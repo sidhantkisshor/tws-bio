@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(touch:*)",
+      "Bash(ls:*)",
+      "Bash(npm run dev:*)",
+      "Bash(timeout 5 npm run dev)",
+      "Bash(true)",
+      "Bash(echo:*)",
+      "Bash(mkdir:*)",
+      "Bash(find:*)",
+      "Bash(vercel:*)",
+      "Bash(chmod:*)",
+      "Bash(./fix-tailwind.sh:*)",
+      "Bash(bash:*)",
+      "Bash(npm run build:*)",
+      "Bash(rm:*)",
+      "Bash(grep:*)",
+      "Bash(npx tsc:*)",
+      "Bash(./check-types.sh)"
+    ],
+    "deny": []
+  }
+}
