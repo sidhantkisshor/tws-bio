@@ -68,17 +68,17 @@ export async function GET(
   // Track analytics asynchronously
   Promise.all([
     // Increment click count
-    supabase.rpc('increment_click_count', { link_id: link.id }),
-    
+    supabase.rpc('increment_link_clicks', { link_id: link.id }),
+
     // Record detailed analytics
-    supabase.from('link_analytics').insert({
+    supabase.from('clicks').insert({
       link_id: link.id,
       ip_address: ip,
       user_agent: userAgent,
-      referer: referer,
-      browser: getBrowser(userAgent),
-      os: getOS(userAgent),
-      device: getDevice(userAgent),
+      referrer_url: referer,
+      browser_name: getBrowser(userAgent),
+      os_name: getOS(userAgent),
+      device_type: getDevice(userAgent) as 'desktop' | 'mobile' | 'tablet',
     })
   ]).catch(err => {
     console.error('Error tracking analytics:', err)
@@ -93,16 +93,18 @@ export async function GET(
       ? link.android_deep_link 
       : null
 
-    if (deepLink && isSafeUrl(deepLink)) {
+    const fallbackUrl = link.fallback_url && isSafeUrl(link.fallback_url)
+      ? link.fallback_url
+      : isSafeUrl(link.original_url)
+        ? link.original_url
+        : null
+
+    if (deepLink && isSafeUrl(deepLink) && fallbackUrl) {
       // Create HTML page that attempts to open the app
-      const rawFallback = link.fallback_url && isSafeUrl(link.fallback_url)
-        ? link.fallback_url
-        : link.original_url
-      const fallbackUrl = rawFallback
 
       // Use JSON.stringify to safely embed values in JavaScript context
-      const safeDeepLink = JSON.stringify(deepLink)
-      const safeFallbackUrl = JSON.stringify(fallbackUrl)
+      const safeDeepLink = JSON.stringify(deepLink).replace(/\//g, '\\/')
+      const safeFallbackUrl = JSON.stringify(fallbackUrl).replace(/\//g, '\\/')
       // Escape double quotes for HTML attribute context
       const fallbackUrlAttr = fallbackUrl.replace(/"/g, '&quot;')
 
@@ -174,7 +176,7 @@ export async function GET(
   }
 
   // Regular redirect for web links or when no deep link is available
-  return NextResponse.redirect(link.original_url)
+  return NextResponse.redirect(isSafeUrl(link.original_url) ? link.original_url : new URL('/', request.url).toString())
 }
 
 // Helper functions for analytics
