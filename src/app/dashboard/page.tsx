@@ -51,7 +51,7 @@ export default async function DashboardPage() {
             <p className="text-3xl font-bold text-gray-900">{totalClicks}</p>
           </div>
           <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-sm font-medium text-gray-500">Average CTR</h3>
+            <h3 className="text-sm font-medium text-gray-500">Avg. Clicks / Link</h3>
             <p className="text-3xl font-bold text-gray-900">
               {links && links.length > 0 
                 ? Math.round(totalClicks / links.length) 

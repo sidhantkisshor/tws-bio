@@ -27,7 +27,6 @@ export function CreateLinkForm({ user, onLinkCreated }: CreateLinkFormProps) {
   const [fallbackUrl, setFallbackUrl] = useState('')
   const [detectedPlatform, setDetectedPlatform] = useState<string | null>(null)
   const [autoDetected, setAutoDetected] = useState(false)
-  const supabase = createClient()
 
   const resetForm = () => {
     setUrl('')
@@ -91,33 +90,28 @@ export function CreateLinkForm({ user, onLinkCreated }: CreateLinkFormProps) {
     }
 
     setLoading(true)
+    const supabase = createClient()
 
     try {
       const shortCode = customCode || generateShortCode()
       
-      // For deep links, we need to insert directly since RPC function doesn't support all fields
       if (linkType === 'deep_link') {
-        const { data, error: insertError } = await supabase
-          .from('links')
-          .insert({
-            short_code: shortCode,
-            original_url: url,
-            user_id: user?.id,
-            link_type: linkType,
-            ios_deep_link: iosDeepLink || null,
-            android_deep_link: androidDeepLink || null,
-            fallback_url: fallbackUrl || null,
-          })
-          .select()
-          .single()
+        const { data, error: rpcError } = await supabase.rpc('create_deep_link', {
+          p_short_code: shortCode,
+          p_original_url: url,
+          p_user_id: user?.id,
+          p_ios_deep_link: iosDeepLink || undefined,
+          p_android_deep_link: androidDeepLink || undefined,
+          p_fallback_url: fallbackUrl || undefined,
+        })
 
-        if (insertError) {
-          throw new Error(insertError.message)
+        if (rpcError) {
+          throw new Error(rpcError.message)
         }
 
         if (data) {
           const shortUrl = getShortUrl(data.short_code)
-          await navigator.clipboard.writeText(shortUrl)
+          try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
           setSuccess('Deep link created and copied to clipboard!')
           onLinkCreated(data)
           resetForm()
@@ -137,7 +131,7 @@ export function CreateLinkForm({ user, onLinkCreated }: CreateLinkFormProps) {
 
         if (data) {
           const shortUrl = getShortUrl(data.short_code)
-          await navigator.clipboard.writeText(shortUrl)
+          try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
           setSuccess('Link created and copied to clipboard!')
           onLinkCreated(data)
           resetForm()

@@ -7,10 +7,17 @@ export function cn(...inputs: ClassValue[]) {
 
 export function generateShortCode(length: number = 6): string {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-  const randomValues = crypto.getRandomValues(new Uint8Array(length))
+  const charsLen = chars.length // 62
+  // Largest multiple of 62 that fits in a byte (62 * 4 = 248)
+  const maxValid = Math.floor(256 / charsLen) * charsLen
   let result = ''
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(randomValues[i] % chars.length)
+  while (result.length < length) {
+    const randomValues = crypto.getRandomValues(new Uint8Array(length - result.length))
+    for (const byte of randomValues) {
+      if (byte < maxValid && result.length < length) {
+        result += chars.charAt(byte % charsLen)
+      }
+    }
   }
   return result
 }
@@ -21,7 +28,7 @@ export function getShortUrl(shortCode: string): string {
   return `${baseUrl}/${shortCode}`
 }
 
-const BLOCKED_HOSTNAMES = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|0\.0\.0\.0|\[::1\]|\[::0\])$/i
+export const BLOCKED_HOSTNAMES = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|0\.0\.0\.0|\[::1\]|\[::0\])$/i
 
 export function isValidUrl(url: string): boolean {
   try {

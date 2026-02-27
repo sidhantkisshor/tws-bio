@@ -11,9 +11,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
-  const supabase = createClient()
 
   const handleLogin = async (e: React.FormEvent) => {
+    const supabase = createClient()
     e.preventDefault()
     setError('')
     setLoading(true)
@@ -36,6 +36,7 @@ export default function LoginPage() {
   }
 
   const handleGoogleLogin = async () => {
+    const supabase = createClient()
     setError('')
     setLoading(true)
 
