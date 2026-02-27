@@ -17,7 +17,7 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
-  const totalClicks = links?.reduce((sum, link) => sum + link.click_count, 0) || 0
+  const totalClicks = links?.reduce((sum, link) => sum + (link.total_clicks || 0), 0) || 0
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -114,10 +114,10 @@ export default async function DashboardPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {link.click_count}
+                        {link.total_clicks || 0}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(link.created_at).toLocaleDateString()}
+                        {link.created_at ? new Date(link.created_at).toLocaleDateString() : '—'}
                       </td>
                     </tr>
                   ))}
