@@ -36,9 +36,9 @@ Three distinct Supabase clients exist — never mix them:
 - `src/lib/supabase/server.ts` — Server client (async, uses `cookies()` from `next/headers`), for Server Components and Route Handlers
 - `src/lib/supabase/middleware.ts` — Middleware client (operates on `NextRequest`), only used by `src/proxy.ts`
 
-### Middleware Warning
+### Middleware
 
-The session-refresh middleware lives in `src/proxy.ts` (exports `proxy` function + route matcher config). **Next.js expects `middleware.ts` at the project root or `src/middleware.ts`** — the current `proxy.ts` naming means this middleware may not execute. If adding or fixing middleware, use the standard `src/middleware.ts` naming convention.
+The session-refresh middleware lives in `src/proxy.ts` (exports `proxy` function + route matcher config). Next.js 16 picks this up as a "Proxy (Middleware)" — visible in the build output. This is a Next.js 16 convention; if downgrading, rename to `src/middleware.ts`.
 
 ### Route Structure
 
@@ -90,4 +90,3 @@ Migrations are in `supabase/migrations/` (7 files, 001–006 + a timestamped dro
 
 - TypeScript types in `database.ts` were manually edited and may not match actual DB column names (e.g. `qr_code` vs `qr_code_url`, `click_count` vs `total_clicks`)
 - A `clicks` table exists in migrations but the app uses `link_analytics` — schema divergence from earlier design
-- Middleware file is named `src/proxy.ts` instead of `src/middleware.ts` — may not be picked up by Next.js
