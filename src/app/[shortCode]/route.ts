@@ -15,7 +15,7 @@ function isMobile(userAgent: string): boolean {
 }
 
 const SAFE_DEEP_LINK_SCHEMES = new Set([
-  'http:', 'https:', 'ftp:',
+  'http:', 'https:',
   // App-specific schemes used by the deep link system
   'youtube:', 'vnd.youtube:', 'instagram:', 'twitter:', 'tiktok:',
   'spotify:', 'linkedin:', 'fb:', 'reddit:', 'whatsapp:', 'tg:',
@@ -24,6 +24,8 @@ const SAFE_DEEP_LINK_SCHEMES = new Set([
   'com.amazon.mobile.shopping:', 'ebay:', 'airbnb:', 'uber:', 'venmo:',
   'cashapp:', 'paypal:', 'medium:', 'github:', 'zoomus:',
 ])
+
+const BLOCKED_HOSTNAMES = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|0\.0\.0\.0|\[::1\]|\[::0\])$/i
 
 function isSafeUrl(url: string): boolean {
   const lower = url.toLowerCase().trim()
@@ -34,7 +36,17 @@ function isSafeUrl(url: string): boolean {
   const colonIndex = lower.indexOf(':')
   if (colonIndex === -1) return false
   const scheme = lower.slice(0, colonIndex + 1)
-  return SAFE_DEEP_LINK_SCHEMES.has(scheme)
+  if (!SAFE_DEEP_LINK_SCHEMES.has(scheme)) return false
+  // For web schemes, also block private networks (SSRF prevention)
+  if (scheme === 'http:' || scheme === 'https:') {
+    try {
+      const parsed = new URL(url)
+      if (BLOCKED_HOSTNAMES.test(parsed.hostname)) return false
+    } catch {
+      return false
+    }
+  }
+  return true
 }
 
 export async function GET(
@@ -170,6 +182,9 @@ export async function GET(
       return new NextResponse(html, {
         headers: {
           'Content-Type': 'text/html',
+          'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'",
+          'X-Content-Type-Options': 'nosniff',
+          'X-Frame-Options': 'DENY',
         },
       })
     }
@@ -198,8 +213,8 @@ function getOS(userAgent: string): string {
   return 'Other'
 }
 
-function getDevice(userAgent: string): string {
-  if (userAgent.includes('Mobile')) return 'Mobile'
-  if (userAgent.includes('Tablet')) return 'Tablet'
-  return 'Desktop'
+function getDevice(userAgent: string): 'desktop' | 'mobile' | 'tablet' {
+  if (userAgent.includes('Mobile')) return 'mobile'
+  if (userAgent.includes('Tablet')) return 'tablet'
+  return 'desktop'
 }
