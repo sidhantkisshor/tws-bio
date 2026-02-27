@@ -18,7 +18,11 @@ export function LinksList({ user, links, loading }: LinksListProps) {
 
   const handleCopy = async (link: Link) => {
     const shortUrl = getShortUrl(link.short_code)
-    await navigator.clipboard.writeText(shortUrl)
+    try {
+      await navigator.clipboard.writeText(shortUrl)
+    } catch {
+      // Clipboard API unavailable (HTTP context or permission denied)
+    }
     setCopiedId(link.id)
     setTimeout(() => setCopiedId(null), 2000)
   }

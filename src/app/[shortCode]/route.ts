@@ -1,9 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { headers } from 'next/headers'
+import { BLOCKED_HOSTNAMES } from '@/lib/utils'
 
 function isIOS(userAgent: string): boolean {
-  return /iPhone|iPad|iPod/i.test(userAgent)
+  // iPadOS 13+ reports as Macintosh, detect via touch support hint in UA
+  return /iPhone|iPod/i.test(userAgent) ||
+    (/iPad/i.test(userAgent)) ||
+    (/Macintosh/i.test(userAgent) && /Mobile/i.test(userAgent))
 }
 
 function isAndroid(userAgent: string): boolean {
@@ -25,11 +29,8 @@ const SAFE_DEEP_LINK_SCHEMES = new Set([
   'cashapp:', 'paypal:', 'medium:', 'github:', 'zoomus:',
 ])
 
-const BLOCKED_HOSTNAMES = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|0\.0\.0\.0|\[::1\]|\[::0\])$/i
-
 function isSafeUrl(url: string): boolean {
   const lower = url.toLowerCase().trim()
-  // Explicitly reject dangerous schemes
   if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('vbscript:')) {
     return false
   }
@@ -37,7 +38,6 @@ function isSafeUrl(url: string): boolean {
   if (colonIndex === -1) return false
   const scheme = lower.slice(0, colonIndex + 1)
   if (!SAFE_DEEP_LINK_SCHEMES.has(scheme)) return false
-  // For web schemes, also block private networks (SSRF prevention)
   if (scheme === 'http:' || scheme === 'https:') {
     try {
       const parsed = new URL(url)
@@ -56,14 +56,12 @@ export async function GET(
   const { shortCode } = await params
   const supabase = await createClient()
   const headersList = await headers()
-  
-  // Get user agent for device detection and analytics
+
   const userAgent = headersList.get('user-agent') || ''
   const referer = headersList.get('referer') || null
-  
-  // Get IP address for analytics (in production, this would come from X-Forwarded-For)
+
   const forwardedFor = headersList.get('x-forwarded-for')
-  const ip = forwardedFor ? forwardedFor.split(',')[0] : null
+  const ip = forwardedFor ? forwardedFor.split(',')[0].trim() : null
 
   // Get the link
   const { data: link, error } = await supabase
@@ -74,15 +72,22 @@ export async function GET(
     .single()
 
   if (error || !link) {
-    return NextResponse.redirect(new URL('/404', request.url))
+    return new NextResponse('Link not found', { status: 404 })
   }
 
-  // Track analytics asynchronously
-  Promise.all([
-    // Increment click count
-    supabase.rpc('increment_link_clicks', { link_id: link.id }),
+  // Check if the link has expired
+  if (link.expires_at && new Date(link.expires_at) < new Date()) {
+    return new NextResponse('This link has expired', { status: 410 })
+  }
 
-    // Record detailed analytics
+  // Check if the link has exceeded max clicks
+  if (link.max_clicks && (link.total_clicks ?? 0) >= link.max_clicks) {
+    return new NextResponse('This link has reached its click limit', { status: 410 })
+  }
+
+  // Track analytics asynchronously (fire-and-forget)
+  Promise.all([
+    supabase.rpc('increment_link_clicks', { link_id: link.id }),
     supabase.from('clicks').insert({
       link_id: link.id,
       ip_address: ip,
@@ -90,7 +95,7 @@ export async function GET(
       referrer_url: referer,
       browser_name: getBrowser(userAgent),
       os_name: getOS(userAgent),
-      device_type: getDevice(userAgent) as 'desktop' | 'mobile' | 'tablet',
+      device_type: getDevice(userAgent),
     })
   ]).catch(err => {
     console.error('Error tracking analytics:', err)
@@ -98,11 +103,10 @@ export async function GET(
 
   // Handle deep linking
   if (link.link_type === 'deep_link' && isMobile(userAgent)) {
-    // Determine which deep link to use
-    const deepLink = isIOS(userAgent) 
-      ? link.ios_deep_link 
-      : isAndroid(userAgent) 
-      ? link.android_deep_link 
+    const deepLink = isIOS(userAgent)
+      ? link.ios_deep_link
+      : isAndroid(userAgent)
+      ? link.android_deep_link
       : null
 
     const fallbackUrl = link.fallback_url && isSafeUrl(link.fallback_url)
@@ -112,12 +116,8 @@ export async function GET(
         : null
 
     if (deepLink && isSafeUrl(deepLink) && fallbackUrl) {
-      // Create HTML page that attempts to open the app
-
-      // Use JSON.stringify to safely embed values in JavaScript context
       const safeDeepLink = JSON.stringify(deepLink).replace(/\//g, '\\/')
       const safeFallbackUrl = JSON.stringify(fallbackUrl).replace(/\//g, '\\/')
-      // Escape double quotes for HTML attribute context
       const fallbackUrlAttr = fallbackUrl.replace(/"/g, '&quot;')
 
       const html = `
@@ -178,7 +178,7 @@ export async function GET(
         </body>
         </html>
       `
-      
+
       return new NextResponse(html, {
         headers: {
           'Content-Type': 'text/html',
@@ -190,31 +190,36 @@ export async function GET(
     }
   }
 
-  // Regular redirect for web links or when no deep link is available
+  // Regular redirect
   return NextResponse.redirect(isSafeUrl(link.original_url) ? link.original_url : new URL('/', request.url).toString())
 }
 
-// Helper functions for analytics
+// Browser detection - order matters: check specific browsers before generic ones
 function getBrowser(userAgent: string): string {
-  if (userAgent.includes('Chrome')) return 'Chrome'
-  if (userAgent.includes('Firefox')) return 'Firefox'
-  if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) return 'Safari'
-  if (userAgent.includes('Edge')) return 'Edge'
-  if (userAgent.includes('Opera')) return 'Opera'
+  if (userAgent.includes('Edg')) return 'Edge'
+  if (userAgent.includes('OPR') || userAgent.includes('Opera')) return 'Opera'
+  if (userAgent.includes('Chrome') || userAgent.includes('CriOS')) return 'Chrome'
+  if (userAgent.includes('Firefox') || userAgent.includes('FxiOS')) return 'Firefox'
+  if (userAgent.includes('Safari')) return 'Safari'
   return 'Other'
 }
 
 function getOS(userAgent: string): string {
+  if (isIOS(userAgent)) return 'iOS'
+  if (isAndroid(userAgent)) return 'Android'
   if (userAgent.includes('Windows')) return 'Windows'
   if (userAgent.includes('Mac')) return 'macOS'
   if (userAgent.includes('Linux')) return 'Linux'
-  if (isIOS(userAgent)) return 'iOS'
-  if (isAndroid(userAgent)) return 'Android'
   return 'Other'
 }
 
 function getDevice(userAgent: string): 'desktop' | 'mobile' | 'tablet' {
-  if (userAgent.includes('Mobile')) return 'mobile'
-  if (userAgent.includes('Tablet')) return 'tablet'
+  // Check tablet patterns first (iPad, Android tablet)
+  if (/iPad/i.test(userAgent)) return 'tablet'
+  if (/Macintosh/i.test(userAgent) && /Mobile/i.test(userAgent)) return 'tablet'
+  if (/Android/i.test(userAgent) && !/Mobile/i.test(userAgent)) return 'tablet'
+  if (/Tablet/i.test(userAgent)) return 'tablet'
+  // Then mobile
+  if (/Mobile|iPhone|iPod|Android.*Mobile/i.test(userAgent)) return 'mobile'
   return 'desktop'
 }

@@ -13,9 +13,9 @@ export default function SignupPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const router = useRouter()
-  const supabase = createClient()
 
   const handleSignup = async (e: React.FormEvent) => {
+    const supabase = createClient()
     e.preventDefault()
     setError('')
     
@@ -51,6 +51,7 @@ export default function SignupPage() {
   }
 
   const handleGoogleSignup = async () => {
+    const supabase = createClient()
     setError('')
     setLoading(true)
 

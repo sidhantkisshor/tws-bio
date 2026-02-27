@@ -315,6 +315,17 @@ export type Database = {
         }
         Returns: Database['public']['Tables']['links']['Row']
       }
+      create_deep_link: {
+        Args: {
+          p_short_code: string
+          p_original_url: string
+          p_user_id?: string
+          p_ios_deep_link?: string
+          p_android_deep_link?: string
+          p_fallback_url?: string
+        }
+        Returns: Database['public']['Tables']['links']['Row']
+      }
       increment_link_clicks:
         | { Args: { link_id: string }; Returns: undefined }
         | { Args: { link_id: string; visitor_id: string }; Returns: undefined }
