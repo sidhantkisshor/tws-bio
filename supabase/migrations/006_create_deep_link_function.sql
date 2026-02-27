@@ -1,6 +1,30 @@
+-- Ensure create_link exists (may not have been applied from migration 004)
+CREATE OR REPLACE FUNCTION create_link(
+  p_short_code TEXT,
+  p_original_url TEXT,
+  p_user_id UUID DEFAULT NULL
+)
+RETURNS links
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = 'public'
+AS $$
+DECLARE
+  new_link links;
+BEGIN
+  INSERT INTO public.links (short_code, original_url, user_id, title)
+  VALUES (p_short_code, p_original_url, p_user_id, p_original_url)
+  RETURNING * INTO new_link;
+
+  RETURN new_link;
+EXCEPTION
+  WHEN unique_violation THEN
+    RAISE EXCEPTION 'Short code "%" is already taken.', p_short_code;
+END;
+$$;
+
 -- Function to create a deep link atomically, supporting all deep link fields.
 -- SECURITY DEFINER allows anonymous users (null user_id) to create links.
-
 CREATE OR REPLACE FUNCTION create_deep_link(
   p_short_code TEXT,
   p_original_url TEXT,
@@ -33,6 +57,3 @@ EXCEPTION
     RAISE EXCEPTION 'Short code "%" is already taken.', p_short_code;
 END;
 $$;
-
--- Also fix search_path on the existing create_link function
-ALTER FUNCTION public.create_link SET search_path = 'public';
