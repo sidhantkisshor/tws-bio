@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "tws.bio - URL Shortener with Analytics",
-  description: "Create powerful short links with advanced analytics, mobile deep linking, and custom domains.",
+  title: "tws.bio - URL Shortener",
+  description: "Shorten your URLs with tws.bio",
 };
 
 export default function RootLayout({

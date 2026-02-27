@@ -18,7 +18,12 @@
       "Bash(rm:*)",
       "Bash(grep:*)",
       "Bash(npx tsc:*)",
-      "Bash(./check-types.sh)"
+      "Bash(./check-types.sh)",
+      "Bash(npm install:*)",
+      "Bash(cat:*)",
+      "Bash(git remote:*)",
+      "Bash(git fetch:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }

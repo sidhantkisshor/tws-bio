@@ -1,88 +1,103 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import QRCode from 'react-qr-code';
-import { getShortUrl } from '../lib/utils';
-import type { User } from '@supabase/supabase-js';
+import { useState } from 'react'
+import { getShortUrl } from '@/lib/utils'
+import type { User } from '@supabase/supabase-js'
+import type { Database } from '@/types/database'
 
-type Link = {
-  id?: string;
-  short_code: string;
-  original_url: string;
-  created_at: string;
-};
+type Link = Database['public']['Tables']['links']['Row']
 
-type LinksListProps = {
-  user: User | null;
-  links: Link[];
-  loading: boolean;
-};
+interface LinksListProps {
+  user: User | null
+  links: Link[]
+  loading: boolean
+}
 
 export function LinksList({ user, links, loading }: LinksListProps) {
-  const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
-  const handleCopy = (shortCode: string) => {
-    const shortUrl = getShortUrl(shortCode);
-    navigator.clipboard.writeText(shortUrl);
-    setCopiedLink(shortCode);
-    setTimeout(() => setCopiedLink(null), 2000);
-  };
+  const handleCopy = async (link: Link) => {
+    const shortUrl = getShortUrl(link.short_code)
+    await navigator.clipboard.writeText(shortUrl)
+    setCopiedId(link.id)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="max-w-4xl mx-auto mt-8">
+        <div className="bg-white rounded-2xl shadow-lg p-8">
+          <div className="animate-pulse space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-24 bg-gray-200 rounded-lg"></div>
+            ))}
+          </div>
         </div>
       </div>
-    );
+    )
   }
 
   if (links.length === 0) {
-    return null; // Don't render anything if there are no links to show
+    return null
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-100">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">
-        {user ? 'Recent Links' : 'Your Links'}
-      </h2>
-      <div className="space-y-5">
-        {links.map((link) => {
-          const shortUrl = getShortUrl(link.short_code);
-          const displayUrl = shortUrl.replace(/^https?:\/\//, '');
-
-          return (
-            <div key={link.short_code} className="bg-gray-50 p-4 rounded-lg border border-gray-200 transition-shadow hover:shadow-md">
-              <div className="flex items-center justify-between">
-                <div className="flex-1 overflow-hidden">
-                  <a href={shortUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-lg text-blue-600 hover:underline break-all">
-                    {displayUrl}
-                  </a>
-                  <p className="text-sm text-gray-500 truncate mt-1" title={link.original_url}>
-                    {link.original_url}
-                  </p>
-                </div>
-                <div className="flex items-center gap-4 ml-4">
+    <div className="max-w-4xl mx-auto mt-8">
+      <div className="bg-white rounded-2xl shadow-lg p-8">
+        <h3 className="text-xl font-bold text-gray-900 mb-6">
+          {user ? 'Your Recent Links' : 'Recent Links'}
+        </h3>
+        
+        <div className="space-y-4">
+          {links.map((link) => {
+            const shortUrl = getShortUrl(link.short_code)
+            const displayUrl = shortUrl.replace(/^https?:\/\//, '')
+            
+            return (
+              <div
+                key={link.id}
+                className="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <a
+                      href={shortUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      {displayUrl}
+                    </a>
+                    <p className="text-sm text-gray-600 truncate mt-1">
+                      {link.original_url}
+                    </p>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                      <span>{link.click_count} clicks</span>
+                      <span>{new Date(link.created_at).toLocaleDateString()}</span>
+                      {link.link_type === 'deep_link' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                          Deep Link
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
                   <button
-                    onClick={() => handleCopy(link.short_code)}
-                    className={`w-24 text-sm font-semibold px-4 py-2 rounded-lg transition ${
-                      copiedLink === link.short_code
-                        ? 'bg-green-500 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    onClick={() => handleCopy(link)}
+                    className={`ml-4 px-4 py-2 text-sm font-medium rounded-lg transition ${
+                      copiedId === link.id
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    {copiedLink === link.short_code ? 'Copied!' : 'Copy'}
+                    {copiedId === link.id ? 'Copied!' : 'Copy'}
                   </button>
-                  <div className="w-16 h-16 p-1 bg-white border rounded-md shadow-sm">
-                    <QRCode value={shortUrl} size={60} level="L" />
-                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            )
+          })}
+        </div>
       </div>
     </div>
-  );
-} 
+  )
+}
