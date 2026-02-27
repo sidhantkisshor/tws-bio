@@ -174,8 +174,8 @@ function generateYouTubeDeepLinks(url: URL): DeepLinkConfig {
   
   if (videoId) {
     return {
-      ios: `youtube://www.youtube.com/watch?v=${videoId}`,
-      android: `vnd.youtube:${videoId}`,
+      ios: `youtube://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`,
+      android: `vnd.youtube:${encodeURIComponent(videoId)}`,
       fallback: url.href,
       platform: 'YouTube'
     }
@@ -196,8 +196,8 @@ function generateInstagramDeepLinks(url: URL): DeepLinkConfig {
   // Instagram post
   if (pathParts[0] === 'p' && pathParts[1]) {
     return {
-      ios: `instagram://media?id=${pathParts[1]}`,
-      android: `instagram://media?id=${pathParts[1]}`,
+      ios: `instagram://media?id=${encodeURIComponent(pathParts[1])}`,
+      android: `instagram://media?id=${encodeURIComponent(pathParts[1])}`,
       fallback: url.href,
       platform: 'Instagram'
     }
@@ -206,8 +206,8 @@ function generateInstagramDeepLinks(url: URL): DeepLinkConfig {
   // Instagram profile
   if (pathParts.length === 1 && !['explore', 'reels', 'stories'].includes(pathParts[0])) {
     return {
-      ios: `instagram://user?username=${pathParts[0]}`,
-      android: `instagram://user?username=${pathParts[0]}`,
+      ios: `instagram://user?username=${encodeURIComponent(pathParts[0])}`,
+      android: `instagram://user?username=${encodeURIComponent(pathParts[0])}`,
       fallback: url.href,
       platform: 'Instagram'
     }
@@ -216,8 +216,8 @@ function generateInstagramDeepLinks(url: URL): DeepLinkConfig {
   // Instagram reel
   if (pathParts[0] === 'reel' && pathParts[1]) {
     return {
-      ios: `instagram://reel?id=${pathParts[1]}`,
-      android: `instagram://reel?id=${pathParts[1]}`,
+      ios: `instagram://reel?id=${encodeURIComponent(pathParts[1])}`,
+      android: `instagram://reel?id=${encodeURIComponent(pathParts[1])}`,
       fallback: url.href,
       platform: 'Instagram'
     }
@@ -237,8 +237,8 @@ function generateTwitterDeepLinks(url: URL): DeepLinkConfig {
   // Tweet
   if (pathParts[1] === 'status' && pathParts[2]) {
     return {
-      ios: `twitter://status?id=${pathParts[2]}`,
-      android: `twitter://status?id=${pathParts[2]}`,
+      ios: `twitter://status?id=${encodeURIComponent(pathParts[2])}`,
+      android: `twitter://status?id=${encodeURIComponent(pathParts[2])}`,
       fallback: url.href,
       platform: 'Twitter/X'
     }
@@ -247,8 +247,8 @@ function generateTwitterDeepLinks(url: URL): DeepLinkConfig {
   // Profile
   if (pathParts.length === 1) {
     return {
-      ios: `twitter://user?screen_name=${pathParts[0]}`,
-      android: `twitter://user?screen_name=${pathParts[0]}`,
+      ios: `twitter://user?screen_name=${encodeURIComponent(pathParts[0])}`,
+      android: `twitter://user?screen_name=${encodeURIComponent(pathParts[0])}`,
       fallback: url.href,
       platform: 'Twitter/X'
     }
@@ -268,8 +268,8 @@ function generateTikTokDeepLinks(url: URL): DeepLinkConfig {
   // TikTok video
   if (pathParts[1] === 'video' && pathParts[2]) {
     return {
-      ios: `tiktok://video/${pathParts[2]}`,
-      android: `tiktok://video/${pathParts[2]}`,
+      ios: `tiktok://video/${encodeURIComponent(pathParts[2])}`,
+      android: `tiktok://video/${encodeURIComponent(pathParts[2])}`,
       fallback: url.href,
       platform: 'TikTok'
     }
@@ -278,8 +278,8 @@ function generateTikTokDeepLinks(url: URL): DeepLinkConfig {
   // TikTok profile
   if (pathParts[0]?.startsWith('@')) {
     return {
-      ios: `tiktok://user?username=${pathParts[0].substring(1)}`,
-      android: `tiktok://user?username=${pathParts[0].substring(1)}`,
+      ios: `tiktok://user?username=${encodeURIComponent(pathParts[0].substring(1))}`,
+      android: `tiktok://user?username=${encodeURIComponent(pathParts[0].substring(1))}`,
       fallback: url.href,
       platform: 'TikTok'
     }
@@ -298,7 +298,7 @@ function generateSpotifyDeepLinks(url: URL): DeepLinkConfig {
   
   // Spotify track, album, playlist, artist
   if (['track', 'album', 'playlist', 'artist'].includes(pathParts[0]) && pathParts[1]) {
-    const spotifyUri = `spotify:${pathParts[0]}:${pathParts[1]}`
+    const spotifyUri = `spotify:${pathParts[0]}:${encodeURIComponent(pathParts[1])}`
     return {
       ios: spotifyUri,
       android: spotifyUri,
@@ -321,8 +321,8 @@ function generateLinkedInDeepLinks(url: URL): DeepLinkConfig {
   // LinkedIn profile
   if (pathParts[0] === 'in' && pathParts[1]) {
     return {
-      ios: `linkedin://profile/${pathParts[1]}`,
-      android: `linkedin://profile/${pathParts[1]}`,
+      ios: `linkedin://profile/${encodeURIComponent(pathParts[1])}`,
+      android: `linkedin://profile/${encodeURIComponent(pathParts[1])}`,
       fallback: url.href,
       platform: 'LinkedIn'
     }
@@ -331,8 +331,8 @@ function generateLinkedInDeepLinks(url: URL): DeepLinkConfig {
   // LinkedIn company
   if (pathParts[0] === 'company' && pathParts[1]) {
     return {
-      ios: `linkedin://company/${pathParts[1]}`,
-      android: `linkedin://company/${pathParts[1]}`,
+      ios: `linkedin://company/${encodeURIComponent(pathParts[1])}`,
+      android: `linkedin://company/${encodeURIComponent(pathParts[1])}`,
       fallback: url.href,
       platform: 'LinkedIn'
     }
@@ -352,8 +352,8 @@ function generateFacebookDeepLinks(url: URL): DeepLinkConfig {
   // Facebook profile or page
   if (pathParts.length === 1 && !['watch', 'groups', 'events'].includes(pathParts[0])) {
     return {
-      ios: `fb://profile/${pathParts[0]}`,
-      android: `fb://page/${pathParts[0]}`,
+      ios: `fb://profile/${encodeURIComponent(pathParts[0])}`,
+      android: `fb://page/${encodeURIComponent(pathParts[0])}`,
       fallback: url.href,
       platform: 'Facebook'
     }
@@ -362,8 +362,8 @@ function generateFacebookDeepLinks(url: URL): DeepLinkConfig {
   // Facebook group
   if (pathParts[0] === 'groups' && pathParts[1]) {
     return {
-      ios: `fb://group/${pathParts[1]}`,
-      android: `fb://group/${pathParts[1]}`,
+      ios: `fb://group/${encodeURIComponent(pathParts[1])}`,
+      android: `fb://group/${encodeURIComponent(pathParts[1])}`,
       fallback: url.href,
       platform: 'Facebook'
     }
@@ -427,8 +427,8 @@ function generateWhatsAppDeepLinks(url: URL): DeepLinkConfig {
   if (url.hostname === 'wa.me' && pathParts[0]) {
     const phoneNumber = pathParts[0]
     return {
-      ios: `whatsapp://send?phone=${phoneNumber}`,
-      android: `whatsapp://send?phone=${phoneNumber}`,
+      ios: `whatsapp://send?phone=${encodeURIComponent(phoneNumber)}`,
+      android: `whatsapp://send?phone=${encodeURIComponent(phoneNumber)}`,
       fallback: url.href,
       platform: 'WhatsApp'
     }
@@ -448,8 +448,8 @@ function generateTelegramDeepLinks(url: URL): DeepLinkConfig {
   // Telegram channel/group
   if (pathParts.length > 0) {
     return {
-      ios: `tg://resolve?domain=${pathParts[0]}`,
-      android: `tg://resolve?domain=${pathParts[0]}`,
+      ios: `tg://resolve?domain=${encodeURIComponent(pathParts[0])}`,
+      android: `tg://resolve?domain=${encodeURIComponent(pathParts[0])}`,
       fallback: url.href,
       platform: 'Telegram'
     }
@@ -468,8 +468,8 @@ function generateDiscordDeepLinks(url: URL): DeepLinkConfig {
   if (url.hostname === 'discord.gg') {
     const inviteCode = url.pathname.substring(1)
     return {
-      ios: `discord://discord.gg/${inviteCode}`,
-      android: `discord://discord.gg/${inviteCode}`,
+      ios: `discord://discord.gg/${encodeURIComponent(inviteCode)}`,
+      android: `discord://discord.gg/${encodeURIComponent(inviteCode)}`,
       fallback: url.href,
       platform: 'Discord'
     }
@@ -489,8 +489,8 @@ function generateSlackDeepLinks(url: URL): DeepLinkConfig {
   // Slack workspace
   if (pathParts[0] && pathParts[0] !== 'signin') {
     return {
-      ios: `slack://workspace?team=${pathParts[0]}`,
-      android: `slack://workspace?team=${pathParts[0]}`,
+      ios: `slack://workspace?team=${encodeURIComponent(pathParts[0])}`,
+      android: `slack://workspace?team=${encodeURIComponent(pathParts[0])}`,
       fallback: url.href,
       platform: 'Slack'
     }
@@ -511,8 +511,8 @@ function generatePinterestDeepLinks(url: URL): DeepLinkConfig {
   // Pinterest pin
   if (pathParts[0] === 'pin' && pathParts[1]) {
     return {
-      ios: `pinterest://pin/${pathParts[1]}`,
-      android: `pinterest://pin/${pathParts[1]}`,
+      ios: `pinterest://pin/${encodeURIComponent(pathParts[1])}`,
+      android: `pinterest://pin/${encodeURIComponent(pathParts[1])}`,
       fallback: url.href,
       platform: 'Pinterest'
     }
@@ -521,8 +521,8 @@ function generatePinterestDeepLinks(url: URL): DeepLinkConfig {
   // Pinterest user
   if (pathParts.length === 2 && !['pin', 'board'].includes(pathParts[0])) {
     return {
-      ios: `pinterest://user/${pathParts[0]}`,
-      android: `pinterest://user/${pathParts[0]}`,
+      ios: `pinterest://user/${encodeURIComponent(pathParts[0])}`,
+      android: `pinterest://user/${encodeURIComponent(pathParts[0])}`,
       fallback: url.href,
       platform: 'Pinterest'
     }
@@ -542,8 +542,8 @@ function generateSnapchatDeepLinks(url: URL): DeepLinkConfig {
   // Snapchat profile
   if (pathParts[0] === 'add' && pathParts[1]) {
     return {
-      ios: `snapchat://add/${pathParts[1]}`,
-      android: `snapchat://add/${pathParts[1]}`,
+      ios: `snapchat://add/${encodeURIComponent(pathParts[1])}`,
+      android: `snapchat://add/${encodeURIComponent(pathParts[1])}`,
       fallback: url.href,
       platform: 'Snapchat'
     }
@@ -564,8 +564,8 @@ function generateTwitchDeepLinks(url: URL): DeepLinkConfig {
   // Twitch channel
   if (pathParts.length === 1) {
     return {
-      ios: `twitch://stream/${pathParts[0]}`,
-      android: `twitch://stream/${pathParts[0]}`,
+      ios: `twitch://stream/${encodeURIComponent(pathParts[0])}`,
+      android: `twitch://stream/${encodeURIComponent(pathParts[0])}`,
       fallback: url.href,
       platform: 'Twitch'
     }
@@ -574,8 +574,8 @@ function generateTwitchDeepLinks(url: URL): DeepLinkConfig {
   // Twitch video
   if (pathParts[0] === 'videos' && pathParts[1]) {
     return {
-      ios: `twitch://video/${pathParts[1]}`,
-      android: `twitch://video/${pathParts[1]}`,
+      ios: `twitch://video/${encodeURIComponent(pathParts[1])}`,
+      android: `twitch://video/${encodeURIComponent(pathParts[1])}`,
       fallback: url.href,
       platform: 'Twitch'
     }
@@ -595,8 +595,8 @@ function generateNetflixDeepLinks(url: URL): DeepLinkConfig {
   // Netflix title
   if (pathParts[0] === 'title' && pathParts[1]) {
     return {
-      ios: `nflx://www.netflix.com/title/${pathParts[1]}`,
-      android: `nflx://www.netflix.com/title/${pathParts[1]}`,
+      ios: `nflx://www.netflix.com/title/${encodeURIComponent(pathParts[1])}`,
+      android: `nflx://www.netflix.com/title/${encodeURIComponent(pathParts[1])}`,
       fallback: url.href,
       platform: 'Netflix'
     }
@@ -693,8 +693,8 @@ function generateAmazonDeepLinks(url: URL): DeepLinkConfig {
     const asin = pathParts[pathParts.indexOf('dp') + 1] || pathParts[pathParts.indexOf('gp') + 2]
     if (asin) {
       return {
-        ios: `com.amazon.mobile.shopping://www.amazon.com/dp/${asin}`,
-        android: `com.amazon.mobile.shopping://www.amazon.com/dp/${asin}`,
+        ios: `com.amazon.mobile.shopping://www.amazon.com/dp/${encodeURIComponent(asin)}`,
+        android: `com.amazon.mobile.shopping://www.amazon.com/dp/${encodeURIComponent(asin)}`,
         fallback: url.href,
         platform: 'Amazon'
       }
@@ -715,8 +715,8 @@ function generateEbayDeepLinks(url: URL): DeepLinkConfig {
   // eBay item
   if (pathParts[0] === 'itm' && pathParts[1]) {
     return {
-      ios: `ebay://launch?itm=${pathParts[1]}`,
-      android: `ebay://launch?itm=${pathParts[1]}`,
+      ios: `ebay://launch?itm=${encodeURIComponent(pathParts[1])}`,
+      android: `ebay://launch?itm=${encodeURIComponent(pathParts[1])}`,
       fallback: url.href,
       platform: 'eBay'
     }
@@ -736,8 +736,8 @@ function generateAirbnbDeepLinks(url: URL): DeepLinkConfig {
   // Airbnb listing
   if (pathParts[0] === 'rooms' && pathParts[1]) {
     return {
-      ios: `airbnb://rooms/${pathParts[1]}`,
-      android: `airbnb://rooms/${pathParts[1]}`,
+      ios: `airbnb://rooms/${encodeURIComponent(pathParts[1])}`,
+      android: `airbnb://rooms/${encodeURIComponent(pathParts[1])}`,
       fallback: url.href,
       platform: 'Airbnb'
     }
@@ -785,8 +785,8 @@ function generateVenmoDeepLinks(url: URL): DeepLinkConfig {
   // Venmo user profile
   if (pathParts.length === 1) {
     return {
-      ios: `venmo://users/${pathParts[0]}`,
-      android: `venmo://users/${pathParts[0]}`,
+      ios: `venmo://users/${encodeURIComponent(pathParts[0])}`,
+      android: `venmo://users/${encodeURIComponent(pathParts[0])}`,
       fallback: url.href,
       platform: 'Venmo'
     }
@@ -806,8 +806,8 @@ function generateCashAppDeepLinks(url: URL): DeepLinkConfig {
   // Cash App user ($cashtag)
   if (pathParts[0]?.startsWith('$')) {
     return {
-      ios: `cashapp://cash.app/${pathParts[0]}`,
-      android: `cashapp://cash.app/${pathParts[0]}`,
+      ios: `cashapp://cash.app/${encodeURIComponent(pathParts[0])}`,
+      android: `cashapp://cash.app/${encodeURIComponent(pathParts[0])}`,
       fallback: url.href,
       platform: 'Cash App'
     }
@@ -827,8 +827,8 @@ function generatePayPalDeepLinks(url: URL): DeepLinkConfig {
     const username = url.pathname.substring(1).split('/')[0]
     if (username) {
       return {
-        ios: `paypal://paypalme/${username}`,
-        android: `paypal://paypalme/${username}`,
+        ios: `paypal://paypalme/${encodeURIComponent(username)}`,
+        android: `paypal://paypalme/${encodeURIComponent(username)}`,
         fallback: url.href,
         platform: 'PayPal'
       }
@@ -850,8 +850,8 @@ function generateMediumDeepLinks(url: URL): DeepLinkConfig {
   // Medium article
   if (pathParts.length > 1) {
     return {
-      ios: `medium://p/${pathParts[pathParts.length - 1]}`,
-      android: `medium://p/${pathParts[pathParts.length - 1]}`,
+      ios: `medium://p/${encodeURIComponent(pathParts[pathParts.length - 1])}`,
+      android: `medium://p/${encodeURIComponent(pathParts[pathParts.length - 1])}`,
       fallback: url.href,
       platform: 'Medium'
     }
@@ -873,8 +873,8 @@ function generateGitHubDeepLinks(url: URL): DeepLinkConfig {
     const owner = pathParts[0]
     const repo = pathParts[1]
     return {
-      ios: `github://github.com/${owner}/${repo}`,
-      android: `github://github.com/${owner}/${repo}`,
+      ios: `github://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+      android: `github://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
       fallback: url.href,
       platform: 'GitHub'
     }
@@ -896,8 +896,8 @@ function generateZoomDeepLinks(url: URL): DeepLinkConfig {
   if (pathParts[0] === 'j' && pathParts[1]) {
     const meetingId = pathParts[1]
     return {
-      ios: `zoomus://zoom.us/join?confno=${meetingId}`,
-      android: `zoomus://zoom.us/join?confno=${meetingId}`,
+      ios: `zoomus://zoom.us/join?confno=${encodeURIComponent(meetingId)}`,
+      android: `zoomus://zoom.us/join?confno=${encodeURIComponent(meetingId)}`,
       fallback: url.href,
       platform: 'Zoom'
     }
