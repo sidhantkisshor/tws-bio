@@ -72,8 +72,8 @@ export function LinksList({ user, links, loading }: LinksListProps) {
                       {link.original_url}
                     </p>
                     <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                      <span>{link.click_count} clicks</span>
-                      <span>{new Date(link.created_at).toLocaleDateString()}</span>
+                      <span>{link.total_clicks || 0} clicks</span>
+                      <span>{link.created_at ? new Date(link.created_at).toLocaleDateString() : '—'}</span>
                       {link.link_type === 'deep_link' && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                           Deep Link
