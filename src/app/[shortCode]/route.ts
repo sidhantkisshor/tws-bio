@@ -14,6 +14,29 @@ function isMobile(userAgent: string): boolean {
   return isIOS(userAgent) || isAndroid(userAgent)
 }
 
+const SAFE_DEEP_LINK_SCHEMES = new Set([
+  'http:', 'https:', 'ftp:',
+  // App-specific schemes used by the deep link system
+  'youtube:', 'vnd.youtube:', 'instagram:', 'twitter:', 'tiktok:',
+  'spotify:', 'linkedin:', 'fb:', 'reddit:', 'whatsapp:', 'tg:',
+  'discord:', 'slack:', 'pinterest:', 'snapchat:', 'twitch:', 'nflx:',
+  'soundcloud:', 'comgooglemaps:', 'google.navigation:', 'maps:', 'geo:',
+  'com.amazon.mobile.shopping:', 'ebay:', 'airbnb:', 'uber:', 'venmo:',
+  'cashapp:', 'paypal:', 'medium:', 'github:', 'zoomus:',
+])
+
+function isSafeUrl(url: string): boolean {
+  const lower = url.toLowerCase().trim()
+  // Explicitly reject dangerous schemes
+  if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('vbscript:')) {
+    return false
+  }
+  const colonIndex = lower.indexOf(':')
+  if (colonIndex === -1) return false
+  const scheme = lower.slice(0, colonIndex + 1)
+  return SAFE_DEEP_LINK_SCHEMES.has(scheme)
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ shortCode: string }> }
@@ -70,9 +93,19 @@ export async function GET(
       ? link.android_deep_link 
       : null
 
-    if (deepLink) {
+    if (deepLink && isSafeUrl(deepLink)) {
       // Create HTML page that attempts to open the app
-      const fallbackUrl = link.fallback_url || link.original_url
+      const rawFallback = link.fallback_url && isSafeUrl(link.fallback_url)
+        ? link.fallback_url
+        : link.original_url
+      const fallbackUrl = rawFallback
+
+      // Use JSON.stringify to safely embed values in JavaScript context
+      const safeDeepLink = JSON.stringify(deepLink)
+      const safeFallbackUrl = JSON.stringify(fallbackUrl)
+      // Escape double quotes for HTML attribute context
+      const fallbackUrlAttr = fallbackUrl.replace(/"/g, '&quot;')
+
       const html = `
         <!DOCTYPE html>
         <html>
@@ -117,15 +150,15 @@ export async function GET(
           <div class="container">
             <h1>Opening app...</h1>
             <p>If the app doesn't open automatically, click below:</p>
-            <a href="${fallbackUrl}" id="fallback">Continue to website</a>
+            <a href="${fallbackUrlAttr}" id="fallback">Continue to website</a>
           </div>
           <script>
             // Attempt to open the deep link
-            window.location.href = "${deepLink}";
-            
+            window.location.href = ${safeDeepLink};
+
             // Fallback to web URL after a delay
             setTimeout(function() {
-              window.location.href = "${fallbackUrl}";
+              window.location.href = ${safeFallbackUrl};
             }, 2500);
           </script>
         </body>
