@@ -14,6 +14,41 @@ function isMobile(userAgent: string): boolean {
   return isIOS(userAgent) || isAndroid(userAgent)
 }
 
+const SAFE_DEEP_LINK_SCHEMES = new Set([
+  'http:', 'https:',
+  // App-specific schemes used by the deep link system
+  'youtube:', 'vnd.youtube:', 'instagram:', 'twitter:', 'tiktok:',
+  'spotify:', 'linkedin:', 'fb:', 'reddit:', 'whatsapp:', 'tg:',
+  'discord:', 'slack:', 'pinterest:', 'snapchat:', 'twitch:', 'nflx:',
+  'soundcloud:', 'comgooglemaps:', 'google.navigation:', 'maps:', 'geo:',
+  'com.amazon.mobile.shopping:', 'ebay:', 'airbnb:', 'uber:', 'venmo:',
+  'cashapp:', 'paypal:', 'medium:', 'github:', 'zoomus:',
+])
+
+const BLOCKED_HOSTNAMES = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|0\.0\.0\.0|\[::1\]|\[::0\])$/i
+
+function isSafeUrl(url: string): boolean {
+  const lower = url.toLowerCase().trim()
+  // Explicitly reject dangerous schemes
+  if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('vbscript:')) {
+    return false
+  }
+  const colonIndex = lower.indexOf(':')
+  if (colonIndex === -1) return false
+  const scheme = lower.slice(0, colonIndex + 1)
+  if (!SAFE_DEEP_LINK_SCHEMES.has(scheme)) return false
+  // For web schemes, also block private networks (SSRF prevention)
+  if (scheme === 'http:' || scheme === 'https:') {
+    try {
+      const parsed = new URL(url)
+      if (BLOCKED_HOSTNAMES.test(parsed.hostname)) return false
+    } catch {
+      return false
+    }
+  }
+  return true
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ shortCode: string }> }
@@ -45,17 +80,17 @@ export async function GET(
   // Track analytics asynchronously
   Promise.all([
     // Increment click count
-    supabase.rpc('increment_click_count', { link_id: link.id }),
-    
+    supabase.rpc('increment_link_clicks', { link_id: link.id }),
+
     // Record detailed analytics
-    supabase.from('link_analytics').insert({
+    supabase.from('clicks').insert({
       link_id: link.id,
       ip_address: ip,
       user_agent: userAgent,
-      referer: referer,
-      browser: getBrowser(userAgent),
-      os: getOS(userAgent),
-      device: getDevice(userAgent),
+      referrer_url: referer,
+      browser_name: getBrowser(userAgent),
+      os_name: getOS(userAgent),
+      device_type: getDevice(userAgent) as 'desktop' | 'mobile' | 'tablet',
     })
   ]).catch(err => {
     console.error('Error tracking analytics:', err)
@@ -70,9 +105,21 @@ export async function GET(
       ? link.android_deep_link 
       : null
 
-    if (deepLink) {
+    const fallbackUrl = link.fallback_url && isSafeUrl(link.fallback_url)
+      ? link.fallback_url
+      : isSafeUrl(link.original_url)
+        ? link.original_url
+        : null
+
+    if (deepLink && isSafeUrl(deepLink) && fallbackUrl) {
       // Create HTML page that attempts to open the app
-      const fallbackUrl = link.fallback_url || link.original_url
+
+      // Use JSON.stringify to safely embed values in JavaScript context
+      const safeDeepLink = JSON.stringify(deepLink).replace(/\//g, '\\/')
+      const safeFallbackUrl = JSON.stringify(fallbackUrl).replace(/\//g, '\\/')
+      // Escape double quotes for HTML attribute context
+      const fallbackUrlAttr = fallbackUrl.replace(/"/g, '&quot;')
+
       const html = `
         <!DOCTYPE html>
         <html>
@@ -117,15 +164,15 @@ export async function GET(
           <div class="container">
             <h1>Opening app...</h1>
             <p>If the app doesn't open automatically, click below:</p>
-            <a href="${fallbackUrl}" id="fallback">Continue to website</a>
+            <a href="${fallbackUrlAttr}" id="fallback">Continue to website</a>
           </div>
           <script>
             // Attempt to open the deep link
-            window.location.href = "${deepLink}";
-            
+            window.location.href = ${safeDeepLink};
+
             // Fallback to web URL after a delay
             setTimeout(function() {
-              window.location.href = "${fallbackUrl}";
+              window.location.href = ${safeFallbackUrl};
             }, 2500);
           </script>
         </body>
@@ -135,13 +182,16 @@ export async function GET(
       return new NextResponse(html, {
         headers: {
           'Content-Type': 'text/html',
+          'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'",
+          'X-Content-Type-Options': 'nosniff',
+          'X-Frame-Options': 'DENY',
         },
       })
     }
   }
 
   // Regular redirect for web links or when no deep link is available
-  return NextResponse.redirect(link.original_url)
+  return NextResponse.redirect(isSafeUrl(link.original_url) ? link.original_url : new URL('/', request.url).toString())
 }
 
 // Helper functions for analytics
@@ -163,8 +213,8 @@ function getOS(userAgent: string): string {
   return 'Other'
 }
 
-function getDevice(userAgent: string): string {
-  if (userAgent.includes('Mobile')) return 'Mobile'
-  if (userAgent.includes('Tablet')) return 'Tablet'
-  return 'Desktop'
+function getDevice(userAgent: string): 'desktop' | 'mobile' | 'tablet' {
+  if (userAgent.includes('Mobile')) return 'mobile'
+  if (userAgent.includes('Tablet')) return 'tablet'
+  return 'desktop'
 }
