@@ -7,9 +7,10 @@ export function cn(...inputs: ClassValue[]) {
 
 export function generateShortCode(length: number = 6): string {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  const randomValues = crypto.getRandomValues(new Uint8Array(length))
   let result = ''
   for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
+    result += chars.charAt(randomValues[i] % chars.length)
   }
   return result
 }
