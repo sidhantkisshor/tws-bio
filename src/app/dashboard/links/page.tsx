@@ -1,17 +1,154 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import Link from 'next/link'
+import { createClient } from '@/lib/supabase/server'
+import { getShortUrl } from '@/lib/utils'
+import { LinkActions } from '@/components/dashboard/LinkActions'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@/components/ui/table'
+import { LinkIcon } from 'lucide-react'
 
-export default function LinksPage() {
+const PAGE_SIZE = 20
+
+export default async function LinksPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>
+}) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const { page: pageParam } = await searchParams
+  const page = Math.max(1, parseInt(pageParam || '1', 10) || 1)
+  const offset = (page - 1) * PAGE_SIZE
+
+  const { data: links, count } = await supabase
+    .from('links')
+    .select('*', { count: 'exact' })
+    .eq('user_id', user!.id)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + PAGE_SIZE - 1)
+
+  const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
+
   return (
     <div>
-      <h1 className="text-2xl font-bold text-foreground mb-6">Links</h1>
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle>Your Links</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">Link management coming soon.</p>
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-foreground">Links</h1>
+        <Link href="/">
+          <Button>Create Link</Button>
+        </Link>
+      </div>
+
+      {links && links.length > 0 ? (
+        <Card className="bg-card border-border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="px-4">Short Code</TableHead>
+                <TableHead className="px-4">Original URL</TableHead>
+                <TableHead className="px-4">Type</TableHead>
+                <TableHead className="px-4">Clicks</TableHead>
+                <TableHead className="px-4">Status</TableHead>
+                <TableHead className="px-4">Created</TableHead>
+                <TableHead className="px-4">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {links.map((link) => (
+                <TableRow key={link.id}>
+                  <TableCell className="px-4 py-3">
+                    <a
+                      href={getShortUrl(link.short_code)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-primary hover:text-primary/80 hover:underline"
+                    >
+                      {link.short_code}
+                    </a>
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <span className="text-sm text-muted-foreground truncate max-w-xs block">
+                      {link.original_url}
+                    </span>
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    {link.link_type === 'deep_link' ? (
+                      <Badge variant="default">Deep Link</Badge>
+                    ) : (
+                      <Badge variant="secondary">URL</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 font-mono">
+                    {link.total_clicks || 0}
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <Badge variant={link.is_active ? 'default' : 'secondary'}>
+                      {link.is_active ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-sm text-muted-foreground">
+                    {link.created_at
+                      ? new Date(link.created_at).toLocaleDateString()
+                      : '---'}
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <LinkActions link={link} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          {totalPages > 1 && (
+            <div className="px-4 py-4 border-t border-border flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
+                Page {page} of {totalPages} ({count} links)
+              </span>
+              <div className="flex gap-2">
+                {page > 1 && (
+                  <Link href={`/dashboard/links?page=${page - 1}`}>
+                    <Button variant="outline" size="sm">
+                      Previous
+                    </Button>
+                  </Link>
+                )}
+                {page < totalPages && (
+                  <Link href={`/dashboard/links?page=${page + 1}`}>
+                    <Button variant="outline" size="sm">
+                      Next
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
+        </Card>
+      ) : (
+        <Card className="bg-card border-border">
+          <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="rounded-full bg-muted p-3">
+              <LinkIcon className="size-6 text-muted-foreground" />
+            </div>
+            <div className="text-center">
+              <p className="text-foreground font-medium">No links yet</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Create your first link to get started.
+              </p>
+            </div>
+            <Link href="/">
+              <Button>Create Link</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
