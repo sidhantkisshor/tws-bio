@@ -52,12 +52,17 @@ The session-refresh middleware lives in `src/proxy.ts` (exports `proxy` function
 | `/auth/callback` | Route Handler (GET) | PKCE OAuth code exchange |
 | `/auth/signout` | Route Handler | Signs out user, clears session |
 
+### Server/Client Boundary Pattern
+
+The home page demonstrates the app's core split: `page.tsx` is a Server Component that renders `HomeInteractive` — the Client boundary. `HomeInteractive` wraps `useAuth()` + `useLinks()` hooks and passes state down to `CreateLinkForm` and `LinksList`. This keeps the page shell server-rendered while isolating interactivity.
+
 ### Key Data Flow
 
-1. **Link creation**: Client calls `create_link` or `create_deep_link` Supabase RPC (SECURITY DEFINER, allows anonymous creation with null `user_id`)
+1. **Link creation**: Client calls `create_link` or `create_deep_link` Supabase RPC (SECURITY DEFINER, allows anonymous creation with null `user_id`). For anonymous users, the new link ID is stored in `localStorage` under the key `anon_links` (capped at 50 entries) so links persist across page reloads without auth.
 2. **Redirect**: `GET /[shortCode]` looks up active link → for deep links, returns HTML page with JS redirect + fallback timeout; for standard links, `NextResponse.redirect()`
 3. **Analytics**: Tracked asynchronously via `after()` callback during redirect — calls `record_click` RPC (inserts into `clicks`) + `increment_link_clicks` RPC
-4. **Auth**: Email/password or Google OAuth → PKCE exchange at `/auth/callback` → session refreshed by middleware on every request
+4. **Auth**: Email/password or Google OAuth → PKCE exchange at `/auth/callback` → session refreshed by middleware on every request. Sign-out uses `<form action="/auth/signout" method="post">` for progressive enhancement. Auth redirect routes resolve origin from `NEXT_PUBLIC_APP_URL` with fallback to `requestUrl.origin`.
+5. **Dashboard**: Server-side paginated (PAGE_SIZE 20) using async `searchParams` — fully server-rendered, no client JS
 
 ### Deep Link System
 
@@ -82,7 +87,7 @@ Migrations are in `supabase/migrations/` (8 files, 001–007 + a timestamped dro
 ## Conventions
 
 - **Path alias**: `@/*` maps to `./src/*`
-- **Components**: Named exports (not default), props typed with inline interfaces
+- **Components**: Named exports (not default), props typed with inline interfaces. Exception: `page.tsx` files use `export default` (Next.js requirement)
 - **DB types**: Derived from `Database` type in `src/types/database.ts` — e.g. `Database['public']['Tables']['links']['Row']`
 - **Styling**: Inline Tailwind utility classes only, blue-600 as primary action color
 - **Short codes**: 6-char alphanumeric random string; custom codes are lowercase alphanumeric + hyphens
@@ -95,3 +100,4 @@ Migrations are in `supabase/migrations/` (8 files, 001–007 + a timestamped dro
 - `custom_domains` and `api_keys` tables exist but have no application code
 - No rate limiting on link creation or redirect endpoints (would require Redis/Upstash)
 - IP addresses are stored raw in `clicks` — consider hashing/truncating for privacy compliance
+- `recharts` and `react-qr-code` are in `package.json` but not used in current code

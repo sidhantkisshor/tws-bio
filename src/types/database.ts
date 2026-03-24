@@ -338,6 +338,11 @@ export type Database = {
           p_browser_name?: string
           p_os_name?: string
           p_device_type?: Database['public']['Enums']['device_type']
+          p_utm_source?: string
+          p_utm_medium?: string
+          p_utm_campaign?: string
+          p_utm_term?: string
+          p_utm_content?: string
         }
         Returns: undefined
       }

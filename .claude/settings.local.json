@@ -23,8 +23,38 @@
       "Bash(cat:*)",
       "Bash(git remote:*)",
       "Bash(git fetch:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(gh pr:*)",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__query-docs",
+      "WebSearch",
+      "Bash(npm view:*)",
+      "Bash(npm run:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npx vercel:*)",
+      "Skill(analyze-codebase:analyze-codebase)",
+      "Bash(source:*)",
+      "Bash(npx supabase:*)",
+      "Bash(apt list:*)",
+      "Bash(psql:*)",
+      "Bash(curl:*)",
+      "Bash(warp-cli:*)",
+      "Bash(yes:*)",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_close",
+      "mcp__plugin_playwright_playwright__browser_run_code",
+      "Bash(npx eslint:*)",
+      "WebFetch(domain:tradingwithsidhant.com)",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_press_key",
+      "mcp__plugin_playwright_playwright__browser_evaluate",
+      "Bash(npx:*)"
     ],
     "deny": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }

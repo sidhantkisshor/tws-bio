@@ -64,6 +64,13 @@ export async function GET(
   const userAgent = request.headers.get('user-agent') || ''
   const referer = request.headers.get('referer') || null
 
+  // Parse UTM parameters from the incoming request URL
+  const utmSource = request.nextUrl.searchParams.get('utm_source') || undefined
+  const utmMedium = request.nextUrl.searchParams.get('utm_medium') || undefined
+  const utmCampaign = request.nextUrl.searchParams.get('utm_campaign') || undefined
+  const utmTerm = request.nextUrl.searchParams.get('utm_term') || undefined
+  const utmContent = request.nextUrl.searchParams.get('utm_content') || undefined
+
   // Use x-forwarded-for header set by the reverse proxy (Vercel/load balancer).
   // Only trust the last value (appended by the proxy closest to us).
   const forwardedFor = request.headers.get('x-forwarded-for')
@@ -106,6 +113,11 @@ export async function GET(
           p_browser_name: getBrowser(userAgent),
           p_os_name: getOS(userAgent),
           p_device_type: getDevice(userAgent),
+          p_utm_source: utmSource,
+          p_utm_medium: utmMedium,
+          p_utm_campaign: utmCampaign,
+          p_utm_term: utmTerm,
+          p_utm_content: utmContent,
         })
       ])
     } catch (err) {
