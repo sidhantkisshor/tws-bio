@@ -49,15 +49,21 @@ export default async function CampaignDetailPage({
 
   const linkIds = (campaignLinks || []).map((l) => l.id)
 
-  const filter = { timeRange, linkIds: linkIds.length > 0 ? linkIds : ['__none__'] }
-  const [clicksOverTime, referrers, devices, countries, browsers, totalClicks] = await Promise.all([
-    getClicksOverTime(filter),
-    getTopReferrers(filter),
-    getDeviceBreakdown(filter),
-    getCountryBreakdown(filter),
-    getBrowserBreakdown(filter),
-    getTotalClicks(filter),
-  ])
+  const empty = { clicksOverTime: [], referrers: [], devices: [], countries: [], browsers: [], totalClicks: 0 }
+  const { clicksOverTime, referrers, devices, countries, browsers, totalClicks } = linkIds.length > 0
+    ? await (async () => {
+        const filter = { timeRange, linkIds }
+        const [clicksOverTime, referrers, devices, countries, browsers, totalClicks] = await Promise.all([
+          getClicksOverTime(filter),
+          getTopReferrers(filter),
+          getDeviceBreakdown(filter),
+          getCountryBreakdown(filter),
+          getBrowserBreakdown(filter),
+          getTotalClicks(filter),
+        ])
+        return { clicksOverTime, referrers, devices, countries, browsers, totalClicks }
+      })()
+    : empty
 
   return (
     <div className="min-h-screen bg-background">
