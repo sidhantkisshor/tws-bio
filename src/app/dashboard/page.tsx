@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
   getClicksOverTime,
@@ -15,6 +14,16 @@ import { ClicksOverTimeChart } from '@/components/charts/ClicksOverTimeChart'
 import { BarChart } from '@/components/charts/BarChart'
 import { DonutChart } from '@/components/charts/DonutChart'
 import { TimeRangePicker } from '@/components/TimeRangePicker'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@/components/ui/table'
 
 const VALID_RANGES = new Set(['7d', '30d', '90d', 'all'])
 
@@ -25,7 +34,6 @@ export default async function DashboardPage({
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
 
   const { range: rangeParam, page: pageParam } = await searchParams
   const timeRange: TimeRange = VALID_RANGES.has(rangeParam || '') ? (rangeParam as TimeRange) : '30d'
@@ -54,7 +62,7 @@ export default async function DashboardPage({
     supabase
       .from('links')
       .select('id, short_code, original_url, link_type, total_clicks, created_at', { count: 'exact' })
-      .eq('user_id', user.id)
+      .eq('user_id', user!.id)
       .order('created_at', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1),
   ])
@@ -64,152 +72,152 @@ export default async function DashboardPage({
   const totalLinks = count || 0
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-            <nav className="flex items-center gap-4">
-              <Link href="/" className="text-gray-700 hover:text-gray-900">Home</Link>
-              <form action="/auth/signout" method="post">
-                <button type="submit" className="text-gray-600 hover:text-gray-800">Sign out</button>
-              </form>
-            </nav>
-          </div>
+    <div>
+      {/* Time Range + Actions */}
+      <div className="flex items-center justify-between mb-8">
+        <TimeRangePicker current={timeRange} basePath="/dashboard" />
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/links">
+            <Button variant="outline">Links</Button>
+          </Link>
+          <Link href="/dashboard/create">
+            <Button>Create Link</Button>
+          </Link>
         </div>
-      </header>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Time Range + Actions */}
-        <div className="flex items-center justify-between mb-8">
-          <TimeRangePicker current={timeRange} basePath="/dashboard" />
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard/campaigns"
-              className="text-gray-700 hover:text-gray-900 font-medium text-sm"
-            >
-              Campaigns
-            </Link>
-            <Link
-              href="/dashboard/create"
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium text-sm"
-            >
-              Create Link
-            </Link>
-          </div>
-        </div>
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <Card className="bg-card border-border">
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground">Total Clicks</p>
+            <p className="text-3xl font-bold font-mono text-foreground">{totalClicks.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground">Total Links</p>
+            <p className="text-3xl font-bold font-mono text-foreground">{totalLinks}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground">Top Referrer</p>
+            <p className="text-3xl font-bold font-mono text-foreground truncate">{topStats.topReferrer}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground">Top Device</p>
+            <p className="text-3xl font-bold font-mono text-foreground">{topStats.topDevice}</p>
+          </CardContent>
+        </Card>
+      </div>
 
-        {/* Stat Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white p-5 rounded-lg shadow-sm">
-            <p className="text-sm text-gray-500">Total Clicks</p>
-            <p className="text-2xl font-bold text-gray-900">{totalClicks.toLocaleString()}</p>
-          </div>
-          <div className="bg-white p-5 rounded-lg shadow-sm">
-            <p className="text-sm text-gray-500">Total Links</p>
-            <p className="text-2xl font-bold text-gray-900">{totalLinks}</p>
-          </div>
-          <div className="bg-white p-5 rounded-lg shadow-sm">
-            <p className="text-sm text-gray-500">Top Referrer</p>
-            <p className="text-2xl font-bold text-gray-900 truncate">{topStats.topReferrer}</p>
-          </div>
-          <div className="bg-white p-5 rounded-lg shadow-sm">
-            <p className="text-sm text-gray-500">Top Device</p>
-            <p className="text-2xl font-bold text-gray-900">{topStats.topDevice}</p>
-          </div>
-        </div>
-
-        {/* Clicks Over Time */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Clicks Over Time</h2>
+      {/* Clicks Over Time */}
+      <Card className="bg-card border-border mb-8">
+        <CardContent className="p-6">
+          <h2 className="text-lg font-semibold text-foreground mb-4">Clicks Over Time</h2>
           <ClicksOverTimeChart data={clicksOverTime} />
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Breakdown Charts */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Referrers</h3>
+      {/* Breakdown Charts */}
+      <div className="grid md:grid-cols-2 gap-6 mb-8">
+        <Card className="bg-card border-border">
+          <CardContent className="p-6">
+            <h3 className="text-sm font-semibold text-foreground mb-4">Referrers</h3>
             <BarChart data={referrers} />
-          </div>
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Devices</h3>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="p-6">
+            <h3 className="text-sm font-semibold text-foreground mb-4">Devices</h3>
             <DonutChart data={devices} />
-          </div>
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Countries</h3>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="p-6">
+            <h3 className="text-sm font-semibold text-foreground mb-4">Countries</h3>
             <BarChart data={countries} color="#059669" />
-          </div>
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Browsers</h3>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="p-6">
+            <h3 className="text-sm font-semibold text-foreground mb-4">Browsers</h3>
             <DonutChart data={browsers} />
-          </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Links Table */}
+      <Card className="bg-card border-border">
+        <div className="px-6 py-4 border-b border-border">
+          <h2 className="text-lg font-semibold text-foreground">Your Links</h2>
         </div>
 
-        {/* Links Table */}
-        <div className="bg-white shadow-sm rounded-lg">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Your Links</h2>
-          </div>
-
-          {links && links.length > 0 ? (
-            <>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Short Link</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Original URL</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Clicks</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {links.map((link) => (
-                      <tr key={link.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <Link href={`/dashboard/links/${link.id}`} className="text-blue-600 hover:text-blue-800">
-                            tws.bio/{link.short_code}
-                          </Link>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900 truncate max-w-xs">{link.original_url}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            link.link_type === 'deep_link' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {link.link_type === 'deep_link' ? 'Deep Link' : 'URL'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{link.total_clicks || 0}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {link.created_at ? new Date(link.created_at).toLocaleDateString() : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {totalPages > 1 && (
-                <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Page {page} of {totalPages} ({count} links)</span>
-                  <div className="flex gap-2">
-                    {page > 1 && (
-                      <Link href={`/dashboard?range=${timeRange}&page=${page - 1}`} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Previous</Link>
-                    )}
-                    {page < totalPages && (
-                      <Link href={`/dashboard?range=${timeRange}&page=${page + 1}`} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Next</Link>
-                    )}
-                  </div>
+        {links && links.length > 0 ? (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="px-6">Short Link</TableHead>
+                  <TableHead className="px-6">Original URL</TableHead>
+                  <TableHead className="px-6">Type</TableHead>
+                  <TableHead className="px-6">Clicks</TableHead>
+                  <TableHead className="px-6">Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {links.map((link) => (
+                  <TableRow key={link.id}>
+                    <TableCell className="px-6 py-4">
+                      <Link href={`/dashboard/links/${link.id}`} className="text-primary hover:text-primary/80">
+                        tws.bio/{link.short_code}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="px-6 py-4 text-foreground truncate max-w-xs">{link.original_url}</TableCell>
+                    <TableCell className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        link.link_type === 'deep_link'
+                          ? 'bg-purple-500/10 text-purple-400'
+                          : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {link.link_type === 'deep_link' ? 'Deep Link' : 'URL'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-6 py-4 text-foreground">{link.total_clicks || 0}</TableCell>
+                    <TableCell className="px-6 py-4 text-muted-foreground">
+                      {link.created_at ? new Date(link.created_at).toLocaleDateString() : '---'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Page {page} of {totalPages} ({count} links)</span>
+                <div className="flex gap-2">
+                  {page > 1 && (
+                    <Link href={`/dashboard?range=${timeRange}&page=${page - 1}`}>
+                      <Button variant="outline">Previous</Button>
+                    </Link>
+                  )}
+                  {page < totalPages && (
+                    <Link href={`/dashboard?range=${timeRange}&page=${page + 1}`}>
+                      <Button variant="outline">Next</Button>
+                    </Link>
+                  )}
                 </div>
-              )}
-            </>
-          ) : (
-            <div className="text-center py-12">
-              <p className="text-gray-500">No links created yet.</p>
-            </div>
-          )}
-        </div>
-      </main>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">No links created yet.</p>
+          </div>
+        )}
+      </Card>
     </div>
   )
 }
