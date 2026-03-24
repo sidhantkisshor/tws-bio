@@ -13,18 +13,27 @@ export default async function CampaignsPage() {
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
-  const campaignStats = await Promise.all(
-    (campaigns || []).map(async (campaign) => {
-      const { data: links } = await supabase
+  const campaignIds = (campaigns || []).map((c) => c.id)
+  const { data: allLinks } = campaignIds.length > 0
+    ? await supabase
         .from('links')
-        .select('id, total_clicks')
-        .eq('campaign_id', campaign.id)
+        .select('campaign_id, total_clicks')
+        .in('campaign_id', campaignIds)
+    : { data: [] as { campaign_id: string | null; total_clicks: number | null }[] }
 
-      const totalLinks = links?.length || 0
-      const totalClicks = links?.reduce((sum, l) => sum + (l.total_clicks || 0), 0) || 0
-      return { ...campaign, totalLinks, totalClicks }
-    })
-  )
+  const linksByCampaign = new Map<string, { count: number; clicks: number }>()
+  for (const link of allLinks || []) {
+    if (!link.campaign_id) continue
+    const stats = linksByCampaign.get(link.campaign_id) || { count: 0, clicks: 0 }
+    stats.count++
+    stats.clicks += link.total_clicks || 0
+    linksByCampaign.set(link.campaign_id, stats)
+  }
+
+  const campaignStats = (campaigns || []).map((campaign) => {
+    const stats = linksByCampaign.get(campaign.id) || { count: 0, clicks: 0 }
+    return { ...campaign, totalLinks: stats.count, totalClicks: stats.clicks }
+  })
 
   return (
     <div className="min-h-screen bg-background">

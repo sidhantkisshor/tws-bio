@@ -15,7 +15,7 @@ export function Footer() {
           </a>
         </p>
         <p className="text-muted-foreground text-xs mt-3">
-          &copy; 2025 Trading with Sidhant. All rights reserved.
+          &copy; {new Date().getFullYear()} Trading with Sidhant. All rights reserved.
         </p>
       </div>
     </footer>
