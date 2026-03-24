@@ -2,7 +2,7 @@
 
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
-const COLORS = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#6b7280']
+const COLORS = ['#00B03B', '#7c3aed', '#059669', '#d97706', '#dc2626', '#6b7280']
 
 interface DonutChartProps {
   data: { name: string; value: number }[]
@@ -10,7 +10,7 @@ interface DonutChartProps {
 
 export function DonutChart({ data }: DonutChartProps) {
   if (data.length === 0) {
-    return <div className="h-48 flex items-center justify-center text-gray-400">No data</div>
+    return <div className="h-48 flex items-center justify-center text-muted-foreground">No data</div>
   }
 
   return (
@@ -29,9 +29,11 @@ export function DonutChart({ data }: DonutChartProps) {
             <Cell key={index} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
-        <Tooltip />
+        <Tooltip
+          contentStyle={{ backgroundColor: '#111111', border: '1px solid #1f1f1f', borderRadius: '8px', color: '#e5e5e5' }}
+        />
         <Legend
-          formatter={(value: string) => <span className="text-sm text-gray-600">{value}</span>}
+          formatter={(value: string) => <span className="text-sm text-muted-foreground">{value}</span>}
         />
       </PieChart>
     </ResponsiveContainer>
