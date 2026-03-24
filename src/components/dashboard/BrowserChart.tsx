@@ -11,7 +11,7 @@ import {
 const chartConfig: ChartConfig = {
   count: {
     label: 'Clicks',
-    color: 'hsl(var(--chart-1))',
+    color: 'var(--chart-1)',
   },
 }
 
@@ -35,13 +35,13 @@ export function BrowserChart({
           dataKey="browser"
           tickLine={false}
           axisLine={false}
-          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+          tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
         />
         <YAxis
           allowDecimals={false}
           tickLine={false}
           axisLine={false}
-          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+          tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
         />
         <ChartTooltip content={<ChartTooltipContent />} />
         <Bar

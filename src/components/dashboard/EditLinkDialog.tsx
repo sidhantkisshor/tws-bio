@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { isValidUrl } from '@/lib/utils'
 import type { Database } from '@/types/database'
 import {
   Dialog,
@@ -42,6 +43,10 @@ export function EditLinkDialog({
   )
 
   async function handleSave() {
+    if (!isValidUrl(originalUrl)) {
+      toast.error('Please enter a valid URL')
+      return
+    }
     setSaving(true)
     try {
       const supabase = createClient()
