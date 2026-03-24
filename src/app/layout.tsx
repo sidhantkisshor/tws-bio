@@ -1,19 +1,12 @@
 import type { Metadata } from "next";
-import { Inter, DM_Serif_Display } from "next/font/google";
-import { Toaster } from "@/components/ui/sonner";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const dmSerif = DM_Serif_Display({
-  weight: "400",
-  subsets: ["latin"],
-  style: "italic",
-  variable: "--font-dm-serif",
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "tws.bio - URL Shortener",
-  description: "Shorten your URLs with tws.bio — by Trading with Sidhant",
+  title: "tws.bio — @tradingwithsidhant",
+  description: "Trading, markets & options",
 };
 
 export default function RootLayout({
@@ -22,11 +15,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`dark ${inter.variable} ${dmSerif.variable}`}>
-      <body className={inter.className}>
-        {children}
-        <Toaster />
-      </body>
+    <html lang="en">
+      <body className={inter.className}>{children}</body>
     </html>
   );
 }

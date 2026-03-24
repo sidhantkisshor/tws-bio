@@ -1,20 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { generateShortCode, isValidUrl, getShortUrl } from '@/lib/utils'
 import { detectDeepLinks } from '@/lib/deeplinks'
-import type { User } from '@supabase/supabase-js'
-import type { Database } from '@/types/database'
 
-type Link = Database['public']['Tables']['links']['Row']
-
-interface CreateLinkFormProps {
-  user: User | null
-  onLinkCreated: (link: Link) => void
-}
-
-export function CreateLinkForm({ user, onLinkCreated }: CreateLinkFormProps) {
+export function CreateLinkForm() {
+  const router = useRouter()
   const [url, setUrl] = useState('')
   const [customCode, setCustomCode] = useState('')
   const [loading, setLoading] = useState(false)
@@ -28,53 +21,27 @@ export function CreateLinkForm({ user, onLinkCreated }: CreateLinkFormProps) {
   const [detectedPlatform, setDetectedPlatform] = useState<string | null>(null)
   const [autoDetected, setAutoDetected] = useState(false)
 
-  const resetForm = () => {
-    setUrl('')
-    setCustomCode('')
-    setIosDeepLink('')
-    setAndroidDeepLink('')
-    setFallbackUrl('')
-    setLinkType('url')
-    setShowAdvanced(false)
-    setDetectedPlatform(null)
-    setAutoDetected(false)
-  }
-
   const handleUrlChange = (newUrl: string) => {
     setUrl(newUrl)
-    
-    // Try to detect deep links
+
     if (newUrl && isValidUrl(newUrl)) {
       const deepLinkConfig = detectDeepLinks(newUrl)
-      
+
       if (deepLinkConfig) {
         setDetectedPlatform(deepLinkConfig.platform)
         setAutoDetected(true)
-        
-        // Auto-populate deep link fields if they're empty or were auto-detected before
-        if (!iosDeepLink || autoDetected) {
-          setIosDeepLink(deepLinkConfig.ios || '')
-        }
-        if (!androidDeepLink || autoDetected) {
-          setAndroidDeepLink(deepLinkConfig.android || '')
-        }
-        if (!fallbackUrl || autoDetected) {
-          setFallbackUrl(deepLinkConfig.fallback)
-        }
-        
-        // Automatically switch to deep link mode
+        if (!iosDeepLink || autoDetected) setIosDeepLink(deepLinkConfig.ios || '')
+        if (!androidDeepLink || autoDetected) setAndroidDeepLink(deepLinkConfig.android || '')
+        if (!fallbackUrl || autoDetected) setFallbackUrl(deepLinkConfig.fallback)
         setLinkType('deep_link')
         setShowAdvanced(true)
-      } else {
-        // Reset if no platform detected and fields were auto-populated
-        if (autoDetected) {
-          setIosDeepLink('')
-          setAndroidDeepLink('')
-          setFallbackUrl('')
-          setLinkType('url')
-          setDetectedPlatform(null)
-          setAutoDetected(false)
-        }
+      } else if (autoDetected) {
+        setIosDeepLink('')
+        setAndroidDeepLink('')
+        setFallbackUrl('')
+        setLinkType('url')
+        setDetectedPlatform(null)
+        setAutoDetected(false)
       }
     }
   }
@@ -93,69 +60,48 @@ export function CreateLinkForm({ user, onLinkCreated }: CreateLinkFormProps) {
     const supabase = createClient()
 
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setError('You must be logged in to create links')
+        return
+      }
+
       const shortCode = customCode || generateShortCode()
-      
+
       if (linkType === 'deep_link') {
         const { data, error: rpcError } = await supabase.rpc('create_deep_link', {
           p_short_code: shortCode,
           p_original_url: url,
-          p_user_id: user?.id,
+          p_user_id: user.id,
           p_ios_deep_link: iosDeepLink || undefined,
           p_android_deep_link: androidDeepLink || undefined,
           p_fallback_url: fallbackUrl || undefined,
         })
 
-        if (rpcError) {
-          throw new Error(rpcError.message)
-        }
-
+        if (rpcError) throw new Error(rpcError.message)
         if (data) {
           const shortUrl = getShortUrl(data.short_code)
           try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
           setSuccess('Deep link created and copied to clipboard!')
-          onLinkCreated(data)
-          // Persist anonymous link ID for retrieval after page reload
-          if (!user && data) {
-            try {
-              const stored = JSON.parse(localStorage.getItem('anon_links') || '[]') as string[]
-              stored.unshift(data.id)
-              localStorage.setItem('anon_links', JSON.stringify(stored.slice(0, 50)))
-            } catch { /* localStorage unavailable */ }
-          }
-          resetForm()
-          setTimeout(() => setSuccess(''), 3000)
+          setTimeout(() => router.push('/dashboard'), 1500)
         }
       } else {
-        // Use RPC for regular links
         const { data, error: rpcError } = await supabase.rpc('create_link', {
           p_short_code: shortCode,
           p_original_url: url,
-          p_user_id: user?.id,
+          p_user_id: user.id,
         })
 
-        if (rpcError) {
-          throw new Error(rpcError.message)
-        }
-
+        if (rpcError) throw new Error(rpcError.message)
         if (data) {
           const shortUrl = getShortUrl(data.short_code)
           try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
           setSuccess('Link created and copied to clipboard!')
-          onLinkCreated(data)
-          // Persist anonymous link ID for retrieval after page reload
-          if (!user && data) {
-            try {
-              const stored = JSON.parse(localStorage.getItem('anon_links') || '[]') as string[]
-              stored.unshift(data.id)
-              localStorage.setItem('anon_links', JSON.stringify(stored.slice(0, 50)))
-            } catch { /* localStorage unavailable */ }
-          }
-          resetForm()
-          setTimeout(() => setSuccess(''), 3000)
+          setTimeout(() => router.push('/dashboard'), 1500)
         }
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to create link')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create link')
     } finally {
       setLoading(false)
     }
@@ -168,14 +114,6 @@ export function CreateLinkForm({ user, onLinkCreated }: CreateLinkFormProps) {
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Shorten Your URL</h2>
           <p className="text-gray-600">Create a short, memorable link in seconds</p>
         </div>
-
-        {!user && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-800">
-              <a href="/login" className="font-semibold underline">Sign in</a> to save and manage your links
-            </p>
-          </div>
-        )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -245,17 +183,16 @@ export function CreateLinkForm({ user, onLinkCreated }: CreateLinkFormProps) {
             </div>
           </div>
 
-          {/* Advanced Options */}
           <div>
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
               className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
             >
-              <svg 
-                className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} 
-                fill="none" 
-                stroke="currentColor" 
+              <svg
+                className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
+                fill="none"
+                stroke="currentColor"
                 viewBox="0 0 24 24"
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -267,28 +204,14 @@ export function CreateLinkForm({ user, onLinkCreated }: CreateLinkFormProps) {
           {showAdvanced && (
             <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Link Type
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Link Type</label>
                 <div className="flex gap-4">
                   <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="url"
-                      checked={linkType === 'url'}
-                      onChange={(e) => setLinkType(e.target.value as 'url')}
-                      className="mr-2"
-                    />
+                    <input type="radio" value="url" checked={linkType === 'url'} onChange={(e) => setLinkType(e.target.value as 'url')} className="mr-2" />
                     <span className="text-sm">Regular URL</span>
                   </label>
                   <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="deep_link"
-                      checked={linkType === 'deep_link'}
-                      onChange={(e) => setLinkType(e.target.value as 'deep_link')}
-                      className="mr-2"
-                    />
+                    <input type="radio" value="deep_link" checked={linkType === 'deep_link'} onChange={(e) => setLinkType(e.target.value as 'deep_link')} className="mr-2" />
                     <span className="text-sm">Deep Link (Mobile App)</span>
                   </label>
                 </div>
@@ -300,54 +223,20 @@ export function CreateLinkForm({ user, onLinkCreated }: CreateLinkFormProps) {
                     <label htmlFor="ios" className="block text-sm font-medium text-gray-700 mb-2">
                       iOS Deep Link {autoDetected && <span className="text-purple-600">(Auto-detected)</span>}
                     </label>
-                    <input
-                      id="ios"
-                      type="text"
-                      value={iosDeepLink}
-                      onChange={(e) => {
-                        setIosDeepLink(e.target.value)
-                        setAutoDetected(false)
-                      }}
-                      placeholder="myapp://screen/path"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                    <input id="ios" type="text" value={iosDeepLink} onChange={(e) => { setIosDeepLink(e.target.value); setAutoDetected(false) }} placeholder="myapp://screen/path" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                   </div>
-
                   <div>
                     <label htmlFor="android" className="block text-sm font-medium text-gray-700 mb-2">
                       Android Deep Link {autoDetected && <span className="text-purple-600">(Auto-detected)</span>}
                     </label>
-                    <input
-                      id="android"
-                      type="text"
-                      value={androidDeepLink}
-                      onChange={(e) => {
-                        setAndroidDeepLink(e.target.value)
-                        setAutoDetected(false)
-                      }}
-                      placeholder="myapp://screen/path"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                    <input id="android" type="text" value={androidDeepLink} onChange={(e) => { setAndroidDeepLink(e.target.value); setAutoDetected(false) }} placeholder="myapp://screen/path" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                   </div>
-
                   <div>
                     <label htmlFor="fallback" className="block text-sm font-medium text-gray-700 mb-2">
                       Fallback URL {autoDetected && <span className="text-purple-600">(Auto-detected)</span>}
                     </label>
-                    <input
-                      id="fallback"
-                      type="url"
-                      value={fallbackUrl}
-                      onChange={(e) => {
-                        setFallbackUrl(e.target.value)
-                        setAutoDetected(false)
-                      }}
-                      placeholder="https://app-store-link.com"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Where to redirect if the app is not installed
-                    </p>
+                    <input id="fallback" type="url" value={fallbackUrl} onChange={(e) => { setFallbackUrl(e.target.value); setAutoDetected(false) }} placeholder="https://app-store-link.com" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    <p className="text-xs text-gray-500 mt-1">Where to redirect if the app is not installed</p>
                   </div>
                 </>
               )}
