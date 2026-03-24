@@ -81,7 +81,7 @@ export type Database = {
           device_name: string | null
           device_type: Database["public"]["Enums"]["device_type"] | null
           id: string
-          ip_address: unknown
+          ip_address: string | null
           is_bot: boolean | null
           latitude: number | null
           link_id: string
@@ -329,6 +329,18 @@ export type Database = {
       increment_link_clicks:
         | { Args: { link_id: string }; Returns: undefined }
         | { Args: { link_id: string; visitor_id: string }; Returns: undefined }
+      record_click: {
+        Args: {
+          p_link_id: string
+          p_ip_address?: string
+          p_user_agent?: string
+          p_referrer_url?: string
+          p_browser_name?: string
+          p_os_name?: string
+          p_device_type?: Database['public']['Enums']['device_type']
+        }
+        Returns: undefined
+      }
       uid: { Args: never; Returns: string }
     }
     Enums: {

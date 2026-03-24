@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { NextRequest, NextResponse } from 'next/server'
-import { headers } from 'next/headers'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { BLOCKED_HOSTNAMES } from '@/lib/utils'
 
 function isIOS(userAgent: string): boolean {
@@ -49,24 +48,31 @@ function isSafeUrl(url: string): boolean {
   return true
 }
 
+function jsonEscapeForHtml(value: string): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ shortCode: string }> }
 ) {
   const { shortCode } = await params
   const supabase = await createClient()
-  const headersList = await headers()
 
-  const userAgent = headersList.get('user-agent') || ''
-  const referer = headersList.get('referer') || null
+  const userAgent = request.headers.get('user-agent') || ''
+  const referer = request.headers.get('referer') || null
 
-  const forwardedFor = headersList.get('x-forwarded-for')
-  const ip = forwardedFor ? forwardedFor.split(',')[0].trim() : null
+  // Use x-forwarded-for header set by the reverse proxy (Vercel/load balancer).
+  // Only trust the last value (appended by the proxy closest to us).
+  const forwardedFor = request.headers.get('x-forwarded-for')
+  const ip = forwardedFor ? forwardedFor.split(',').pop()!.trim() : null
 
   // Get the link
   const { data: link, error } = await supabase
     .from('links')
-    .select('*')
+    .select('id, short_code, original_url, link_type, is_active, expires_at, max_clicks, total_clicks, ios_deep_link, android_deep_link, fallback_url')
     .eq('short_code', shortCode)
     .eq('is_active', true)
     .single()
@@ -85,20 +91,26 @@ export async function GET(
     return new NextResponse('This link has reached its click limit', { status: 410 })
   }
 
-  // Track analytics asynchronously (fire-and-forget)
-  Promise.all([
-    supabase.rpc('increment_link_clicks', { link_id: link.id }),
-    supabase.from('clicks').insert({
-      link_id: link.id,
-      ip_address: ip,
-      user_agent: userAgent,
-      referrer_url: referer,
-      browser_name: getBrowser(userAgent),
-      os_name: getOS(userAgent),
-      device_type: getDevice(userAgent),
-    })
-  ]).catch(err => {
-    console.error('Error tracking analytics:', err)
+  // Track analytics asynchronously via after()
+  // NOTE: Full IP is stored for analytics. Consider hashing or truncating
+  // for PII compliance in production (e.g., zero last octet for IPv4).
+  after(async () => {
+    try {
+      await Promise.all([
+        supabase.rpc('increment_link_clicks', { link_id: link.id }),
+        supabase.rpc('record_click', {
+          p_link_id: link.id,
+          p_ip_address: ip ?? undefined,
+          p_user_agent: userAgent || undefined,
+          p_referrer_url: referer ?? undefined,
+          p_browser_name: getBrowser(userAgent),
+          p_os_name: getOS(userAgent),
+          p_device_type: getDevice(userAgent),
+        })
+      ])
+    } catch (err) {
+      console.error('Error tracking analytics:', err)
+    }
   })
 
   // Handle deep linking
@@ -116,9 +128,9 @@ export async function GET(
         : null
 
     if (deepLink && isSafeUrl(deepLink) && fallbackUrl) {
-      const safeDeepLink = JSON.stringify(deepLink).replace(/\//g, '\\/')
-      const safeFallbackUrl = JSON.stringify(fallbackUrl).replace(/\//g, '\\/')
-      const fallbackUrlAttr = fallbackUrl.replace(/"/g, '&quot;')
+      const safeDeepLink = jsonEscapeForHtml(deepLink)
+      const safeFallbackUrl = jsonEscapeForHtml(fallbackUrl)
+      const fallbackUrlAttr = encodeURI(fallbackUrl)
 
       const html = `
         <!DOCTYPE html>
@@ -191,7 +203,10 @@ export async function GET(
   }
 
   // Regular redirect
-  return NextResponse.redirect(isSafeUrl(link.original_url) ? link.original_url : new URL('/', request.url).toString())
+  if (!isSafeUrl(link.original_url)) {
+    return new NextResponse('This link has been flagged as unsafe and cannot be accessed.', { status: 403 })
+  }
+  return NextResponse.redirect(link.original_url)
 }
 
 // Browser detection - order matters: check specific browsers before generic ones
