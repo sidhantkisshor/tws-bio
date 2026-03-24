@@ -1,61 +1,55 @@
-import { HomeHeader } from '@/components/HomeHeader'
-import { HomeInteractive } from '@/components/HomeInteractive'
+import { bio } from '@/config/bio'
+import { SocialIcon } from '@/components/SocialIcon'
+import Image from 'next/image'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: `${bio.name} — ${bio.handle}`,
+  description: bio.tagline,
+}
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      <HomeHeader />
-
-      {/* Hero Section */}
-      <section className="py-20 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-5xl font-bold text-gray-900 mb-6">
-            Short Links, Big Impact
-          </h2>
-          <p className="text-xl text-gray-600 mb-12">
-            Create custom short links and QR codes in seconds. Track clicks and manage your links with ease.
-          </p>
+    <div className="min-h-screen bg-white flex items-center justify-center px-4">
+      <div className="w-full max-w-sm py-16">
+        {/* Profile */}
+        <div className="text-center mb-10">
+          <Image
+            src={bio.avatar}
+            alt={bio.name}
+            width={80}
+            height={80}
+            className="rounded-full mx-auto mb-4"
+            priority
+          />
+          <h1 className="text-xl font-bold text-gray-900">{bio.name}</h1>
+          <p className="text-sm text-gray-500">{bio.handle}</p>
+          <p className="text-sm text-gray-400 mt-1">{bio.tagline}</p>
         </div>
 
-        <HomeInteractive />
-      </section>
-
-      {/* Features Section — always visible for SEO, hidden by CSS when links are shown */}
-      <section className="py-20 px-4 bg-gray-50">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold mb-2">Lightning Fast</h3>
-              <p className="text-gray-600">Create short links instantly with our optimized platform</p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold mb-2">Analytics</h3>
-              <p className="text-gray-600">Track clicks and understand your audience better</p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold mb-2">Deep Linking</h3>
-              <p className="text-gray-600">Smart mobile deep links with automatic app detection</p>
-            </div>
-          </div>
+        {/* Links */}
+        <div className="space-y-3">
+          {bio.links.map((link) => {
+            const isExternal = link.url.startsWith('http')
+            return (
+              <a
+                key={link.label}
+                href={link.url}
+                {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                className="flex items-center gap-3 w-full px-5 py-3.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-900"
+              >
+                <SocialIcon name={link.icon} />
+                <span className="text-sm font-medium">{link.label}</span>
+              </a>
+            )
+          })}
         </div>
-      </section>
+
+        {/* Footer */}
+        <p className="text-center text-xs text-gray-300 mt-12">
+          tws.bio
+        </p>
+      </div>
     </div>
   )
 }
