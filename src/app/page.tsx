@@ -16,15 +16,22 @@ export default function HomePage() {
 
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="max-w-5xl mx-auto px-4 pt-28 pb-12 md:py-28">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight">
+        <section className="relative max-w-5xl mx-auto px-4 pt-28 pb-12 md:py-28">
+          {/* Gradient glow effect */}
+          <div
+            className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[400px] opacity-30 blur-[120px]"
+            style={{
+              background: 'radial-gradient(ellipse at center, rgba(0,176,59,0.4) 0%, rgba(20,184,166,0.2) 40%, transparent 70%)',
+            }}
+          />
+          <h1 className="relative text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight">
             Short Links,
             <br />
             <span className="font-[family-name:var(--font-dm-serif)] italic text-primary">
               Big Impact
             </span>
           </h1>
-          <p className="text-muted-foreground text-xl mt-6 max-w-2xl">
+          <p className="relative text-muted-foreground text-xl mt-6 max-w-2xl">
             Create short links with analytics and mobile deep linking. Free, fast, no account required.
           </p>
         </section>

@@ -98,7 +98,14 @@ export default async function DashboardPage() {
       <h1 className="text-2xl font-bold text-foreground mb-6">Overview</h1>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* Gradient glow effect behind stat cards */}
+        <div
+          className="pointer-events-none absolute -top-16 left-1/2 -translate-x-1/2 w-[500px] h-[200px] opacity-20 blur-[100px]"
+          style={{
+            background: 'radial-gradient(ellipse at center, rgba(0,176,59,0.5) 0%, rgba(20,184,166,0.25) 50%, transparent 80%)',
+          }}
+        />
         <StatCard
           title="Total Links"
           value={totalLinks}
