@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { generateShortCode, isValidUrl, getShortUrl } from '@/lib/utils'
@@ -20,6 +20,21 @@ export function CreateLinkForm() {
   const [fallbackUrl, setFallbackUrl] = useState('')
   const [detectedPlatform, setDetectedPlatform] = useState<string | null>(null)
   const [autoDetected, setAutoDetected] = useState(false)
+  const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([])
+  const [selectedCampaignId, setSelectedCampaignId] = useState('')
+  const [newCampaignName, setNewCampaignName] = useState('')
+
+  useEffect(() => {
+    async function loadCampaigns() {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('campaigns')
+        .select('id, name')
+        .order('created_at', { ascending: false })
+      setCampaigns(data || [])
+    }
+    loadCampaigns()
+  }, [])
 
   const handleUrlChange = (newUrl: string) => {
     setUrl(newUrl)
@@ -68,6 +83,20 @@ export function CreateLinkForm() {
 
       const shortCode = customCode || generateShortCode()
 
+      // Resolve campaign ID (create new campaign if needed)
+      let campaignId: string | undefined = undefined
+      if (selectedCampaignId === '__new__' && newCampaignName.trim()) {
+        const { data: newCampaign, error: campaignError } = await supabase
+          .from('campaigns')
+          .insert({ name: newCampaignName.trim(), user_id: user.id })
+          .select('id')
+          .single()
+        if (campaignError) throw new Error(campaignError.message)
+        campaignId = newCampaign.id
+      } else if (selectedCampaignId && selectedCampaignId !== '__new__') {
+        campaignId = selectedCampaignId
+      }
+
       if (linkType === 'deep_link') {
         const { data, error: rpcError } = await supabase.rpc('create_deep_link', {
           p_short_code: shortCode,
@@ -80,6 +109,9 @@ export function CreateLinkForm() {
 
         if (rpcError) throw new Error(rpcError.message)
         if (data) {
+          if (campaignId) {
+            await supabase.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
+          }
           const shortUrl = getShortUrl(data.short_code)
           try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
           setSuccess('Deep link created and copied to clipboard!')
@@ -94,6 +126,9 @@ export function CreateLinkForm() {
 
         if (rpcError) throw new Error(rpcError.message)
         if (data) {
+          if (campaignId) {
+            await supabase.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
+          }
           const shortUrl = getShortUrl(data.short_code)
           try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
           setSuccess('Link created and copied to clipboard!')
@@ -181,6 +216,33 @@ export function CreateLinkForm() {
                 pattern="[a-z0-9-]+"
               />
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="campaign" className="block text-sm font-medium text-gray-700 mb-2">
+              Campaign (optional)
+            </label>
+            <select
+              id="campaign"
+              value={selectedCampaignId}
+              onChange={(e) => setSelectedCampaignId(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            >
+              <option value="">No campaign</option>
+              {campaigns.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+              <option value="__new__">+ New campaign...</option>
+            </select>
+            {selectedCampaignId === '__new__' && (
+              <input
+                type="text"
+                value={newCampaignName}
+                onChange={(e) => setNewCampaignName(e.target.value)}
+                placeholder="Campaign name"
+                className="w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            )}
           </div>
 
           <div>
