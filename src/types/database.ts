@@ -39,6 +39,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      campaigns: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          user_id: string
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          user_id: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          user_id?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       api_keys: {
         Row: {
           created_at: string | null
@@ -206,6 +233,7 @@ export type Database = {
       links: {
         Row: {
           android_deep_link: string | null
+          campaign_id: string | null
           created_at: string | null
           custom_meta: Json | null
           description: string | null
@@ -229,6 +257,7 @@ export type Database = {
         }
         Insert: {
           android_deep_link?: string | null
+          campaign_id?: string | null
           created_at?: string | null
           custom_meta?: Json | null
           description?: string | null
@@ -252,6 +281,7 @@ export type Database = {
         }
         Update: {
           android_deep_link?: string | null
+          campaign_id?: string | null
           created_at?: string | null
           custom_meta?: Json | null
           description?: string | null

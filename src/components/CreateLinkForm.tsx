@@ -5,14 +5,20 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { generateShortCode, isValidUrl, getShortUrl } from '@/lib/utils'
 import { detectDeepLinks } from '@/lib/deeplinks'
+import { toast } from 'sonner'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { useAuth } from '@/hooks/useAuth'
 
 export function CreateLinkForm() {
   const router = useRouter()
+  const { user } = useAuth()
   const [url, setUrl] = useState('')
   const [customCode, setCustomCode] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [linkType, setLinkType] = useState<'url' | 'deep_link'>('url')
   const [iosDeepLink, setIosDeepLink] = useState('')
@@ -27,7 +33,8 @@ export function CreateLinkForm() {
   useEffect(() => {
     async function loadCampaigns() {
       const supabase = createClient()
-      const { data } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
         .from('campaigns')
         .select('id, name')
         .order('created_at', { ascending: false })
@@ -63,11 +70,9 @@ export function CreateLinkForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
-    setSuccess('')
 
     if (!isValidUrl(url)) {
-      setError('Please enter a valid URL')
+      toast.error('Please enter a valid URL')
       return
     }
 
@@ -77,16 +82,18 @@ export function CreateLinkForm() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        setError('You must be logged in to create links')
+        toast.error('You must be logged in to create links')
         return
       }
 
       const shortCode = customCode || generateShortCode()
 
       // Resolve campaign ID (create new campaign if needed)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any
       let campaignId: string | undefined = undefined
       if (selectedCampaignId === '__new__' && newCampaignName.trim()) {
-        const { data: newCampaign, error: campaignError } = await supabase
+        const { data: newCampaign, error: campaignError } = await sb
           .from('campaigns')
           .insert({ name: newCampaignName.trim(), user_id: user.id })
           .select('id')
@@ -110,11 +117,11 @@ export function CreateLinkForm() {
         if (rpcError) throw new Error(rpcError.message)
         if (data) {
           if (campaignId) {
-            await supabase.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
+            await sb.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
           }
           const shortUrl = getShortUrl(data.short_code)
           try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
-          setSuccess('Deep link created and copied to clipboard!')
+          toast.success('Deep link created and copied to clipboard!')
           setTimeout(() => router.push('/dashboard'), 1500)
         }
       } else {
@@ -127,16 +134,16 @@ export function CreateLinkForm() {
         if (rpcError) throw new Error(rpcError.message)
         if (data) {
           if (campaignId) {
-            await supabase.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
+            await sb.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
           }
           const shortUrl = getShortUrl(data.short_code)
           try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
-          setSuccess('Link created and copied to clipboard!')
+          toast.success('Link created and copied to clipboard!')
           setTimeout(() => router.push('/dashboard'), 1500)
         }
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create link')
+      toast.error(err instanceof Error ? err.message : 'Failed to create link')
     } finally {
       setLoading(false)
     }
@@ -144,176 +151,196 @@ export function CreateLinkForm() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-lg p-8 space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Shorten Your URL</h2>
-          <p className="text-gray-600">Create a short, memorable link in seconds</p>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-sm text-red-800">{error}</p>
-          </div>
-        )}
-
-        {success && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <p className="text-sm text-green-800">{success}</p>
-          </div>
-        )}
-
-        {detectedPlatform && (
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-sm text-purple-800">
-                <strong>{detectedPlatform}</strong> deep links detected and configured automatically!
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-xl text-foreground">Shorten Your URL</CardTitle>
+          <CardDescription>Create a short, memorable link in seconds</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!user && (
+            <div className="mb-6 rounded-lg border border-primary/20 bg-primary/10 p-4">
+              <p className="text-sm text-primary">
+                <a href="/login" className="font-semibold underline underline-offset-4 hover:text-primary/80">Sign in</a>{' '}
+                to save links to your dashboard and access analytics.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowAdvanced(true)}
-              className="text-purple-600 hover:text-purple-800 text-sm font-medium"
-            >
-              View settings
-            </button>
-          </div>
-        )}
+          )}
 
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-2">
-              Long URL
-            </label>
-            <input
-              id="url"
-              type="url"
-              value={url}
-              onChange={(e) => handleUrlChange(e.target.value)}
-              placeholder="https://example.com/very-long-url"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="custom" className="block text-sm font-medium text-gray-700 mb-2">
-              Custom short code (optional)
-            </label>
-            <div className="flex rounded-lg overflow-hidden border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
-              <span className="bg-gray-50 px-4 py-3 text-gray-600 border-r border-gray-300">
-                {process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'}/
-              </span>
-              <input
-                id="custom"
-                type="text"
-                value={customCode}
-                onChange={(e) => setCustomCode(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                placeholder="custom-link"
-                className="flex-1 px-4 py-3 focus:outline-none"
-                pattern="[a-z0-9-]+"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="campaign" className="block text-sm font-medium text-gray-700 mb-2">
-              Campaign (optional)
-            </label>
-            <select
-              id="campaign"
-              value={selectedCampaignId}
-              onChange={(e) => setSelectedCampaignId(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-            >
-              <option value="">No campaign</option>
-              {campaigns.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-              <option value="__new__">+ New campaign...</option>
-            </select>
-            {selectedCampaignId === '__new__' && (
-              <input
-                type="text"
-                value={newCampaignName}
-                onChange={(e) => setNewCampaignName(e.target.value)}
-                placeholder="Campaign name"
-                className="w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {detectedPlatform && (
+              <div className="rounded-lg border border-primary/20 bg-primary/10 p-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm text-primary">
+                    <strong>{detectedPlatform}</strong> deep links detected and configured automatically!
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(true)}
+                  className="text-primary hover:text-primary/80 text-sm font-medium"
+                >
+                  View settings
+                </button>
+              </div>
             )}
-          </div>
 
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
-            >
-              <svg
-                className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-              Advanced Options (Deep Linking)
-            </button>
-          </div>
-
-          {showAdvanced && (
-            <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+            <div className="space-y-4">
+              {/* URL input row */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Link Type</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center">
-                    <input type="radio" value="url" checked={linkType === 'url'} onChange={(e) => setLinkType(e.target.value as 'url')} className="mr-2" />
-                    <span className="text-sm">Regular URL</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input type="radio" value="deep_link" checked={linkType === 'deep_link'} onChange={(e) => setLinkType(e.target.value as 'deep_link')} className="mr-2" />
-                    <span className="text-sm">Deep Link (Mobile App)</span>
-                  </label>
+                <Label htmlFor="url" className="mb-2">Long URL</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="url"
+                    type="url"
+                    value={url}
+                    onChange={(e) => handleUrlChange(e.target.value)}
+                    placeholder="https://example.com/very-long-url"
+                    className="flex-1 bg-muted h-10"
+                    required
+                  />
+                  <Button type="submit" disabled={loading} className="h-10 px-6">
+                    {loading ? 'Creating...' : linkType === 'deep_link' ? 'Create Deep Link' : 'Shorten'}
+                  </Button>
                 </div>
               </div>
 
-              {linkType === 'deep_link' && (
-                <>
+              {/* Custom code input */}
+              <div>
+                <Label htmlFor="custom" className="mb-2">Custom short code (optional)</Label>
+                <div className="flex">
+                  <span className="inline-flex items-center rounded-l-lg border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
+                    {process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'}/
+                  </span>
+                  <Input
+                    id="custom"
+                    type="text"
+                    value={customCode}
+                    onChange={(e) => setCustomCode(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                    placeholder="custom-link"
+                    className="rounded-l-none bg-muted h-10"
+                    pattern="[a-z0-9-]+"
+                  />
+                </div>
+              </div>
+
+              {/* Campaign selector */}
+              <div>
+                <Label htmlFor="campaign" className="mb-2">Campaign (optional)</Label>
+                <select
+                  id="campaign"
+                  value={selectedCampaignId}
+                  onChange={(e) => setSelectedCampaignId(e.target.value)}
+                  className="w-full h-10 rounded-lg border border-input bg-muted px-3 text-sm text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                >
+                  <option value="">No campaign</option>
+                  {campaigns.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                  <option value="__new__">+ New campaign...</option>
+                </select>
+                {selectedCampaignId === '__new__' && (
+                  <Input
+                    type="text"
+                    value={newCampaignName}
+                    onChange={(e) => setNewCampaignName(e.target.value)}
+                    placeholder="Campaign name"
+                    className="mt-2 bg-muted h-10"
+                  />
+                )}
+              </div>
+
+              {/* Advanced options toggle */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1"
+                >
+                  <svg
+                    className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  Advanced Options (Deep Linking)
+                </button>
+              </div>
+
+              {showAdvanced && (
+                <div className="space-y-4 p-4 bg-muted rounded-lg">
                   <div>
-                    <label htmlFor="ios" className="block text-sm font-medium text-gray-700 mb-2">
-                      iOS Deep Link {autoDetected && <span className="text-purple-600">(Auto-detected)</span>}
-                    </label>
-                    <input id="ios" type="text" value={iosDeepLink} onChange={(e) => { setIosDeepLink(e.target.value); setAutoDetected(false) }} placeholder="myapp://screen/path" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    <Label className="mb-3">Link Type</Label>
+                    <RadioGroup
+                      value={linkType}
+                      onValueChange={(val) => setLinkType(val as 'url' | 'deep_link')}
+                      className="flex gap-6"
+                    >
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="url" />
+                        <Label className="font-normal cursor-pointer">Regular URL</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="deep_link" />
+                        <Label className="font-normal cursor-pointer">Deep Link (Mobile App)</Label>
+                      </div>
+                    </RadioGroup>
                   </div>
-                  <div>
-                    <label htmlFor="android" className="block text-sm font-medium text-gray-700 mb-2">
-                      Android Deep Link {autoDetected && <span className="text-purple-600">(Auto-detected)</span>}
-                    </label>
-                    <input id="android" type="text" value={androidDeepLink} onChange={(e) => { setAndroidDeepLink(e.target.value); setAutoDetected(false) }} placeholder="myapp://screen/path" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                  </div>
-                  <div>
-                    <label htmlFor="fallback" className="block text-sm font-medium text-gray-700 mb-2">
-                      Fallback URL {autoDetected && <span className="text-purple-600">(Auto-detected)</span>}
-                    </label>
-                    <input id="fallback" type="url" value={fallbackUrl} onChange={(e) => { setFallbackUrl(e.target.value); setAutoDetected(false) }} placeholder="https://app-store-link.com" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                    <p className="text-xs text-gray-500 mt-1">Where to redirect if the app is not installed</p>
-                  </div>
-                </>
+
+                  {linkType === 'deep_link' && (
+                    <>
+                      <div>
+                        <Label htmlFor="ios" className="mb-2">
+                          iOS Deep Link {autoDetected && <span className="text-primary">(Auto-detected)</span>}
+                        </Label>
+                        <Input
+                          id="ios"
+                          type="text"
+                          value={iosDeepLink}
+                          onChange={(e) => { setIosDeepLink(e.target.value); setAutoDetected(false) }}
+                          placeholder="myapp://screen/path"
+                          className="bg-muted h-10"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="android" className="mb-2">
+                          Android Deep Link {autoDetected && <span className="text-primary">(Auto-detected)</span>}
+                        </Label>
+                        <Input
+                          id="android"
+                          type="text"
+                          value={androidDeepLink}
+                          onChange={(e) => { setAndroidDeepLink(e.target.value); setAutoDetected(false) }}
+                          placeholder="myapp://screen/path"
+                          className="bg-muted h-10"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="fallback" className="mb-2">
+                          Fallback URL {autoDetected && <span className="text-primary">(Auto-detected)</span>}
+                        </Label>
+                        <Input
+                          id="fallback"
+                          type="url"
+                          value={fallbackUrl}
+                          onChange={(e) => { setFallbackUrl(e.target.value); setAutoDetected(false) }}
+                          placeholder="https://app-store-link.com"
+                          className="bg-muted h-10"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Where to redirect if the app is not installed</p>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
-        >
-          {loading ? 'Creating...' : linkType === 'deep_link' ? 'Create Deep Link' : 'Shorten URL'}
-        </button>
-      </form>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   )
 }
