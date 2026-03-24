@@ -49,7 +49,8 @@
       "mcp__plugin_playwright_playwright__browser_take_screenshot",
       "mcp__plugin_playwright_playwright__browser_press_key",
       "mcp__plugin_playwright_playwright__browser_evaluate",
-      "Bash(npx:*)"
+      "Bash(npx:*)",
+      "Bash(node:*)"
     ],
     "deny": []
   },
