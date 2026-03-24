@@ -44,7 +44,7 @@ The session-refresh middleware lives in `src/proxy.ts` (exports `proxy` function
 
 | Route | Type | Purpose |
 |---|---|---|
-| `/` | Client Component | Home page with link creation form |
+| `/` | Server Component + Client islands | Home page with link creation form |
 | `/login` | Client Component | Email/password + Google OAuth login |
 | `/signup` | Client Component | Registration |
 | `/dashboard` | Server Component | Auth-guarded, fetches user's links server-side via `redirect('/login')` |
@@ -56,7 +56,7 @@ The session-refresh middleware lives in `src/proxy.ts` (exports `proxy` function
 
 1. **Link creation**: Client calls `create_link` or `create_deep_link` Supabase RPC (SECURITY DEFINER, allows anonymous creation with null `user_id`)
 2. **Redirect**: `GET /[shortCode]` looks up active link → for deep links, returns HTML page with JS redirect + fallback timeout; for standard links, `NextResponse.redirect()`
-3. **Analytics**: Tracked asynchronously (fire-and-forget) during redirect via insert to `link_analytics` + `increment_click_count` RPC
+3. **Analytics**: Tracked asynchronously via `after()` callback during redirect — calls `record_click` RPC (inserts into `clicks`) + `increment_link_clicks` RPC
 4. **Auth**: Email/password or Google OAuth → PKCE exchange at `/auth/callback` → session refreshed by middleware on every request
 
 ### Deep Link System
@@ -69,13 +69,15 @@ The `[shortCode]/route.ts` handler validates URLs against a `SAFE_DEEP_LINK_SCHE
 
 ### Database Tables
 
-- `links` — short_code, original_url, ios/android deep links, fallback_url, link_type enum, click_count
-- `link_analytics` — per-click records (ip, country, user_agent, browser, os, device)
+- `links` — short_code, original_url, ios/android deep links, fallback_url, link_type enum, total_clicks
+- `clicks` — per-click records (ip_address, user_agent, browser_name, os_name, device_type, referrer_url)
 - `profiles` — extends auth.users (email, full_name, avatar_url)
 
-RLS is enabled on all tables. `SECURITY DEFINER` RPCs (`create_link`, `create_deep_link`, `increment_link_clicks`) bypass RLS intentionally — all have `SET search_path = 'public'` to prevent search path injection.
+Ghost tables (exist in schema but not wired into the app): `custom_domains`, `api_keys`. Ghost columns on `links`: `password_hash`, `unique_clicks`, `custom_meta`, `tags`, `qr_code_url`.
 
-Migrations are in `supabase/migrations/` (7 files, 001–006 + a timestamped drop) — run manually via Supabase SQL Editor.
+RLS is enabled on all tables. `SECURITY DEFINER` RPCs (`create_link`, `create_deep_link`, `increment_link_clicks`, `record_click`) bypass RLS intentionally — all have `SET search_path = 'public'` to prevent search path injection.
+
+Migrations are in `supabase/migrations/` (8 files, 001–007 + a timestamped drop) — run manually via Supabase SQL Editor. Migration 007 must be applied before deploying code changes from the security audit fix.
 
 ## Conventions
 
@@ -88,5 +90,8 @@ Migrations are in `supabase/migrations/` (7 files, 001–006 + a timestamped dro
 
 ## Known Issues
 
-- TypeScript types in `database.ts` were manually edited and may not match actual DB column names (e.g. `qr_code` vs `qr_code_url`, `click_count` vs `total_clicks`)
-- A `clicks` table exists in migrations but the app uses `link_analytics` — schema divergence from earlier design
+- Ghost columns on `links` table (`password_hash`, `unique_clicks`, `custom_meta`, `tags`, `qr_code_url`) are unused — harmless but add schema noise
+- `unique_clicks` on `links` is always 0 — no logic increments it
+- `custom_domains` and `api_keys` tables exist but have no application code
+- No rate limiting on link creation or redirect endpoints (would require Redis/Upstash)
+- IP addresses are stored raw in `clicks` — consider hashing/truncating for privacy compliance

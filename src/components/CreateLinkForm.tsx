@@ -114,6 +114,14 @@ export function CreateLinkForm({ user, onLinkCreated }: CreateLinkFormProps) {
           try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
           setSuccess('Deep link created and copied to clipboard!')
           onLinkCreated(data)
+          // Persist anonymous link ID for retrieval after page reload
+          if (!user && data) {
+            try {
+              const stored = JSON.parse(localStorage.getItem('anon_links') || '[]') as string[]
+              stored.unshift(data.id)
+              localStorage.setItem('anon_links', JSON.stringify(stored.slice(0, 50)))
+            } catch { /* localStorage unavailable */ }
+          }
           resetForm()
           setTimeout(() => setSuccess(''), 3000)
         }
@@ -134,6 +142,14 @@ export function CreateLinkForm({ user, onLinkCreated }: CreateLinkFormProps) {
           try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
           setSuccess('Link created and copied to clipboard!')
           onLinkCreated(data)
+          // Persist anonymous link ID for retrieval after page reload
+          if (!user && data) {
+            try {
+              const stored = JSON.parse(localStorage.getItem('anon_links') || '[]') as string[]
+              stored.unshift(data.id)
+              localStorage.setItem('anon_links', JSON.stringify(stored.slice(0, 50)))
+            } catch { /* localStorage unavailable */ }
+          }
           resetForm()
           setTimeout(() => setSuccess(''), 3000)
         }

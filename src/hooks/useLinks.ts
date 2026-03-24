@@ -30,8 +30,27 @@ export function useLinks(user: User | null) {
         setLinks(data || [])
       }
     } else {
-      // For anonymous users, we'll only show links created in this session
-      setLinks([])
+      // For anonymous users, load previously created links from localStorage
+      try {
+        const stored = JSON.parse(localStorage.getItem('anon_links') || '[]') as string[]
+        if (stored.length > 0) {
+          const { data, error } = await supabase
+            .from('links')
+            .select('*')
+            .in('id', stored)
+            .order('created_at', { ascending: false })
+          if (error) {
+            console.error('Error loading anonymous links:', error)
+            setLinks([])
+          } else {
+            setLinks(data || [])
+          }
+        } else {
+          setLinks([])
+        }
+      } catch {
+        setLinks([])
+      }
     }
     
     setLoading(false)

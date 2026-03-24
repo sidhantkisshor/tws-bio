@@ -2,7 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>
+}) {
   const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
@@ -11,12 +15,19 @@ export default async function DashboardPage() {
     redirect('/login')
   }
 
-  const { data: links } = await supabase
+  const { page: pageParam } = await searchParams
+  const page = Math.max(1, parseInt(pageParam || '1', 10) || 1)
+  const PAGE_SIZE = 20
+  const offset = (page - 1) * PAGE_SIZE
+
+  const { data: links, count } = await supabase
     .from('links')
-    .select('*')
+    .select('id, short_code, original_url, link_type, total_clicks, created_at', { count: 'exact' })
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
+    .range(offset, offset + PAGE_SIZE - 1)
 
+  const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
   const totalClicks = links?.reduce((sum, link) => sum + (link.total_clicks || 0), 0) || 0
 
   return (
@@ -67,6 +78,7 @@ export default async function DashboardPage() {
           </div>
           
           {links && links.length > 0 ? (
+            <>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -124,6 +136,32 @@ export default async function DashboardPage() {
                 </tbody>
               </table>
             </div>
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                <div className="text-sm text-gray-500">
+                  Page {page} of {totalPages} ({count} links)
+                </div>
+                <div className="flex gap-2">
+                  {page > 1 && (
+                    <Link
+                      href={`/dashboard?page=${page - 1}`}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                    >
+                      Previous
+                    </Link>
+                  )}
+                  {page < totalPages && (
+                    <Link
+                      href={`/dashboard?page=${page + 1}`}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                    >
+                      Next
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
+            </>
           ) : (
             <div className="text-center py-12">
               <p className="text-gray-500">No links created yet.</p>

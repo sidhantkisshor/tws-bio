@@ -12,9 +12,18 @@ export function useAuth() {
     const supabase = createClient()
     
     async function getUser() {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
-      setLoading(false)
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser()
+        if (error) {
+          console.error('Auth error:', error.message)
+        }
+        setUser(user)
+      } catch (err) {
+        console.error('Failed to get user:', err)
+        setUser(null)
+      } finally {
+        setLoading(false)
+      }
     }
 
     getUser()
