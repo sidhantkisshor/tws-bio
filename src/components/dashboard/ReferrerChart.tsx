@@ -11,7 +11,7 @@ import {
 const chartConfig: ChartConfig = {
   count: {
     label: 'Clicks',
-    color: 'hsl(var(--chart-1))',
+    color: 'var(--chart-1)',
   },
 }
 
@@ -37,14 +37,14 @@ export function ReferrerChart({
           tickLine={false}
           axisLine={false}
           width={75}
-          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+          tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
         />
         <XAxis
           type="number"
           allowDecimals={false}
           tickLine={false}
           axisLine={false}
-          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+          tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
         />
         <ChartTooltip content={<ChartTooltipContent />} />
         <Bar

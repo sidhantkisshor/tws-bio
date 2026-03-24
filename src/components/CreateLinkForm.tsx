@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { useAuth } from '@/hooks/useAuth'
+import { saveAnonLinkId } from '@/hooks/useLinks'
 
 export function CreateLinkForm() {
   const router = useRouter()
@@ -81,19 +82,13 @@ export function CreateLinkForm() {
 
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        toast.error('You must be logged in to create links')
-        return
-      }
 
       const shortCode = customCode || generateShortCode()
 
-      // Resolve campaign ID (create new campaign if needed)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sb = supabase as any
+      // Resolve campaign ID (create new campaign if needed, only for logged-in users)
       let campaignId: string | undefined = undefined
-      if (selectedCampaignId === '__new__' && newCampaignName.trim()) {
-        const { data: newCampaign, error: campaignError } = await sb
+      if (user && selectedCampaignId === '__new__' && newCampaignName.trim()) {
+        const { data: newCampaign, error: campaignError } = await supabase
           .from('campaigns')
           .insert({ name: newCampaignName.trim(), user_id: user.id })
           .select('id')
@@ -108,7 +103,7 @@ export function CreateLinkForm() {
         const { data, error: rpcError } = await supabase.rpc('create_deep_link', {
           p_short_code: shortCode,
           p_original_url: url,
-          p_user_id: user.id,
+          p_user_id: user?.id,
           p_ios_deep_link: iosDeepLink || undefined,
           p_android_deep_link: androidDeepLink || undefined,
           p_fallback_url: fallbackUrl || undefined,
@@ -117,29 +112,31 @@ export function CreateLinkForm() {
         if (rpcError) throw new Error(rpcError.message)
         if (data) {
           if (campaignId) {
-            await sb.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
+            await supabase.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
           }
+          if (!user) saveAnonLinkId(data.id)
           const shortUrl = getShortUrl(data.short_code)
           try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
           toast.success('Deep link created and copied to clipboard!')
-          setTimeout(() => router.push('/dashboard'), 1500)
+          if (user) setTimeout(() => router.push('/dashboard'), 1500)
         }
       } else {
         const { data, error: rpcError } = await supabase.rpc('create_link', {
           p_short_code: shortCode,
           p_original_url: url,
-          p_user_id: user.id,
+          p_user_id: user?.id,
         })
 
         if (rpcError) throw new Error(rpcError.message)
         if (data) {
           if (campaignId) {
-            await sb.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
+            await supabase.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
           }
+          if (!user) saveAnonLinkId(data.id)
           const shortUrl = getShortUrl(data.short_code)
           try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
           toast.success('Link created and copied to clipboard!')
-          setTimeout(() => router.push('/dashboard'), 1500)
+          if (user) setTimeout(() => router.push('/dashboard'), 1500)
         }
       }
     } catch (err: unknown) {

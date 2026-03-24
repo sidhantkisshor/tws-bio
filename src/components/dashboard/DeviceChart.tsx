@@ -9,11 +9,11 @@ import {
 } from '@/components/ui/chart'
 
 const DEVICE_COLORS: Record<string, string> = {
-  desktop: 'hsl(var(--chart-1))',
-  mobile: 'hsl(var(--chart-2))',
-  tablet: 'hsl(var(--chart-3))',
-  bot: 'hsl(var(--chart-4))',
-  unknown: 'hsl(var(--chart-5))',
+  desktop: 'var(--chart-1))',
+  mobile: 'var(--chart-2))',
+  tablet: 'var(--chart-3))',
+  bot: 'var(--chart-4))',
+  unknown: 'var(--chart-5))',
 }
 
 function buildChartConfig(
@@ -24,7 +24,7 @@ function buildChartConfig(
   data.forEach((item, i) => {
     config[item.device] = {
       label: item.device.charAt(0).toUpperCase() + item.device.slice(1),
-      color: `hsl(var(--${colorKeys[i % colorKeys.length]}))`,
+      color: `var(--${colorKeys[i % colorKeys.length]})`,
     }
   })
   return config
@@ -63,7 +63,7 @@ export function DeviceChart({
             <Cell
               key={entry.device}
               fill={
-                DEVICE_COLORS[entry.device] || 'hsl(var(--chart-5))'
+                DEVICE_COLORS[entry.device] || 'var(--chart-5))'
               }
             />
           ))}
