@@ -9,11 +9,11 @@ import {
 } from '@/components/ui/chart'
 
 const DEVICE_COLORS: Record<string, string> = {
-  desktop: 'var(--chart-1))',
-  mobile: 'var(--chart-2))',
-  tablet: 'var(--chart-3))',
-  bot: 'var(--chart-4))',
-  unknown: 'var(--chart-5))',
+  desktop: 'var(--chart-1)',
+  mobile: 'var(--chart-2)',
+  tablet: 'var(--chart-3)',
+  bot: 'var(--chart-4)',
+  unknown: 'var(--chart-5)',
 }
 
 function buildChartConfig(
@@ -63,7 +63,7 @@ export function DeviceChart({
             <Cell
               key={entry.device}
               fill={
-                DEVICE_COLORS[entry.device] || 'var(--chart-5))'
+                DEVICE_COLORS[entry.device] || 'var(--chart-5)'
               }
             />
           ))}
