@@ -1,8 +1,3 @@
 # Ignore files for Vercel deployment
 .env.local.example
-fix-tailwind.sh
-DEPLOY_*.md
-FIX_*.md
-QUICK_SETUP.md
-NAVIGATION_FIX.md
-setup.ps1
+docs/
