@@ -18,13 +18,34 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   )
 }
 
-function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
+function SelectValue({
+  className,
+  options,
+  children,
+  ...props
+}: SelectPrimitive.Value.Props & {
+  /**
+   * Options used to resolve the closed trigger's raw controlled value into
+   * its authored label, so callers don't leak snake_case/enum values (e.g.
+   * "created_desc") into user-facing chrome. Ignored if `children` is set.
+   */
+  options?: { value: string; label: React.ReactNode }[]
+}) {
+  const resolvedChildren =
+    children ??
+    (options
+      ? (value: string | null) =>
+          options.find((option) => option.value === value)?.label ?? value
+      : undefined)
+
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("flex flex-1 text-left", className)}
       {...props}
-    />
+    >
+      {resolvedChildren}
+    </SelectPrimitive.Value>
   )
 }
 

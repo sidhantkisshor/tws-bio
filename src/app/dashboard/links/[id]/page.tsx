@@ -14,8 +14,12 @@ import { ClicksOverTimeChart } from '@/components/charts/ClicksOverTimeChart'
 import { BarChart } from '@/components/charts/BarChart'
 import { DonutChart } from '@/components/charts/DonutChart'
 import { TimeRangePicker } from '@/components/TimeRangePicker'
+import { TrendChip, computeTrend, type StatTrend } from '@/components/dashboard/StatCard'
+import { CopyShortLinkButton } from '@/components/dashboard/CopyShortLinkButton'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 
 const VALID_RANGES = new Set(['7d', '30d', '90d', 'all'])
+const RANGE_DAYS: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90 }
 
 export default async function LinkDetailPage({
   params,
@@ -51,6 +55,30 @@ export default async function LinkDetailPage({
     getTotalClicks(filter),
   ])
 
+  // Prior-period click count (same-length window immediately preceding the
+  // selected range) for the "clicks in period" trend delta. Not meaningful
+  // for "all time" since there's no bounded prior window to compare against.
+  let periodTrend: StatTrend | null = null
+  if (timeRange !== 'all') {
+    const days = RANGE_DAYS[timeRange]
+    const periodStart = new Date()
+    periodStart.setDate(periodStart.getDate() - days)
+    const priorStart = new Date(periodStart)
+    priorStart.setDate(priorStart.getDate() - days)
+
+    const { count: priorClicks, error: priorClicksError } = await supabase
+      .from('clicks')
+      .select('id', { count: 'exact', head: true })
+      .eq('link_id', id)
+      .gte('clicked_at', priorStart.toISOString())
+      .lt('clicked_at', periodStart.toISOString())
+
+    if (priorClicksError) {
+      console.error('[link-detail] prior clicks query:', priorClicksError)
+    }
+    periodTrend = computeTrend(totalClicks, priorClicks || 0)
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-border">
@@ -62,7 +90,10 @@ export default async function LinkDetailPage({
               </svg>
             </Link>
             <div>
-              <h1 className="text-lg font-bold text-foreground">tws.bio/{link.short_code}</h1>
+              <div className="flex items-center gap-1.5">
+                <h1 className="font-heading text-lg text-foreground">tws.bio/{link.short_code}</h1>
+                <CopyShortLinkButton shortCode={link.short_code} />
+              </div>
               <p className="text-sm text-muted-foreground truncate max-w-md">{link.original_url}</p>
             </div>
           </div>
@@ -72,33 +103,54 @@ export default async function LinkDetailPage({
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
           <TimeRangePicker current={timeRange} basePath={`/dashboard/links/${id}`} />
-          <div className="text-sm text-muted-foreground">
-            {totalClicks.toLocaleString()} clicks in period
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>{totalClicks.toLocaleString()} clicks in period</span>
+            <TrendChip trend={periodTrend} />
           </div>
         </div>
 
-        <div className="bg-card rounded-lg border border-border p-6 mb-8">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Clicks Over Time</h2>
-          <ClicksOverTimeChart data={clicksOverTime} />
-        </div>
+        <Card className="bg-card border-border mb-8">
+          <CardHeader>
+            <CardTitle>Clicks Over Time</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ClicksOverTimeChart data={clicksOverTime} />
+          </CardContent>
+        </Card>
 
         <div className="grid md:grid-cols-2 gap-6">
-          <div className="bg-card rounded-lg border border-border p-6">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Referrers</h3>
-            <BarChart data={referrers} />
-          </div>
-          <div className="bg-card rounded-lg border border-border p-6">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Devices</h3>
-            <DonutChart data={devices} />
-          </div>
-          <div className="bg-card rounded-lg border border-border p-6">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Countries</h3>
-            <BarChart data={countries} color="#059669" />
-          </div>
-          <div className="bg-card rounded-lg border border-border p-6">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Browsers</h3>
-            <DonutChart data={browsers} />
-          </div>
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Referrers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BarChart data={referrers} />
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Devices</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DonutChart data={devices} />
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Countries</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BarChart data={countries} color="var(--chart-3)" />
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Browsers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DonutChart data={browsers} />
+            </CardContent>
+          </Card>
         </div>
       </main>
     </div>

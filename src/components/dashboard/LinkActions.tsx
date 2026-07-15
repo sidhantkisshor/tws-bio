@@ -30,24 +30,61 @@ export function LinkActions({ link }: { link: Link }) {
     }
   }
 
+  async function setActive(nextActive: boolean) {
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('links')
+      .update({ is_active: nextActive })
+      .eq('id', link.id)
+    return error
+  }
+
   async function handleToggleActive() {
+    const wasActive = link.is_active
     setToggling(true)
     try {
-      const supabase = createClient()
-      const { error } = await supabase
-        .from('links')
-        .update({ is_active: !link.is_active })
-        .eq('id', link.id)
+      const error = await setActive(!wasActive)
 
       if (error) {
         toast.error(error.message)
         return
       }
 
-      toast.success(link.is_active ? 'Link deactivated' : 'Link activated')
       router.refresh()
+
+      if (wasActive) {
+        // Deactivating a live link is easy to trigger by accident (small icon,
+        // no confirm step) — give it a lightweight undo instead of a blocking dialog.
+        toast.success('Link deactivated', {
+          action: {
+            label: 'Undo',
+            onClick: () => void handleUndoDeactivate(),
+          },
+        })
+      } else {
+        toast.success('Link activated')
+      }
     } catch {
       toast.error('Failed to toggle link status')
+    } finally {
+      setToggling(false)
+    }
+  }
+
+  async function handleUndoDeactivate() {
+    setToggling(true)
+    try {
+      const error = await setActive(true)
+
+      if (error) {
+        toast.error(error.message)
+        return
+      }
+
+      toast.success('Link reactivated')
+      router.refresh()
+    } catch {
+      toast.error('Failed to reactivate link')
     } finally {
       setToggling(false)
     }
@@ -86,7 +123,7 @@ export function LinkActions({ link }: { link: Link }) {
           onClick={handleToggleActive}
           disabled={toggling}
           aria-label={link.is_active ? 'Deactivate link' : 'Activate link'}
-          className={link.is_active ? 'text-green-500 hover:text-green-400' : 'text-muted-foreground'}
+          className={link.is_active ? 'text-primary-text hover:text-primary-text/80' : 'text-muted-foreground'}
         >
           <Power className="size-3.5" />
         </Button>

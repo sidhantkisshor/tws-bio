@@ -31,7 +31,7 @@ export function DateRangePicker() {
       }}
     >
       <SelectTrigger>
-        <SelectValue />
+        <SelectValue options={options} />
       </SelectTrigger>
       <SelectContent>
         {options.map((opt) => (

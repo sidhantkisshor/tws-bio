@@ -32,6 +32,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
@@ -61,6 +62,9 @@
   --popover-foreground: #FAFAFA;
   --primary: #00802B;
   --primary-foreground: #FFFFFF;
+  /* AA-legible green for TEXT on dark surfaces (#0a0a0a/#111111/#1a1a1a) — --primary (#00802B)
+     is reserved for solid fills, where it's paired with --primary-foreground (white). */
+  --primary-text: var(--ring);
   --secondary: #1a1a1a;
   --secondary-foreground: #FAFAFA;
   --muted: #1a1a1a;
@@ -73,12 +77,18 @@
   --ring: #00B03B;
   --radius: 0.625rem;
 
-  /* Chart colors: green primary + complementary palette */
+  /* Chart colors: shared token ramp for every chart component (ClickChart,
+     ClicksOverTimeChart, BarChart, DonutChart, DeviceChart, ReferrerChart,
+     BrowserChart). Single-series charts use --chart-1 (brand green). Multi-
+     series/categorical charts (DonutChart, DeviceChart) draw from the full
+     --chart-1..5 ramp in order — never invent a one-off hex per chart. All
+     five stay in the brand's green family, alternating light/dark so
+     adjacent pie/bar segments stay distinguishable. */
   --chart-1: #00B03B;
-  --chart-2: #2563EB;
-  --chart-3: #F59E0B;
-  --chart-4: #8B5CF6;
-  --chart-5: #EC4899;
+  --chart-2: #6EE7B7;
+  --chart-3: #047857;
+  --chart-4: #A7F3D0;
+  --chart-5: #065F46;
 
   /* Sidebar */
   --sidebar: #0d0d0d;

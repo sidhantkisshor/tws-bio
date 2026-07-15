@@ -53,3 +53,4 @@ commit_message.txt
 
 # Cursor (contains local MCP tokens)
 .cursor/
+.superpowers/

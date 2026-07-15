@@ -90,7 +90,7 @@ export function QRCodeDialog({
               fgColor="#00B03B"
             />
           </div>
-          <p className="font-mono text-primary text-center text-sm">
+          <p className="font-mono text-primary-text text-center text-sm">
             {url}
           </p>
         </div>

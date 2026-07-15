@@ -1,0 +1,176 @@
+[
+  {
+    "id": "sidebar-add-create-campaigns-nav",
+    "severity": "P0",
+    "surface": "shell",
+    "title": "Create Link and Campaigns routes are unreachable from any navigation UI"
+  },
+  {
+    "id": "shell-fix-mobile-header-overlap",
+    "severity": "P0",
+    "surface": "shell",
+    "title": "Mobile fixed top bar overlaps page content — flex-row spacer div contributes zero vertical offset"
+  },
+  {
+    "id": "global-primary-green-text-contrast",
+    "severity": "P0",
+    "surface": "shell",
+    "title": "--primary #00802B used as text color fails WCAG AA contrast on all dark surfaces"
+  },
+  {
+    "id": "dashboard-add-loading-error-boundaries",
+    "severity": "P0",
+    "surface": "shell",
+    "title": "Zero loading.tsx or error.tsx anywhere under /dashboard — blank first paints, dead range pickers, and errors that nuke the whole shell"
+  },
+  {
+    "id": "mobile-tables-responsive-layout",
+    "severity": "P0",
+    "surface": "shell",
+    "title": "Wide tables on mobile hide most columns — including every row action — behind undiscoverable horizontal scroll"
+  },
+  {
+    "id": "overview-clickchart-no-visible-data",
+    "severity": "P0",
+    "surface": "overview",
+    "title": "Clicks Over Time chart renders completely flat/empty despite 200 recorded clicks in the window"
+  },
+  {
+    "id": "linkdetail-barchart-invisible-zero-bars",
+    "severity": "P0",
+    "surface": "linkDetail",
+    "title": "BarChart panels render axis + category labels with literally zero visible bars — reads as broken, not empty"
+  },
+  {
+    "id": "overview-url-badge-contrast",
+    "severity": "P0",
+    "surface": "overview",
+    "title": "'URL' type badge is nearly invisible against the dark table background"
+  },
+  {
+    "id": "dashboard-remove-duplicate-page-headers",
+    "severity": "P1",
+    "surface": "shell",
+    "title": "Create, link-detail, and campaigns pages each stack a redundant inner header + max-w-7xl container inside the shared layout chrome"
+  },
+  {
+    "id": "dashboard-error-vs-empty-states",
+    "severity": "P1",
+    "surface": "shell",
+    "title": "Swallowed query errors render identically to genuine empty states across Overview, Links, and Campaigns"
+  },
+  {
+    "id": "dashboard-use-shared-card-primitives",
+    "severity": "P1",
+    "surface": "linkDetail",
+    "title": "Link-detail and campaigns pages hand-roll card containers and headers instead of the shared Card/CardTitle primitives, drifting from the design system"
+  },
+  {
+    "id": "charts-consolidate-color-tokens",
+    "severity": "P1",
+    "surface": "shell",
+    "title": "Chart colors are a patchwork of hardcoded hex and off-brand greens with no shared token system across five chart components"
+  },
+  {
+    "id": "dashboard-headings-use-display-font",
+    "severity": "P1",
+    "surface": "shell",
+    "title": "Brand display font (DM Serif font-heading) appears only on subordinate card titles — never on the wordmark or any page h1"
+  },
+  {
+    "id": "dashboard-stat-trend-deltas",
+    "severity": "P1",
+    "surface": "overview",
+    "title": "No prior-period trend delta on any KPI anywhere in the dashboard"
+  },
+  {
+    "id": "dashboard-csv-export",
+    "severity": "P1",
+    "surface": "analytics",
+    "title": "No CSV/export affordance anywhere in an analytics-first product"
+  },
+  {
+    "id": "links-search-filter-sort-bulk",
+    "severity": "P1",
+    "surface": "links",
+    "title": "No search, filter, sort, or bulk actions on the Links table, the campaigns list, or the links-in-campaign table"
+  },
+  {
+    "id": "dashboard-create-link-ctas",
+    "severity": "P1",
+    "surface": "overview",
+    "title": "Core-task CTAs missing: no Create Link entry on Overview, and empty states describe actions without offering them"
+  },
+  {
+    "id": "create-form-double-submit-guards",
+    "severity": "P1",
+    "surface": "create",
+    "title": "CreateLinkForm allows duplicate submits — no loading guard on Enter, and the form re-enables during the 1.5s post-success redirect window"
+  },
+  {
+    "id": "create-inline-field-validation",
+    "severity": "P1",
+    "surface": "create",
+    "title": "No inline field-level validation on the create form — errors only surface as toasts"
+  },
+  {
+    "id": "create-skip-client-auth-skeleton",
+    "severity": "P1",
+    "surface": "create",
+    "title": "Guaranteed loading-skeleton flicker on the dashboard create route despite server-side auth already being resolved"
+  },
+  {
+    "id": "links-deactivate-undo",
+    "severity": "P1",
+    "surface": "links",
+    "title": "Deactivating a live link is a single click on a 24px icon with no confirmation or undo"
+  },
+  {
+    "id": "linkdetail-copy-short-link",
+    "severity": "P1",
+    "surface": "linkDetail",
+    "title": "No copy/share affordance for the short link on its own detail page"
+  },
+  {
+    "id": "analytics-per-link-breakdown",
+    "severity": "P1",
+    "surface": "analytics",
+    "title": "Analytics page has no per-link breakdown — all clicks are one undifferentiated blob"
+  },
+  {
+    "id": "analytics-country-breakdown",
+    "severity": "P1",
+    "surface": "analytics",
+    "title": "No geography breakdown on Analytics despite country data already existing on clicks"
+  },
+  {
+    "id": "analytics-device-donut-legend",
+    "severity": "P1",
+    "surface": "analytics",
+    "title": "Devices donut has no legend — color is the only channel, and mobile has no hover"
+  },
+  {
+    "id": "links-type-status-badge-differentiation",
+    "severity": "P1",
+    "surface": "links",
+    "title": "Type ('Deep Link') and Status ('Active') badges are visually identical green pills, hurting row scannability"
+  },
+  {
+    "id": "campaigns-mobile-row-reflow",
+    "severity": "P1",
+    "surface": "campaigns",
+    "title": "Campaign list rows don't reflow on mobile — stats squeeze beside the wrapped description"
+  },
+  {
+    "id": "campaigns-empty-links-section",
+    "severity": "P1",
+    "surface": "campaigns",
+    "title": "Empty 'Links in Campaign' section disappears entirely instead of showing an empty state"
+  },
+  {
+    "id": "links-per-link-sparklines",
+    "severity": "P1",
+    "surface": "links",
+    "title": "Click counts everywhere are bare cumulative numbers with no per-link trend signal"
+  }
+]
