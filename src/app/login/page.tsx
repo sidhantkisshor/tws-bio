@@ -32,8 +32,8 @@ export default function LoginPage() {
 
       router.push('/dashboard')
       router.refresh()
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to log in')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to log in')
     } finally {
       setLoading(false)
     }
@@ -52,8 +52,8 @@ export default function LoginPage() {
       })
 
       if (error) throw error
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to log in with Google')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to log in with Google')
       setLoading(false)
     }
   }
