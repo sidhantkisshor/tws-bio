@@ -690,7 +690,12 @@ function generateAmazonDeepLinks(url: URL): DeepLinkConfig {
   
   // Amazon product
   if (pathParts.includes('dp') || pathParts.includes('gp')) {
-    const asin = pathParts[pathParts.indexOf('dp') + 1] || pathParts[pathParts.indexOf('gp') + 2]
+    // Resolve ASIN from whichever marker is actually present:
+    //   /dp/<ASIN>          -> segment after 'dp'
+    //   /gp/product/<ASIN>  -> segment after 'gp/product' (indexOf('gp') + 2)
+    const asin = pathParts.includes('dp')
+      ? pathParts[pathParts.indexOf('dp') + 1]
+      : pathParts[pathParts.indexOf('gp') + 2]
     if (asin) {
       return {
         ios: `com.amazon.mobile.shopping://www.amazon.com/dp/${encodeURIComponent(asin)}`,
