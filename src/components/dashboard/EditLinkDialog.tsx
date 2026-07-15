@@ -67,6 +67,22 @@ export function EditLinkDialog({
       toast.error('Please enter a valid URL')
       return
     }
+    // Reject dangerous schemes on the deep-link fields, mirroring the redirect
+    // handler (route.ts) and the create_deep_link RPC. The DB also enforces
+    // this via CHECK constraints (migration 016) so the invariant holds for
+    // any write path; this client check just gives a clean error first.
+    const hasDangerousScheme = (value: string) =>
+      /^(javascript|data|vbscript):/.test(value.trim().toLowerCase())
+    if (
+      (iosDeepLink && hasDangerousScheme(iosDeepLink)) ||
+      (androidDeepLink && hasDangerousScheme(androidDeepLink)) ||
+      (fallbackUrl && hasDangerousScheme(fallbackUrl))
+    ) {
+      toast.error(
+        'Deep link and fallback URLs cannot use javascript:, data:, or vbscript: schemes'
+      )
+      return
+    }
     setSaving(true)
     try {
       const supabase = createClient()
