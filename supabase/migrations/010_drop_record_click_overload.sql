@@ -1,0 +1,14 @@
+-- Migration 010: Drop stale record_click overload
+-- Fixes: H-1 / G-2 (PostgREST PGRST203 ambiguity silently fails click recording)
+--
+-- Migration 007 defined record_click with 7 args:
+--   (uuid, text, text, text, text, text, device_type)
+-- Migration 008 defined record_click with 12 args (adding 5 UTM params).
+-- Because the signatures differ, CREATE OR REPLACE in 008 did NOT replace the
+-- 007 function -- it created a SECOND overload. PostgREST then cannot resolve
+-- which overload to call for a partial argument set and returns PGRST203
+-- (ambiguous function), so analytics inserts silently fail.
+--
+-- Fix: drop the stale 7-arg overload, keeping only the 12-arg UTM-aware one
+-- from migration 008. Idempotent via IF EXISTS.
+DROP FUNCTION IF EXISTS public.record_click(uuid, text, text, text, text, text, device_type);
