@@ -19,11 +19,22 @@ function getAnonLinkIds(): string[] {
   }
 }
 
+// Pure merge: prepend id, dedupe (id moves to front), cap at max (newest kept).
+export function mergeAnonLinkId(
+  existing: string[],
+  id: string,
+  max: number
+): string[] {
+  return [id, ...existing.filter((i) => i !== id)].slice(0, max)
+}
+
 export function saveAnonLinkId(id: string) {
   if (typeof window === 'undefined') return
   try {
+    // Re-read the latest value immediately before writing so a concurrent
+    // write from another tab is merged rather than clobbered.
     const ids = getAnonLinkIds()
-    const updated = [id, ...ids.filter((i) => i !== id)].slice(0, MAX_ANON_LINKS)
+    const updated = mergeAnonLinkId(ids, id, MAX_ANON_LINKS)
     localStorage.setItem(ANON_LINKS_KEY, JSON.stringify(updated))
   } catch {
     // localStorage unavailable
@@ -35,6 +46,8 @@ export function useLinks(userId: string | null | undefined) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let ignore = false
+
     async function fetchLinks() {
       setLoading(true)
       const supabase = createClient()
@@ -46,7 +59,7 @@ export function useLinks(userId: string | null | undefined) {
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .limit(10)
-        setLinks(data || [])
+        if (!ignore) setLinks(data || [])
       } else {
         // Fetch anonymous links from localStorage IDs
         const anonIds = getAnonLinkIds()
@@ -57,16 +70,20 @@ export function useLinks(userId: string | null | undefined) {
             .in('id', anonIds)
             .order('created_at', { ascending: false })
             .limit(10)
-          setLinks(data || [])
+          if (!ignore) setLinks(data || [])
         } else {
-          setLinks([])
+          if (!ignore) setLinks([])
         }
       }
 
-      setLoading(false)
+      if (!ignore) setLoading(false)
     }
 
     fetchLinks()
+
+    return () => {
+      ignore = true
+    }
   }, [userId])
 
   const addLink = useCallback((link: Link) => {

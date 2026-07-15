@@ -26,17 +26,25 @@ export default async function LinksPage({
   const { data: { user } } = await supabase.auth.getUser()
 
   const { page: pageParam } = await searchParams
-  const page = Math.max(1, parseInt(pageParam || '1', 10) || 1)
+  const requestedPage = Math.max(1, parseInt(pageParam || '1', 10) || 1)
+
+  // Cheap count-only query to determine the valid page range up front.
+  const { count } = await supabase
+    .from('links')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user!.id)
+
+  const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
+  // Clamp so an over-range ?page=9999 doesn't render the empty state.
+  const page = Math.min(requestedPage, Math.max(1, totalPages))
   const offset = (page - 1) * PAGE_SIZE
 
-  const { data: links, count } = await supabase
+  const { data: links } = await supabase
     .from('links')
-    .select('*', { count: 'exact' })
+    .select('*')
     .eq('user_id', user!.id)
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
-
-  const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
 
   return (
     <div>
