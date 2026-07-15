@@ -71,10 +71,13 @@ export async function GET(
   const utmTerm = request.nextUrl.searchParams.get('utm_term') || undefined
   const utmContent = request.nextUrl.searchParams.get('utm_content') || undefined
 
-  // Use x-forwarded-for header set by the reverse proxy (Vercel/load balancer).
-  // Only trust the last value (appended by the proxy closest to us).
+  // Derive the client IP from a platform-trusted header. On Vercel/edge the
+  // trusted client IP is set as `x-real-ip`, or as the FIRST entry of
+  // `x-forwarded-for`. A client-supplied XFF is otherwise untrusted (spoofable),
+  // so we never take the last entry.
+  const realIp = request.headers.get('x-real-ip')
   const forwardedFor = request.headers.get('x-forwarded-for')
-  const ip = forwardedFor ? forwardedFor.split(',').pop()!.trim() : null
+  const ip = realIp?.trim() || (forwardedFor ? forwardedFor.split(',')[0].trim() : null)
 
   // Get the link
   const { data: link, error } = await supabase
@@ -206,7 +209,9 @@ export async function GET(
       return new NextResponse(html, {
         headers: {
           'Content-Type': 'text/html',
-          'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'",
+          // Escaping is already sound; frame-ancestors/base-uri are defense-in-depth.
+          // Future improvement: replace 'unsafe-inline' with a per-response nonce.
+          'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
           'X-Content-Type-Options': 'nosniff',
           'X-Frame-Options': 'DENY',
         },
