@@ -7,9 +7,17 @@ Process: 8 fixer subagents (2 required a reject→refix→approve cycle) → 6 r
 
 ## 1. Headline
 
-All **autonomous** findings are fixed, reviewed, tested, and committed. The bulk of the CRITICAL/HIGH severity, however, is **HUMAN-GATED** — those fixes require DB migrations applied to your live Supabase project, an auth-flow change, a credential rotation only you can perform, and a git-history rewrite. They are **not** done; they are documented below and await your decision. **Nothing has been merged to main.**
+All **autonomous** findings are fixed, reviewed, tested, and committed. Per your gate decisions, the **gated DB/security fixes are now authored** as reviewed migration + app-code commits — but they are **not applied**: they must be run against your live Supabase DB and deployed in a specific order (see `APPLY_RUNBOOK.md`). The leaked token has been untracked + gitignored, but **you must still rotate it** (only you can) — it remains valid and in git history until you do. **Nothing has been merged to main.**
 
 A test suite now exists (Vitest, 46 tests) where there was none — the SSRF host-blocking and Amazon deep-link fixes are proven by unit tests.
+
+### Gate status (post-decision)
+- **G-1 token** — repo untracked + `.cursor/` gitignored (`edcebe4`). ⚠️ **You must rotate the token + purge history** (runbook §0). Rotation is the only thing that neutralizes the leak.
+- **G-2/G-4/G-5/G-11/G-12** — authored, reviewed, committed (`9bd8417`); SQL-only, no app coupling, safe to apply anytime.
+- **G-3/G-6/G-7/G-8(partial)/G-10** — authored, reviewed (one blocking `SETOF` bug caught + fixed), committed (`ad83771` migrations + `ffa8e0d` app). Lockstep: apply migrations 012/013/014 **before** deploying the app commit (runbook §1–2).
+- **G-9** (rate limiting) — NOT authored, needs Redis/Upstash infra decision.
+- **G-13** (regenerate `database.ts`) — do after migrations land (runbook §4).
+- All gated SQL was statically reviewed by a fresh Postgres reviewer (no live DB available); **verify against your DB using runbook §3** after applying.
 
 ## 2. Before / after health grades
 
