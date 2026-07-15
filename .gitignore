@@ -49,3 +49,6 @@ next-env.d.ts
 # Local tooling artifacts
 commit_message.txt
 .playwright-mcp/
+
+# Cursor (contains local MCP tokens)
+.cursor/
