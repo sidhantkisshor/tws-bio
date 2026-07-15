@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { generateShortCode, isValidUrl, getShortUrl } from '@/lib/utils'
-import { detectDeepLinks } from '@/lib/deeplinks'
 import { toast } from 'sonner'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -30,15 +29,16 @@ export function CreateLinkForm() {
   const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([])
   const [selectedCampaignId, setSelectedCampaignId] = useState('')
   const [newCampaignName, setNewCampaignName] = useState('')
+  const latestUrlRef = useRef('')
 
   useEffect(() => {
     async function loadCampaigns() {
       const supabase = createClient()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
+      const { data, error } = await supabase
         .from('campaigns')
         .select('id, name')
         .order('created_at', { ascending: false })
+      if (error) console.error('Failed to load campaigns:', error)
       setCampaigns(data || [])
     }
     loadCampaigns()
@@ -46,26 +46,42 @@ export function CreateLinkForm() {
 
   const handleUrlChange = (newUrl: string) => {
     setUrl(newUrl)
+    // Track the latest input synchronously so stale async detections can bail out
+    latestUrlRef.current = newUrl
 
     if (newUrl && isValidUrl(newUrl)) {
-      const deepLinkConfig = detectDeepLinks(newUrl)
+      // Dynamically import the deep-link map so it stays out of the initial bundle
+      void (async () => {
+        const { detectDeepLinks } = await import('@/lib/deeplinks')
+        // A newer input superseded this one during the await; drop the stale result
+        if (latestUrlRef.current !== newUrl) return
+        const deepLinkConfig = detectDeepLinks(newUrl)
 
-      if (deepLinkConfig) {
-        setDetectedPlatform(deepLinkConfig.platform)
-        setAutoDetected(true)
-        if (!iosDeepLink || autoDetected) setIosDeepLink(deepLinkConfig.ios || '')
-        if (!androidDeepLink || autoDetected) setAndroidDeepLink(deepLinkConfig.android || '')
-        if (!fallbackUrl || autoDetected) setFallbackUrl(deepLinkConfig.fallback)
-        setLinkType('deep_link')
-        setShowAdvanced(true)
-      } else if (autoDetected) {
-        setIosDeepLink('')
-        setAndroidDeepLink('')
-        setFallbackUrl('')
-        setLinkType('url')
-        setDetectedPlatform(null)
-        setAutoDetected(false)
-      }
+        if (deepLinkConfig) {
+          setDetectedPlatform(deepLinkConfig.platform)
+          setAutoDetected(true)
+          if (!iosDeepLink || autoDetected) setIosDeepLink(deepLinkConfig.ios || '')
+          if (!androidDeepLink || autoDetected) setAndroidDeepLink(deepLinkConfig.android || '')
+          if (!fallbackUrl || autoDetected) setFallbackUrl(deepLinkConfig.fallback)
+          setLinkType('deep_link')
+          setShowAdvanced(true)
+        } else if (autoDetected) {
+          setIosDeepLink('')
+          setAndroidDeepLink('')
+          setFallbackUrl('')
+          setLinkType('url')
+          setDetectedPlatform(null)
+          setAutoDetected(false)
+        }
+      })()
+    } else if (autoDetected) {
+      // URL cleared or invalidated — clear any previously auto-detected state
+      setIosDeepLink('')
+      setAndroidDeepLink('')
+      setFallbackUrl('')
+      setLinkType('url')
+      setDetectedPlatform(null)
+      setAutoDetected(false)
     }
   }
 
@@ -111,13 +127,19 @@ export function CreateLinkForm() {
 
         if (rpcError) throw new Error(rpcError.message)
         if (data) {
+          let campaignFailed = false
           if (campaignId) {
-            await supabase.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
+            const { error: campaignErr } = await supabase.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
+            if (campaignErr) campaignFailed = true
           }
           if (!user) saveAnonLinkId(data.id)
           const shortUrl = getShortUrl(data.short_code)
           try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
-          toast.success('Deep link created and copied to clipboard!')
+          if (campaignFailed) {
+            toast.warning('Deep link created, but could not assign it to the campaign.')
+          } else {
+            toast.success('Deep link created and copied to clipboard!')
+          }
           if (user) setTimeout(() => router.push('/dashboard'), 1500)
         }
       } else {
@@ -129,13 +151,19 @@ export function CreateLinkForm() {
 
         if (rpcError) throw new Error(rpcError.message)
         if (data) {
+          let campaignFailed = false
           if (campaignId) {
-            await supabase.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
+            const { error: campaignErr } = await supabase.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
+            if (campaignErr) campaignFailed = true
           }
           if (!user) saveAnonLinkId(data.id)
           const shortUrl = getShortUrl(data.short_code)
           try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
-          toast.success('Link created and copied to clipboard!')
+          if (campaignFailed) {
+            toast.warning('Link created, but could not assign it to the campaign.')
+          } else {
+            toast.success('Link created and copied to clipboard!')
+          }
           if (user) setTimeout(() => router.push('/dashboard'), 1500)
         }
       }
