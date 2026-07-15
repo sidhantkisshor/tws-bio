@@ -3,12 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { LinkIcon, Smartphone, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { getShortUrl, formatDate } from '@/lib/utils'
 import type { Database } from '@/types/database'
 import { LinkActions } from '@/components/dashboard/LinkActions'
 import { MiniSparkline } from '@/components/charts/MiniSparkline'
+import { TypeBadge } from '@/components/dashboard/TypeBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -37,19 +38,9 @@ const checkboxStyle = { accentColor: 'var(--primary)' }
 
 // Type carries the link's shape (URL vs deep link); Status carries whether
 // it's currently live. Both used to render as identical solid green pills —
-// Type is now a neutral outline+icon chip, reserving the solid brand-green
-// fill exclusively for the Active signal (finding:
-// links-type-status-badge-differentiation).
-function TypeBadge({ type }: { type: LinkRow['link_type'] }) {
-  const isDeepLink = type === 'deep_link'
-  return (
-    <Badge variant="outline" className="gap-1">
-      {isDeepLink ? <Smartphone className="size-3" /> : <LinkIcon className="size-3" />}
-      {isDeepLink ? 'Deep Link' : 'URL'}
-    </Badge>
-  )
-}
-
+// Type is now a neutral outline+icon chip (shared TypeBadge component),
+// reserving the solid brand-green fill exclusively for the Active signal
+// (finding: links-type-status-badge-differentiation).
 function StatusBadge({ active }: { active: boolean | null }) {
   return <Badge variant={active ? 'default' : 'secondary'}>{active ? 'Active' : 'Inactive'}</Badge>
 }

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { StatCard, computeTrend } from '@/components/dashboard/StatCard'
 import { ClickChart } from '@/components/dashboard/ClickChart'
+import { TypeBadge } from '@/components/dashboard/TypeBadge'
 import { Link2, MousePointerClick, Activity, BarChart3, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -190,7 +191,9 @@ export default async function DashboardPage() {
 
   const totalLinksTrend = computeTrend(linksCurrentCount, linksPrevCount)
   const totalClicksTrend = computeTrend(clicksCurrentWindow, clicksPrevWindow)
-  const avgClicksTrend = computeTrend(avgClicksCurrentWindow, avgClicksPrevWindow)
+  const avgClicksTrend = computeTrend(avgClicksCurrentWindow, avgClicksPrevWindow, {
+    isRatio: true,
+  })
   const activeLinksTrend = computeTrend(activeLinksCurrentCount, activeLinksPrevCount)
 
   return (
@@ -324,15 +327,7 @@ export default async function DashboardPage() {
                     {link.original_url}
                   </TableCell>
                   <TableCell className="px-6 py-4">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                        link.link_type === 'deep_link'
-                          ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                          : 'bg-sky-500/10 text-sky-300 border-sky-500/20'
-                      }`}
-                    >
-                      {link.link_type === 'deep_link' ? 'Deep Link' : 'URL'}
-                    </span>
+                    <TypeBadge type={link.link_type} />
                   </TableCell>
                   <TableCell className="px-6 py-4 text-foreground">
                     {link.total_clicks || 0}

@@ -172,7 +172,9 @@ export default async function LinksPage({
       <div className="flex items-center justify-between mb-6 gap-3">
         <h1 className="font-heading text-2xl text-foreground">Links</h1>
         <div className="flex items-center gap-2">
-          {!hasError && links && links.length > 0 && <ExportLinksButton links={links} />}
+          {!hasError && links && links.length > 0 && (
+            <ExportLinksButton links={links} totalCount={count || 0} filters={filters} />
+          )}
           <Link href="/dashboard/create">
             <Button>Create Link</Button>
           </Link>

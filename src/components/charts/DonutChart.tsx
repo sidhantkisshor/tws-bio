@@ -12,7 +12,11 @@ interface DonutChartProps {
 }
 
 export function DonutChart({ data }: DonutChartProps) {
-  if (data.length === 0) {
+  // Categories that are all zero render a legend with no visible ring (recharts still
+  // emits zero-degree arcs) — that reads as a broken widget rather than empty data.
+  const hasVisibleData = data.length > 0 && data.some((item) => item.value > 0)
+
+  if (!hasVisibleData) {
     return <div className="h-48 flex items-center justify-center text-muted-foreground">No data</div>
   }
 

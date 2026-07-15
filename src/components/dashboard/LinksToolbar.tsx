@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Search, X } from 'lucide-react'
+import { Loader2, Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -39,7 +39,7 @@ export function LinksToolbar() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const [, startTransition] = useTransition()
+  const [isPending, startTransition] = useTransition()
 
   const [search, setSearch] = useState(searchParams.get('q') || '')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -90,21 +90,35 @@ export function LinksToolbar() {
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+      {/* Announces loading state to screen readers without a visible layout
+          shift — the spinner + dimmed controls below cover sighted users. */}
+      <span className="sr-only" role="status" aria-live="polite">
+        {isPending ? 'Updating links…' : ''}
+      </span>
+
       <div className="relative flex-1 min-w-0 sm:max-w-xs">
-        <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        {isPending ? (
+          <Loader2 className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground pointer-events-none" />
+        ) : (
+          <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        )}
         <Input
           value={search}
           onChange={(e) => handleSearchChange(e.target.value)}
           placeholder="Search short code or URL…"
           className="pl-8"
           aria-label="Search links"
+          aria-busy={isPending}
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div
+        className={`flex flex-wrap items-center gap-2 transition-opacity ${isPending ? 'opacity-60' : ''}`}
+        aria-busy={isPending}
+      >
         <Select value={currentType} onValueChange={(v) => v && updateParam('type', v)}>
           <SelectTrigger size="sm" className="w-[130px]" aria-label="Filter by type">
-            <SelectValue />
+            <SelectValue options={TYPE_OPTIONS} />
           </SelectTrigger>
           <SelectContent>
             {TYPE_OPTIONS.map((o) => (
@@ -117,7 +131,7 @@ export function LinksToolbar() {
 
         <Select value={currentStatus} onValueChange={(v) => v && updateParam('status', v)}>
           <SelectTrigger size="sm" className="w-[130px]" aria-label="Filter by status">
-            <SelectValue />
+            <SelectValue options={STATUS_OPTIONS} />
           </SelectTrigger>
           <SelectContent>
             {STATUS_OPTIONS.map((o) => (
@@ -130,7 +144,7 @@ export function LinksToolbar() {
 
         <Select value={currentSort} onValueChange={(v) => v && updateParam('sort', v, 'created_desc')}>
           <SelectTrigger size="sm" className="w-[150px]" aria-label="Sort links">
-            <SelectValue />
+            <SelectValue options={SORT_OPTIONS} />
           </SelectTrigger>
           <SelectContent>
             {SORT_OPTIONS.map((o) => (
@@ -148,7 +162,8 @@ export function LinksToolbar() {
               setSearch('')
               startTransition(() => router.push(pathname))
             }}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            disabled={isPending}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none"
           >
             <X className="size-3.5" />
             Clear
