@@ -25,15 +25,18 @@ Context7 sources consulted: `/vercel/next.js`, `/react/react`, `/supabase/ssr`, 
 
 | # | Unit | Change | Class | Commit | Status |
 |---|---|---|---|---|---|
-| 1 | TypeScript | typescript 5.8.3 → 5.9.3 | PATCH-SAFE | `chore(deps): typescript 5.8.3→5.9.3` | pending |
-| 2 | ESLint | eslint 9.39.3 → 10.7.0 | MAJOR (no code) | `chore(deps): eslint 9.39.3→10.7.0` | pending |
-| 3 | Vitest | vitest 3.2.7 → 4.1.10 | MAJOR (no code) | `chore(deps): vitest 3.2.7→4.1.10` | pending |
-| 4 | Tailwind | tailwindcss + @tailwindcss/postcss 4.2.1 → 4.3.2 | PATCH-SAFE | `chore(deps): tailwindcss 4.2.1→4.3.2` | pending |
-| 5 | Node types + pin | @types/node → 22.20.1; add `engines.node` + `.nvmrc` | CONFIG | `chore(deps): pin Node 22 + @types/node 22.20.1` | pending |
-| 6 | Next.js | next + @next/eslint-plugin-next 16.1.6 → 16.2.10 | PATCH-SAFE | `chore(deps): next 16.1.6→16.2.10` | pending |
-| 7 | React | react + react-dom 19.2.4 → 19.2.7; @types/react → 19.2.17 | PATCH-SAFE | `chore(deps): react 19.2.4→19.2.7` | pending |
-| 8 | Supabase | @supabase/ssr 0.8.0 → 0.12.3 + @supabase/supabase-js 2.98.0 → 2.110.5 + **middleware `setAll(headers)` fix** | MIGRATION | `refactor(migrate): @supabase/ssr 0.8→0.12 setAll headers` | pending |
-| 9 | UI libs | @base-ui/react 1.6.0, lucide-react 1.24.0, recharts 3.9.2, react-qr-code 2.2.0, shadcn 4.13.0, tailwind-merge 3.6.0 | PATCH-SAFE batch | `chore(deps): bump UI libraries` | pending |
+| 1 | TypeScript | typescript 5.8.3 → 5.9.3 | PATCH-SAFE | `fabfb7c` | ✅ done |
+| 2 | ESLint | eslint 9.39.3 → 10.7.0 | MAJOR (no code) | `3c13a3e` | ✅ done |
+| 3 | Vitest | vitest 3.2.7 → 4.1.10 | MAJOR (no code) | `50bfe5c` | ✅ done |
+| 4 | Tailwind | tailwindcss + @tailwindcss/postcss 4.2.1 → 4.3.2 | PATCH-SAFE | `d20ea87` | ✅ done |
+| 5 | Node types + pin | @types/node → 22.20.1; add `engines.node` + `.nvmrc` | CONFIG | `0ec5ae8` (+ `13c0471` floor→22.13.0) | ✅ done |
+| 6 | Next.js | next + @next/eslint-plugin-next 16.1.6 → 16.2.10 | PATCH-SAFE | `436baa7` | ✅ done |
+| 7 | React | react + react-dom 19.2.4 → 19.2.7; @types/react → 19.2.17 | PATCH-SAFE | `f35190e` | ✅ done |
+| 8 | Supabase | @supabase/ssr 0.8.0 → 0.12.3 + @supabase/supabase-js 2.98.0 → 2.110.5 + **middleware `setAll(headers)` fix** | MIGRATION | `e00347e` | ✅ done (reviewer APPROVED) |
+| 9 | UI libs | @base-ui/react 1.6.0, lucide-react 1.24.0, recharts 3.9.2, react-qr-code 2.2.0, shadcn 4.13.0, tailwind-merge 3.6.0 | PATCH-SAFE batch | `5784f9f` | ✅ done |
+| 10 | Vuln remediation | `npm audit fix` (non-force) — cleared all high-severity | SECURITY | `7f62d67` | ✅ done |
+
+**Convergence: all units green.** Final gate — build ✅ · typecheck ✅ · lint ✅ · test 46/46 ✅ · `npm audit --audit-level=high` → 0 high/critical (2 moderate residual, see summary).
 
 Already current (no action): sonner, class-variance-authority, clsx, tw-animate-css, next-themes, @types/react-dom.
 
