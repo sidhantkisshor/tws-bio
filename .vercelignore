@@ -1,3 +1,11 @@
 # Ignore files for Vercel deployment
+.env*
+!.env.local.example
 .env.local.example
 docs/
+.claude/
+.cursor/
+.playwright-mcp/
+.git/
+commit_message.txt
+*.tsbuildinfo
