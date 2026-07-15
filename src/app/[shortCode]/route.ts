@@ -79,13 +79,13 @@ export async function GET(
   const forwardedFor = request.headers.get('x-forwarded-for')
   const ip = realIp?.trim() || (forwardedFor ? forwardedFor.split(',')[0].trim() : null)
 
-  // Get the link
-  const { data: link, error } = await supabase
-    .from('links')
-    .select('id, short_code, original_url, link_type, is_active, expires_at, max_clicks, total_clicks, ios_deep_link, android_deep_link, fallback_url')
-    .eq('short_code', shortCode)
-    .eq('is_active', true)
-    .single()
+  // Get the link. The RPC enforces is_active server-side and returns the single
+  // active row (or null). PostgREST may hand back a single object or an array
+  // depending on the function shape, so normalize defensively.
+  const { data: linkResult, error } = await supabase.rpc('get_link_by_short_code', {
+    p_short_code: shortCode,
+  })
+  const link = Array.isArray(linkResult) ? linkResult[0] : linkResult
 
   if (error || !link) {
     return new NextResponse('Link not found', { status: 404 })
@@ -106,23 +106,22 @@ export async function GET(
   // for PII compliance in production (e.g., zero last octet for IPv4).
   after(async () => {
     try {
-      await Promise.all([
-        supabase.rpc('increment_link_clicks', { link_id: link.id }),
-        supabase.rpc('record_click', {
-          p_link_id: link.id,
-          p_ip_address: ip ?? undefined,
-          p_user_agent: userAgent || undefined,
-          p_referrer_url: referer ?? undefined,
-          p_browser_name: getBrowser(userAgent),
-          p_os_name: getOS(userAgent),
-          p_device_type: getDevice(userAgent),
-          p_utm_source: utmSource,
-          p_utm_medium: utmMedium,
-          p_utm_campaign: utmCampaign,
-          p_utm_term: utmTerm,
-          p_utm_content: utmContent,
-        })
-      ])
+      // Atomic increment + click insert. The RPC masks the IP and derives the
+      // referrer domain server-side (replaces increment_link_clicks + record_click).
+      await supabase.rpc('record_click_and_increment', {
+        p_link_id: link.id,
+        p_ip_address: ip ?? undefined,
+        p_user_agent: userAgent || undefined,
+        p_referrer_url: referer ?? undefined,
+        p_browser_name: getBrowser(userAgent),
+        p_os_name: getOS(userAgent),
+        p_device_type: getDevice(userAgent),
+        p_utm_source: utmSource,
+        p_utm_medium: utmMedium,
+        p_utm_campaign: utmCampaign,
+        p_utm_term: utmTerm,
+        p_utm_content: utmContent,
+      })
     } catch (err) {
       console.error('Error tracking analytics:', err)
     }

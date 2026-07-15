@@ -16,154 +16,109 @@ function getDateFrom(timeRange: TimeRange): string | null {
   return date.toISOString()
 }
 
-function applyFilters(
-  query: ReturnType<ReturnType<Awaited<ReturnType<typeof createClient>>['from']>['select']>,
-  filter: AnalyticsFilter,
-  dateFrom: string | null
-) {
-  let q = query
-  if (filter.linkId) q = q.eq('link_id', filter.linkId)
-  if (filter.linkIds) q = q.in('link_id', filter.linkIds)
-  if (dateFrom) q = q.gte('clicked_at', dateFrom)
-  return q
+function getLinkIds(filter: AnalyticsFilter): string[] {
+  if (filter.linkIds) return filter.linkIds
+  if (filter.linkId) return [filter.linkId]
+  return []
 }
 
 export async function getClicksOverTime(filter: AnalyticsFilter) {
   const supabase = await createClient()
-  const dateFrom = getDateFrom(filter.timeRange)
 
-  let query = supabase.from('clicks').select('clicked_at')
-  query = applyFilters(query, filter, dateFrom)
-
-  const { data, error } = await query.order('clicked_at', { ascending: true })
+  const { data, error } = await supabase.rpc('get_clicks_over_time', {
+    p_link_ids: getLinkIds(filter),
+    p_since: getDateFrom(filter.timeRange),
+  })
   if (error || !data) {
     console.error('[analytics] getClicksOverTime:', error)
     return []
   }
 
-  const grouped: Record<string, number> = {}
-  for (const click of data) {
-    if (!click.clicked_at) continue
-    const date = click.clicked_at.split('T')[0]
-    grouped[date] = (grouped[date] || 0) + 1
-  }
-
-  return Object.entries(grouped).map(([date, clicks]) => ({ date, clicks }))
+  return data.map((row) => ({ date: row.day, clicks: Number(row.clicks) }))
 }
 
 export async function getTopReferrers(filter: AnalyticsFilter) {
   const supabase = await createClient()
-  const dateFrom = getDateFrom(filter.timeRange)
 
-  let query = supabase.from('clicks').select('referrer_domain')
-  query = applyFilters(query, filter, dateFrom)
-
-  const { data, error } = await query
+  const { data, error } = await supabase.rpc('get_referrer_breakdown', {
+    p_link_ids: getLinkIds(filter),
+    p_since: getDateFrom(filter.timeRange),
+  })
   if (error || !data) {
     console.error('[analytics] getTopReferrers:', error)
     return []
   }
 
-  const counts: Record<string, number> = {}
-  for (const click of data) {
-    const domain = click.referrer_domain || 'Direct'
-    counts[domain] = (counts[domain] || 0) + 1
-  }
-
-  return Object.entries(counts)
-    .map(([name, clicks]) => ({ name, clicks }))
+  return data
+    .map((row) => ({ name: row.name || 'Direct', clicks: Number(row.count) }))
     .sort((a, b) => b.clicks - a.clicks)
     .slice(0, 10)
 }
 
 export async function getDeviceBreakdown(filter: AnalyticsFilter) {
   const supabase = await createClient()
-  const dateFrom = getDateFrom(filter.timeRange)
 
-  let query = supabase.from('clicks').select('device_type')
-  query = applyFilters(query, filter, dateFrom)
-
-  const { data, error } = await query
+  const { data, error } = await supabase.rpc('get_device_breakdown', {
+    p_link_ids: getLinkIds(filter),
+    p_since: getDateFrom(filter.timeRange),
+  })
   if (error || !data) {
     console.error('[analytics] getDeviceBreakdown:', error)
     return []
   }
 
-  const counts: Record<string, number> = {}
-  for (const click of data) {
-    const device = click.device_type || 'unknown'
-    counts[device] = (counts[device] || 0) + 1
-  }
-
-  return Object.entries(counts)
-    .map(([name, value]) => ({ name, value }))
+  return data
+    .map((row) => ({ name: row.name || 'unknown', value: Number(row.count) }))
     .sort((a, b) => b.value - a.value)
 }
 
 export async function getCountryBreakdown(filter: AnalyticsFilter) {
   const supabase = await createClient()
-  const dateFrom = getDateFrom(filter.timeRange)
 
-  let query = supabase.from('clicks').select('country')
-  query = applyFilters(query, filter, dateFrom)
-
-  const { data, error } = await query
+  const { data, error } = await supabase.rpc('get_country_breakdown', {
+    p_link_ids: getLinkIds(filter),
+    p_since: getDateFrom(filter.timeRange),
+  })
   if (error || !data) {
     console.error('[analytics] getCountryBreakdown:', error)
     return []
   }
 
-  const counts: Record<string, number> = {}
-  for (const click of data) {
-    const country = click.country || 'Unknown'
-    counts[country] = (counts[country] || 0) + 1
-  }
-
-  return Object.entries(counts)
-    .map(([name, clicks]) => ({ name, clicks }))
+  return data
+    .map((row) => ({ name: row.name || 'Unknown', clicks: Number(row.count) }))
     .sort((a, b) => b.clicks - a.clicks)
     .slice(0, 10)
 }
 
 export async function getBrowserBreakdown(filter: AnalyticsFilter) {
   const supabase = await createClient()
-  const dateFrom = getDateFrom(filter.timeRange)
 
-  let query = supabase.from('clicks').select('browser_name')
-  query = applyFilters(query, filter, dateFrom)
-
-  const { data, error } = await query
+  const { data, error } = await supabase.rpc('get_browser_breakdown', {
+    p_link_ids: getLinkIds(filter),
+    p_since: getDateFrom(filter.timeRange),
+  })
   if (error || !data) {
     console.error('[analytics] getBrowserBreakdown:', error)
     return []
   }
 
-  const counts: Record<string, number> = {}
-  for (const click of data) {
-    const browser = click.browser_name || 'Unknown'
-    counts[browser] = (counts[browser] || 0) + 1
-  }
-
-  return Object.entries(counts)
-    .map(([name, value]) => ({ name, value }))
+  return data
+    .map((row) => ({ name: row.name || 'Unknown', value: Number(row.count) }))
     .sort((a, b) => b.value - a.value)
 }
 
 export async function getTotalClicks(filter: AnalyticsFilter): Promise<number> {
   const supabase = await createClient()
-  const dateFrom = getDateFrom(filter.timeRange)
 
-  let query = supabase.from('clicks').select('id', { count: 'exact', head: true })
-  if (filter.linkId) query = query.eq('link_id', filter.linkId)
-  if (filter.linkIds) query = query.in('link_id', filter.linkIds)
-  if (dateFrom) query = query.gte('clicked_at', dateFrom)
-
-  const { count, error } = await query
+  const { data, error } = await supabase.rpc('get_total_clicks', {
+    p_link_ids: getLinkIds(filter),
+    p_since: getDateFrom(filter.timeRange),
+  })
   if (error) {
     console.error('[analytics] getTotalClicks:', error)
     return 0
   }
-  return count || 0
+  return Number(data) || 0
 }
 
 export async function getTopStats(filter: AnalyticsFilter) {
