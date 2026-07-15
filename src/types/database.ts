@@ -376,6 +376,51 @@ export type Database = {
         }
         Returns: undefined
       }
+      get_link_by_short_code: {
+        Args: { p_short_code: string }
+        Returns: Database['public']['Tables']['links']['Row'][]
+      }
+      record_click_and_increment: {
+        Args: {
+          p_link_id: string
+          p_ip_address?: string
+          p_user_agent?: string
+          p_referrer_url?: string
+          p_browser_name?: string
+          p_os_name?: string
+          p_device_type?: Database['public']['Enums']['device_type']
+          p_utm_source?: string
+          p_utm_medium?: string
+          p_utm_campaign?: string
+          p_utm_term?: string
+          p_utm_content?: string
+        }
+        Returns: undefined
+      }
+      get_clicks_over_time: {
+        Args: { p_link_ids: string[]; p_since?: string | null }
+        Returns: { day: string; clicks: number }[]
+      }
+      get_device_breakdown: {
+        Args: { p_link_ids: string[]; p_since?: string | null }
+        Returns: { name: string; count: number }[]
+      }
+      get_browser_breakdown: {
+        Args: { p_link_ids: string[]; p_since?: string | null }
+        Returns: { name: string; count: number }[]
+      }
+      get_referrer_breakdown: {
+        Args: { p_link_ids: string[]; p_since?: string | null }
+        Returns: { name: string; count: number }[]
+      }
+      get_country_breakdown: {
+        Args: { p_link_ids: string[]; p_since?: string | null }
+        Returns: { name: string; count: number }[]
+      }
+      get_total_clicks: {
+        Args: { p_link_ids: string[]; p_since?: string | null }
+        Returns: number
+      }
       uid: { Args: never; Returns: string }
     }
     Enums: {
