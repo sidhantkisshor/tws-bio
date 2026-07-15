@@ -28,6 +28,17 @@ export function getShortUrl(shortCode: string): string {
   return `${baseUrl}/${shortCode}`
 }
 
+// Locale-stable date formatter. `toLocaleDateString()` with no explicit locale
+// uses the server's locale on the server and the browser's locale on the client,
+// which produces a hydration mismatch (e.g. 11/7/2026 vs 7/11/2026) once a table
+// is a Client Component. Pinning the locale makes server and client agree.
+export function formatDate(value: string | number | Date | null | undefined): string {
+  if (!value) return '---'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '---'
+  return d.toLocaleDateString('en-US')
+}
+
 // Canonicalize an IPv4 host given in any notation (dotted-decimal, dotted-octal,
 // dotted-hex, or a bare decimal/hex/octal integer) to a dotted-quad string.
 // Returns null if the host is not a valid IPv4 address in any notation.

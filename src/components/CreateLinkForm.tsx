@@ -12,12 +12,29 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { useAuth } from '@/hooks/useAuth'
 
-export function CreateLinkForm() {
+type FieldName = 'url' | 'customCode' | 'iosDeepLink' | 'androidDeepLink' | 'fallbackUrl'
+type FieldErrors = Partial<Record<FieldName, string>>
+
+interface CreateLinkFormProps {
+  /**
+   * Server-resolved user, passed by routes (e.g. the dashboard create page)
+   * that already redirect unauthenticated visitors before rendering this
+   * form. Lets the form skip its own client-side auth loading skeleton and
+   * sign-in gate on first paint; once useAuth resolves client-side, its
+   * result takes over as the source of truth.
+   */
+  initialUser?: { id: string } | null
+}
+
+export function CreateLinkForm({ initialUser = null }: CreateLinkFormProps) {
   const router = useRouter()
-  const { user, loading: authLoading } = useAuth()
+  const { user: authUser, loading: authLoading } = useAuth()
+  const user = initialUser && authLoading ? initialUser : authUser
+  const showAuthSkeleton = !initialUser && authLoading
   const [url, setUrl] = useState('')
   const [customCode, setCustomCode] = useState('')
   const [loading, setLoading] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [linkType, setLinkType] = useState<'url' | 'deep_link'>('url')
   const [iosDeepLink, setIosDeepLink] = useState('')
@@ -29,6 +46,15 @@ export function CreateLinkForm() {
   const [selectedCampaignId, setSelectedCampaignId] = useState('')
   const [newCampaignName, setNewCampaignName] = useState('')
   const latestUrlRef = useRef('')
+
+  const clearFieldError = (field: FieldName) => {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
 
   useEffect(() => {
     if (!user) return
@@ -46,6 +72,7 @@ export function CreateLinkForm() {
 
   const handleUrlChange = (newUrl: string) => {
     setUrl(newUrl)
+    clearFieldError('url')
     // Track the latest input synchronously so stale async detections can bail out
     latestUrlRef.current = newUrl
 
@@ -91,11 +118,17 @@ export function CreateLinkForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // Guard against double submits: a second Enter press or click while the
+    // first request is still in flight must be a no-op, not a duplicate RPC.
+    if (loading) return
+
     if (!isValidUrl(url)) {
+      setFieldErrors((prev) => ({ ...prev, url: 'Please enter a valid URL' }))
       toast.error('Please enter a valid URL')
       return
     }
 
+    setFieldErrors({})
     setLoading(true)
     const supabase = createClient()
 
@@ -142,7 +175,12 @@ export function CreateLinkForm() {
           } else {
             toast.success('Deep link created and copied to clipboard!')
           }
+          // Keep the form disabled through the redirect delay so a fast
+          // second submit can't fire before navigation actually happens.
           setTimeout(() => router.push('/dashboard'), 1500)
+        } else {
+          toast.error('Failed to create link. Please try again.')
+          setLoading(false)
         }
       } else {
         const { data, error: rpcError } = await supabase.rpc('create_link', {
@@ -165,19 +203,46 @@ export function CreateLinkForm() {
           } else {
             toast.success('Link created and copied to clipboard!')
           }
+          // Keep the form disabled through the redirect delay so a fast
+          // second submit can't fire before navigation actually happens.
           setTimeout(() => router.push('/dashboard'), 1500)
+        } else {
+          toast.error('Failed to create link. Please try again.')
+          setLoading(false)
         }
       }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create link')
-    } finally {
+      const message = err instanceof Error ? err.message : 'Failed to create link'
+      toast.error(message)
+
+      // Surface backend rejections inline on the offending field, in
+      // addition to the toast.
+      if (/fallback url/i.test(message)) {
+        setFieldErrors((prev) => ({ ...prev, fallbackUrl: message }))
+        setShowAdvanced(true)
+      } else if (/ios deep link/i.test(message)) {
+        setFieldErrors((prev) => ({ ...prev, iosDeepLink: message }))
+        setShowAdvanced(true)
+      } else if (/android deep link/i.test(message)) {
+        setFieldErrors((prev) => ({ ...prev, androidDeepLink: message }))
+        setShowAdvanced(true)
+      } else if (/short code/i.test(message)) {
+        setFieldErrors((prev) => ({ ...prev, customCode: message }))
+      } else if (/url must start with/i.test(message)) {
+        setFieldErrors((prev) => ({ ...prev, url: message }))
+      }
+
+      // Only clear loading on failure — on success the form should stay
+      // disabled through the pending redirect (see setTimeout above).
       setLoading(false)
     }
   }
 
-  // Link creation requires authentication. While auth state resolves, show a
-  // neutral placeholder; once resolved, gate anonymous visitors behind sign-in.
-  if (authLoading) {
+  // Link creation requires authentication. While client auth state resolves,
+  // show a neutral placeholder; once resolved, gate anonymous visitors behind
+  // sign-in. Callers that already resolved auth server-side (e.g. the
+  // dashboard create route) pass initialUser to skip this skeleton entirely.
+  if (showAuthSkeleton) {
     return (
       <div className="max-w-2xl mx-auto">
         <Card className="bg-card border-border">
@@ -257,12 +322,19 @@ export function CreateLinkForm() {
                     onChange={(e) => handleUrlChange(e.target.value)}
                     placeholder="https://example.com/very-long-url"
                     className="flex-1 bg-muted h-10"
+                    aria-invalid={!!fieldErrors.url}
+                    aria-describedby={fieldErrors.url ? 'url-error' : undefined}
                     required
                   />
                   <Button type="submit" disabled={loading} className="h-10 px-6">
                     {loading ? 'Creating...' : linkType === 'deep_link' ? 'Create Deep Link' : 'Shorten'}
                   </Button>
                 </div>
+                {fieldErrors.url && (
+                  <p id="url-error" role="alert" className="mt-1.5 text-xs text-destructive">
+                    {fieldErrors.url}
+                  </p>
+                )}
               </div>
 
               {/* Custom code input */}
@@ -276,12 +348,22 @@ export function CreateLinkForm() {
                     id="custom"
                     type="text"
                     value={customCode}
-                    onChange={(e) => setCustomCode(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                    onChange={(e) => {
+                      setCustomCode(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))
+                      clearFieldError('customCode')
+                    }}
                     placeholder="custom-link"
                     className="rounded-l-none bg-muted h-10"
                     pattern="[a-z0-9-]+"
+                    aria-invalid={!!fieldErrors.customCode}
+                    aria-describedby={fieldErrors.customCode ? 'custom-code-error' : undefined}
                   />
                 </div>
+                {fieldErrors.customCode && (
+                  <p id="custom-code-error" role="alert" className="mt-1.5 text-xs text-destructive">
+                    {fieldErrors.customCode}
+                  </p>
+                )}
               </div>
 
               {/* Campaign selector */}
@@ -359,10 +441,21 @@ export function CreateLinkForm() {
                           id="ios"
                           type="text"
                           value={iosDeepLink}
-                          onChange={(e) => { setIosDeepLink(e.target.value); setAutoDetected(false) }}
+                          onChange={(e) => {
+                            setIosDeepLink(e.target.value)
+                            setAutoDetected(false)
+                            clearFieldError('iosDeepLink')
+                          }}
                           placeholder="myapp://screen/path"
                           className="bg-muted h-10"
+                          aria-invalid={!!fieldErrors.iosDeepLink}
+                          aria-describedby={fieldErrors.iosDeepLink ? 'ios-error' : undefined}
                         />
+                        {fieldErrors.iosDeepLink && (
+                          <p id="ios-error" role="alert" className="mt-1.5 text-xs text-destructive">
+                            {fieldErrors.iosDeepLink}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <Label htmlFor="android" className="mb-2">
@@ -372,10 +465,21 @@ export function CreateLinkForm() {
                           id="android"
                           type="text"
                           value={androidDeepLink}
-                          onChange={(e) => { setAndroidDeepLink(e.target.value); setAutoDetected(false) }}
+                          onChange={(e) => {
+                            setAndroidDeepLink(e.target.value)
+                            setAutoDetected(false)
+                            clearFieldError('androidDeepLink')
+                          }}
                           placeholder="myapp://screen/path"
                           className="bg-muted h-10"
+                          aria-invalid={!!fieldErrors.androidDeepLink}
+                          aria-describedby={fieldErrors.androidDeepLink ? 'android-error' : undefined}
                         />
+                        {fieldErrors.androidDeepLink && (
+                          <p id="android-error" role="alert" className="mt-1.5 text-xs text-destructive">
+                            {fieldErrors.androidDeepLink}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <Label htmlFor="fallback" className="mb-2">
@@ -385,11 +489,22 @@ export function CreateLinkForm() {
                           id="fallback"
                           type="url"
                           value={fallbackUrl}
-                          onChange={(e) => { setFallbackUrl(e.target.value); setAutoDetected(false) }}
+                          onChange={(e) => {
+                            setFallbackUrl(e.target.value)
+                            setAutoDetected(false)
+                            clearFieldError('fallbackUrl')
+                          }}
                           placeholder="https://app-store-link.com"
                           className="bg-muted h-10"
+                          aria-invalid={!!fieldErrors.fallbackUrl}
+                          aria-describedby={fieldErrors.fallbackUrl ? 'fallback-error' : 'fallback-hint'}
                         />
-                        <p className="text-xs text-muted-foreground mt-1">Where to redirect if the app is not installed</p>
+                        {fieldErrors.fallbackUrl && (
+                          <p id="fallback-error" role="alert" className="mt-1.5 text-xs text-destructive">
+                            {fieldErrors.fallbackUrl}
+                          </p>
+                        )}
+                        <p id="fallback-hint" className="text-xs text-muted-foreground mt-1">Where to redirect if the app is not installed</p>
                       </div>
                     </>
                   )}

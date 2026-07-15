@@ -1,6 +1,8 @@
 'use client'
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { AlertTriangle } from 'lucide-react'
+import Link from 'next/link'
 import {
   ChartContainer,
   ChartTooltip,
@@ -10,6 +12,10 @@ import {
 
 interface ClickChartProps {
   data: { date: string; clicks: number }[]
+  /** True when the underlying click query failed — renders a distinct
+   * message from the zero-clicks empty state so a swallowed error doesn't
+   * read as "this link genuinely has no clicks yet". */
+  error?: boolean
 }
 
 const chartConfig = {
@@ -19,8 +25,38 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-export function ClickChart({ data }: ClickChartProps) {
+// Dates arrive as plain 'YYYY-MM-DD' strings. Parsing those directly with
+// `new Date(...)` treats them as UTC midnight, which renders as the prior
+// day in any negative-UTC-offset timezone. Anchoring to local midnight
+// keeps the displayed date stable regardless of viewer timezone.
+function parseLocalDate(value: string): Date {
+  return new Date(value.includes('T') ? value : `${value}T00:00:00`)
+}
+
+export function ClickChart({ data, error }: ClickChartProps) {
   const hasClicks = data.some((d) => d.clicks > 0)
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+        <div className="rounded-full bg-destructive/10 p-3">
+          <AlertTriangle className="size-6 text-destructive" />
+        </div>
+        <div>
+          <p className="text-foreground font-medium">Couldn&apos;t load click data</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Something went wrong.{' '}
+            <Link
+              href="/dashboard"
+              className="text-primary-text hover:text-primary-text/80 underline underline-offset-4"
+            >
+              Try again
+            </Link>
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   if (!data.length || !hasClicks) {
     return (
@@ -52,8 +88,7 @@ export function ClickChart({ data }: ClickChartProps) {
           axisLine={false}
           tickMargin={8}
           tickFormatter={(value: string) => {
-            const d = new Date(value)
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            return parseLocalDate(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
           }}
         />
         <YAxis
@@ -68,7 +103,7 @@ export function ClickChart({ data }: ClickChartProps) {
             <ChartTooltipContent
               labelFormatter={(value) => {
                 if (typeof value === 'string') {
-                  return new Date(value).toLocaleDateString('en-US', {
+                  return parseLocalDate(value).toLocaleDateString('en-US', {
                     month: 'long',
                     day: 'numeric',
                     year: 'numeric',

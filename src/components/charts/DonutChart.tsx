@@ -2,7 +2,10 @@
 
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
-const COLORS = ['#00B03B', '#7c3aed', '#059669', '#d97706', '#dc2626', '#6b7280']
+// Shared chart-color ramp (see globals.css) — same tokens DeviceChart draws
+// from, so a device pie and a browser pie stay visually consistent instead
+// of landing on independently-chosen hexes.
+const COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)']
 
 interface DonutChartProps {
   data: { name: string; value: number }[]

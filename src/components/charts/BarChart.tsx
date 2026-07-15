@@ -14,7 +14,7 @@ interface BarChartProps {
   color?: string
 }
 
-export function BarChart({ data, color = '#00B03B' }: BarChartProps) {
+export function BarChart({ data, color = 'var(--chart-1)' }: BarChartProps) {
   // Categories with zero clicks in every slot are indistinguishable from "no data" —
   // an axis with only invisible zero-width bars reads as broken, not empty.
   const hasVisibleData = data.length > 0 && data.some((item) => item.clicks > 0)

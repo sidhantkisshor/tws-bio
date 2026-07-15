@@ -14,8 +14,12 @@ import { ClicksOverTimeChart } from '@/components/charts/ClicksOverTimeChart'
 import { BarChart } from '@/components/charts/BarChart'
 import { DonutChart } from '@/components/charts/DonutChart'
 import { TimeRangePicker } from '@/components/TimeRangePicker'
+import { TrendChip, computeTrend, type StatTrend } from '@/components/dashboard/StatCard'
+import { Button } from '@/components/ui/button'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 
 const VALID_RANGES = new Set(['7d', '30d', '90d', 'all'])
+const RANGE_DAYS: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90 }
 
 export default async function CampaignDetailPage({
   params,
@@ -65,6 +69,30 @@ export default async function CampaignDetailPage({
       })()
     : empty
 
+  // Prior-period click count (same-length window immediately preceding the
+  // selected range) for the campaign's clicks trend delta. Not meaningful
+  // for "all time" or an empty campaign.
+  let periodTrend: StatTrend | null = null
+  if (timeRange !== 'all' && linkIds.length > 0) {
+    const days = RANGE_DAYS[timeRange]
+    const periodStart = new Date()
+    periodStart.setDate(periodStart.getDate() - days)
+    const priorStart = new Date(periodStart)
+    priorStart.setDate(priorStart.getDate() - days)
+
+    const { count: priorClicks, error: priorClicksError } = await supabase
+      .from('clicks')
+      .select('id', { count: 'exact', head: true })
+      .in('link_id', linkIds)
+      .gte('clicked_at', priorStart.toISOString())
+      .lt('clicked_at', periodStart.toISOString())
+
+    if (priorClicksError) {
+      console.error('[campaign-detail] prior clicks query:', priorClicksError)
+    }
+    periodTrend = computeTrend(totalClicks, priorClicks || 0)
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-border">
@@ -76,7 +104,7 @@ export default async function CampaignDetailPage({
               </svg>
             </Link>
             <div>
-              <h1 className="text-lg font-bold text-foreground">{campaign.name}</h1>
+              <h1 className="font-heading text-2xl text-foreground">{campaign.name}</h1>
               {campaign.description && <p className="text-sm text-muted-foreground">{campaign.description}</p>}
             </div>
           </div>
@@ -86,40 +114,63 @@ export default async function CampaignDetailPage({
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
           <TimeRangePicker current={timeRange} basePath={`/dashboard/campaigns/${id}`} />
-          <div className="text-sm text-muted-foreground">
-            {totalClicks.toLocaleString()} clicks &middot; {linkIds.length} links
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>
+              {totalClicks.toLocaleString()} clicks &middot; {linkIds.length} links
+            </span>
+            <TrendChip trend={periodTrend} />
           </div>
         </div>
 
-        <div className="bg-card rounded-lg border border-border p-6 mb-8">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Clicks Over Time</h2>
-          <ClicksOverTimeChart data={clicksOverTime} />
-        </div>
+        <Card className="bg-card border-border mb-8">
+          <CardHeader>
+            <CardTitle>Clicks Over Time</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ClicksOverTimeChart data={clicksOverTime} />
+          </CardContent>
+        </Card>
 
         <div className="grid md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-card rounded-lg border border-border p-6">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Referrers</h3>
-            <BarChart data={referrers} />
-          </div>
-          <div className="bg-card rounded-lg border border-border p-6">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Devices</h3>
-            <DonutChart data={devices} />
-          </div>
-          <div className="bg-card rounded-lg border border-border p-6">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Countries</h3>
-            <BarChart data={countries} color="#059669" />
-          </div>
-          <div className="bg-card rounded-lg border border-border p-6">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Browsers</h3>
-            <DonutChart data={browsers} />
-          </div>
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Referrers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BarChart data={referrers} />
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Devices</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DonutChart data={devices} />
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Countries</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BarChart data={countries} color="var(--chart-3)" />
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Browsers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DonutChart data={browsers} />
+            </CardContent>
+          </Card>
         </div>
 
-        {campaignLinks && campaignLinks.length > 0 && (
-          <div className="bg-card border border-border rounded-lg">
-            <div className="px-6 py-4 border-b border-border">
-              <h2 className="text-lg font-semibold text-foreground">Links in Campaign</h2>
-            </div>
+        <Card className="bg-card border-border overflow-hidden">
+          <CardHeader className="border-b border-border">
+            <CardTitle>Links in Campaign</CardTitle>
+          </CardHeader>
+          {campaignLinks && campaignLinks.length > 0 ? (
             <div className="divide-y divide-border">
               {campaignLinks.map((link) => (
                 <Link
@@ -137,8 +188,17 @@ export default async function CampaignDetailPage({
                 </Link>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <CardContent>
+              <div className="flex flex-col items-center text-center gap-4 py-12">
+                <p className="text-muted-foreground">No links in this campaign yet.</p>
+                <Link href="/dashboard/create">
+                  <Button>Create Link</Button>
+                </Link>
+              </div>
+            </CardContent>
+          )}
+        </Card>
       </main>
     </div>
   )

@@ -5,6 +5,8 @@ import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
   type ChartConfig,
 } from '@/components/ui/chart'
 
@@ -46,7 +48,7 @@ export function DeviceChart({
   const chartConfig = buildChartConfig(data)
 
   return (
-    <ChartContainer config={chartConfig} className="mx-auto aspect-square h-[220px]">
+    <ChartContainer config={chartConfig} className="mx-auto h-[260px] w-full">
       <PieChart>
         <ChartTooltip content={<ChartTooltipContent nameKey="device" />} />
         <Pie
@@ -68,6 +70,7 @@ export function DeviceChart({
             />
           ))}
         </Pie>
+        <ChartLegend content={<ChartLegendContent nameKey="device" />} />
       </PieChart>
     </ChartContainer>
   )
