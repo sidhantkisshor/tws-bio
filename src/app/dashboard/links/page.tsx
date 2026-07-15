@@ -50,70 +50,120 @@ export default async function LinksPage({
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-foreground">Links</h1>
-        <Link href="/">
+        <Link href="/dashboard/create">
           <Button>Create Link</Button>
         </Link>
       </div>
 
       {links && links.length > 0 ? (
         <Card className="bg-card border-border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="px-4">Short Code</TableHead>
-                <TableHead className="px-4">Original URL</TableHead>
-                <TableHead className="px-4">Type</TableHead>
-                <TableHead className="px-4">Clicks</TableHead>
-                <TableHead className="px-4">Status</TableHead>
-                <TableHead className="px-4">Created</TableHead>
-                <TableHead className="px-4">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {links.map((link) => (
-                <TableRow key={link.id}>
-                  <TableCell className="px-4 py-3">
+          {/* Desktop / tablet: full table, scoped horizontal scroll only if needed */}
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="px-4">Short Code</TableHead>
+                  <TableHead className="px-4">Original URL</TableHead>
+                  <TableHead className="px-4">Type</TableHead>
+                  <TableHead className="px-4">Clicks</TableHead>
+                  <TableHead className="px-4">Status</TableHead>
+                  <TableHead className="px-4">Created</TableHead>
+                  <TableHead className="px-4">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {links.map((link) => (
+                  <TableRow key={link.id}>
+                    <TableCell className="px-4 py-3">
+                      <a
+                        href={getShortUrl(link.short_code)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-primary-text hover:text-primary-text/80 hover:underline"
+                      >
+                        {link.short_code}
+                      </a>
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      <span className="text-sm text-muted-foreground truncate max-w-xs block">
+                        {link.original_url}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      {link.link_type === 'deep_link' ? (
+                        <Badge variant="default">Deep Link</Badge>
+                      ) : (
+                        <Badge variant="secondary">URL</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 font-mono">
+                      {link.total_clicks || 0}
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      <Badge variant={link.is_active ? 'default' : 'secondary'}>
+                        {link.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-sm text-muted-foreground">
+                      {link.created_at
+                        ? new Date(link.created_at).toLocaleDateString()
+                        : '---'}
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      <LinkActions link={link} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Mobile: stacked card-per-link layout so every field and action stays on-screen */}
+          <div className="md:hidden divide-y divide-border">
+            {links.map((link) => (
+              <div key={link.id} className="p-4 flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <a
                       href={getShortUrl(link.short_code)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-mono text-primary hover:text-primary/80 hover:underline"
+                      className="font-mono text-primary-text hover:text-primary-text/80 hover:underline block truncate"
                     >
                       {link.short_code}
                     </a>
-                  </TableCell>
-                  <TableCell className="px-4 py-3">
-                    <span className="text-sm text-muted-foreground truncate max-w-xs block">
+                    <span className="text-sm text-muted-foreground truncate block mt-0.5">
                       {link.original_url}
                     </span>
-                  </TableCell>
-                  <TableCell className="px-4 py-3">
-                    {link.link_type === 'deep_link' ? (
-                      <Badge variant="default">Deep Link</Badge>
-                    ) : (
-                      <Badge variant="secondary">URL</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="px-4 py-3 font-mono">
-                    {link.total_clicks || 0}
-                  </TableCell>
-                  <TableCell className="px-4 py-3">
-                    <Badge variant={link.is_active ? 'default' : 'secondary'}>
-                      {link.is_active ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="px-4 py-3 text-sm text-muted-foreground">
+                  </div>
+                  <Badge
+                    variant={link.is_active ? 'default' : 'secondary'}
+                    className="shrink-0"
+                  >
+                    {link.is_active ? 'Active' : 'Inactive'}
+                  </Badge>
+                </div>
+
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  {link.link_type === 'deep_link' ? (
+                    <Badge variant="default">Deep Link</Badge>
+                  ) : (
+                    <Badge variant="secondary">URL</Badge>
+                  )}
+                  <span className="font-mono">{link.total_clicks || 0} clicks</span>
+                  <span className="ml-auto">
                     {link.created_at
                       ? new Date(link.created_at).toLocaleDateString()
                       : '---'}
-                  </TableCell>
-                  <TableCell className="px-4 py-3">
-                    <LinkActions link={link} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-end -mx-1">
+                  <LinkActions link={link} />
+                </div>
+              </div>
+            ))}
+          </div>
 
           {totalPages > 1 && (
             <div className="px-4 py-4 border-t border-border flex items-center justify-between">
@@ -151,7 +201,7 @@ export default async function LinksPage({
                 Create your first link to get started.
               </p>
             </div>
-            <Link href="/">
+            <Link href="/dashboard/create">
               <Button>Create Link</Button>
             </Link>
           </CardContent>

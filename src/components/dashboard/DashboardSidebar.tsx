@@ -3,7 +3,15 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Link2, BarChart3, LogOut, Menu } from 'lucide-react'
+import {
+  LayoutDashboard,
+  Link2,
+  BarChart3,
+  Megaphone,
+  Plus,
+  LogOut,
+  Menu,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -15,6 +23,7 @@ import {
 const navItems = [
   { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Links', href: '/dashboard/links', icon: Link2 },
+  { label: 'Campaigns', href: '/dashboard/campaigns', icon: Megaphone },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
 ]
 
@@ -34,12 +43,31 @@ function NavItem({
       onClick={onClick}
       className={`flex items-center gap-3 px-4 py-2.5 rounded-r-md text-sm font-medium transition-colors ${
         active
-          ? 'bg-accent text-primary border-l-2 border-primary'
+          ? 'bg-accent text-primary-text border-l-2 border-primary'
           : 'text-muted-foreground hover:text-foreground hover:bg-accent'
       }`}
     >
       <Icon className="size-4" />
       {item.label}
+    </Link>
+  )
+}
+
+function CreateLinkButton({
+  onClick,
+  className = '',
+}: {
+  onClick?: () => void
+  className?: string
+}) {
+  return (
+    <Link
+      href="/dashboard/create"
+      onClick={onClick}
+      className={`flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${className}`}
+    >
+      <Plus className="size-4" />
+      Create Link
     </Link>
   )
 }
@@ -70,6 +98,10 @@ function SidebarContent({
         <Link href="/" className="font-bold text-xl text-foreground">
           tws.bio
         </Link>
+      </div>
+
+      <div className="px-4 pb-4">
+        <CreateLinkButton onClick={onNavClick} />
       </div>
 
       <nav className="flex-1 flex flex-col gap-1 px-2">
@@ -117,26 +149,33 @@ export function DashboardSidebar({ userEmail }: { userEmail: string }) {
         <Link href="/" className="font-bold text-xl text-foreground">
           tws.bio
         </Link>
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger
-            render={
-              <Button variant="ghost" size="icon" aria-label="Open menu" />
-            }
+        <div className="flex items-center gap-1">
+          <Link
+            href="/dashboard/create"
+            aria-label="Create Link"
+            className="flex items-center justify-center rounded-md bg-primary size-9 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
-            <Menu className="size-5" />
-          </SheetTrigger>
-          <SheetContent side="left" className="w-64 p-0">
-            <SheetTitle className="sr-only">Navigation</SheetTitle>
-            <SidebarContent
-              pathname={pathname}
-              userEmail={userEmail}
-              onNavClick={() => setOpen(false)}
-            />
-          </SheetContent>
-        </Sheet>
+            <Plus className="size-5" />
+          </Link>
+          <Sheet open={open} onOpenChange={setOpen}>
+            <SheetTrigger
+              render={
+                <Button variant="ghost" size="icon" aria-label="Open menu" />
+              }
+            >
+              <Menu className="size-5" />
+            </SheetTrigger>
+            <SheetContent side="left" className="w-64 p-0">
+              <SheetTitle className="sr-only">Navigation</SheetTitle>
+              <SidebarContent
+                pathname={pathname}
+                userEmail={userEmail}
+                onNavClick={() => setOpen(false)}
+              />
+            </SheetContent>
+          </Sheet>
+        </div>
       </div>
-      {/* Mobile top bar spacer */}
-      <div className="md:hidden h-14 flex-shrink-0" />
     </>
   )
 }

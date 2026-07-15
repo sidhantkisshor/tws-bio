@@ -15,18 +15,22 @@ interface ClickChartProps {
 const chartConfig = {
   clicks: {
     label: 'Clicks',
-    color: '#22c55e',
+    color: 'var(--chart-1)',
   },
 } satisfies ChartConfig
 
 export function ClickChart({ data }: ClickChartProps) {
-  if (!data.length) {
+  const hasClicks = data.some((d) => d.clicks > 0)
+
+  if (!data.length || !hasClicks) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
         No click data yet
       </div>
     )
   }
+
+  const maxClicks = Math.max(...data.map((d) => d.clicks))
 
   return (
     <ChartContainer config={chartConfig} className="h-64 w-full">
@@ -57,6 +61,7 @@ export function ClickChart({ data }: ClickChartProps) {
           axisLine={false}
           tickMargin={8}
           allowDecimals={false}
+          domain={[0, Math.max(maxClicks + 1, 4)]}
         />
         <ChartTooltip
           content={
@@ -78,8 +83,10 @@ export function ClickChart({ data }: ClickChartProps) {
           type="monotone"
           dataKey="clicks"
           stroke="var(--color-clicks)"
-          strokeWidth={2}
+          strokeWidth={2.5}
           fill="url(#clicksGradient)"
+          dot={{ r: 3, fill: 'var(--color-clicks)', stroke: 'var(--card)', strokeWidth: 1 }}
+          activeDot={{ r: 5, fill: 'var(--color-clicks)', stroke: 'var(--card)', strokeWidth: 2 }}
         />
       </AreaChart>
     </ChartContainer>

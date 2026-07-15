@@ -32,6 +32,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
@@ -61,6 +62,9 @@
   --popover-foreground: #FAFAFA;
   --primary: #00802B;
   --primary-foreground: #FFFFFF;
+  /* AA-legible green for TEXT on dark surfaces (#0a0a0a/#111111/#1a1a1a) — --primary (#00802B)
+     is reserved for solid fills, where it's paired with --primary-foreground (white). */
+  --primary-text: var(--ring);
   --secondary: #1a1a1a;
   --secondary-foreground: #FAFAFA;
   --muted: #1a1a1a;

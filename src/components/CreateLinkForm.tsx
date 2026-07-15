@@ -228,17 +228,17 @@ export function CreateLinkForm() {
             {detectedPlatform && (
               <div className="rounded-lg border border-primary/20 bg-primary/10 p-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-primary-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <p className="text-sm text-primary">
+                  <p className="text-sm text-primary-text">
                     <strong>{detectedPlatform}</strong> deep links detected and configured automatically!
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowAdvanced(true)}
-                  className="text-primary hover:text-primary/80 text-sm font-medium"
+                  className="text-primary-text hover:text-primary-text/80 text-sm font-medium"
                 >
                   View settings
                 </button>
@@ -315,7 +315,7 @@ export function CreateLinkForm() {
                 <button
                   type="button"
                   onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1"
+                  className="text-sm text-primary-text hover:text-primary-text/80 font-medium flex items-center gap-1"
                 >
                   <svg
                     className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
@@ -353,7 +353,7 @@ export function CreateLinkForm() {
                     <>
                       <div>
                         <Label htmlFor="ios" className="mb-2">
-                          iOS Deep Link {autoDetected && <span className="text-primary">(Auto-detected)</span>}
+                          iOS Deep Link {autoDetected && <span className="text-primary-text">(Auto-detected)</span>}
                         </Label>
                         <Input
                           id="ios"
@@ -366,7 +366,7 @@ export function CreateLinkForm() {
                       </div>
                       <div>
                         <Label htmlFor="android" className="mb-2">
-                          Android Deep Link {autoDetected && <span className="text-primary">(Auto-detected)</span>}
+                          Android Deep Link {autoDetected && <span className="text-primary-text">(Auto-detected)</span>}
                         </Label>
                         <Input
                           id="android"
@@ -379,7 +379,7 @@ export function CreateLinkForm() {
                       </div>
                       <div>
                         <Label htmlFor="fallback" className="mb-2">
-                          Fallback URL {autoDetected && <span className="text-primary">(Auto-detected)</span>}
+                          Fallback URL {autoDetected && <span className="text-primary-text">(Auto-detected)</span>}
                         </Label>
                         <Input
                           id="fallback"

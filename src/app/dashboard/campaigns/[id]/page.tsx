@@ -129,7 +129,7 @@ export default async function CampaignDetailPage({
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-sm font-medium text-primary">tws.bio/{link.short_code}</span>
+                      <span className="text-sm font-medium text-primary-text">tws.bio/{link.short_code}</span>
                       <p className="text-xs text-muted-foreground truncate max-w-md">{link.original_url}</p>
                     </div>
                     <span className="text-sm text-muted-foreground">{(link.total_clicks || 0).toLocaleString()} clicks</span>

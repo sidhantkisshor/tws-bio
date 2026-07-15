@@ -15,7 +15,11 @@ interface BarChartProps {
 }
 
 export function BarChart({ data, color = '#00B03B' }: BarChartProps) {
-  if (data.length === 0) {
+  // Categories with zero clicks in every slot are indistinguishable from "no data" —
+  // an axis with only invisible zero-width bars reads as broken, not empty.
+  const hasVisibleData = data.length > 0 && data.some((item) => item.clicks > 0)
+
+  if (!hasVisibleData) {
     return <div className="h-48 flex items-center justify-center text-muted-foreground">No data</div>
   }
 
@@ -32,7 +36,8 @@ export function BarChart({ data, color = '#00B03B' }: BarChartProps) {
         <Tooltip
           contentStyle={{ backgroundColor: '#111111', border: '1px solid #1f1f1f', borderRadius: '8px', color: '#e5e5e5' }}
         />
-        <Bar dataKey="clicks" fill={color} radius={[0, 4, 4, 0]} />
+        {/* minPointSize keeps small-but-nonzero values from collapsing to an invisible sliver */}
+        <Bar dataKey="clicks" fill={color} radius={[0, 4, 4, 0]} minPointSize={4} />
       </RechartsBarChart>
     </ResponsiveContainer>
   )

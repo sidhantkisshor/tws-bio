@@ -56,9 +56,15 @@ export default async function DashboardPage() {
   const avgClicksPerLink =
     totalLinks > 0 ? Math.round((totalClicks / totalLinks) * 10) / 10 : 0
 
-  // Fetch clicks over time (last 30 days)
-  const thirtyDaysAgo = new Date()
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+  // Fetch clicks over time (last 30 days). Computed in UTC (matching the
+  // UTC date `clicked_at.slice(0, 10)` below) so the zero-fill loop can't
+  // drift a day off from the aggregated click dates due to server timezone.
+  const DAYS_IN_RANGE = 30
+  const MS_PER_DAY = 24 * 60 * 60 * 1000
+  const now = new Date()
+  const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const rangeStartUTC = todayUTC - (DAYS_IN_RANGE - 1) * MS_PER_DAY
+  const thirtyDaysAgo = new Date(rangeStartUTC)
 
   const { data: userLinks, error: userLinksError } = await supabase
     .from('links')
@@ -85,18 +91,21 @@ export default async function DashboardPage() {
       console.error('[dashboard] clicks query:', clicksError)
     }
 
-    if (clicks && clicks.length > 0) {
-      const clicksByDate = new Map<string, number>()
-      for (const click of clicks) {
-        if (click.clicked_at) {
-          const date = click.clicked_at.slice(0, 10)
-          clicksByDate.set(date, (clicksByDate.get(date) || 0) + 1)
-        }
+    const clicksByDate = new Map<string, number>()
+    for (const click of clicks || []) {
+      if (click.clicked_at) {
+        const date = click.clicked_at.slice(0, 10)
+        clicksByDate.set(date, (clicksByDate.get(date) || 0) + 1)
       }
-      clickChartData = Array.from(clicksByDate.entries())
-        .map(([date, count]) => ({ date, clicks: count }))
-        .sort((a, b) => a.date.localeCompare(b.date))
     }
+
+    // Zero-fill every day in the window so the chart always renders a
+    // continuous 30-day line instead of only the (possibly sparse) days
+    // that happened to have a click.
+    clickChartData = Array.from({ length: DAYS_IN_RANGE }, (_, i) => {
+      const date = new Date(rangeStartUTC + i * MS_PER_DAY).toISOString().slice(0, 10)
+      return { date, clicks: clicksByDate.get(date) || 0 }
+    })
   }
 
   const recentLinks = recentLinksResult.data || []
@@ -152,7 +161,7 @@ export default async function DashboardPage() {
           <CardTitle>Recent Links</CardTitle>
           <Link
             href="/dashboard/links"
-            className="text-sm text-primary hover:text-primary/80"
+            className="text-sm text-primary-text hover:text-primary-text/80"
           >
             View all
           </Link>
@@ -175,7 +184,7 @@ export default async function DashboardPage() {
                   <TableCell className="px-6 py-4">
                     <Link
                       href={`/dashboard/links/${link.id}`}
-                      className="text-primary hover:text-primary/80"
+                      className="text-primary-text hover:text-primary-text/80"
                     >
                       tws.bio/{link.short_code}
                     </Link>
@@ -185,10 +194,10 @@ export default async function DashboardPage() {
                   </TableCell>
                   <TableCell className="px-6 py-4">
                     <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
                         link.link_type === 'deep_link'
-                          ? 'bg-purple-500/10 text-purple-400'
-                          : 'bg-muted text-muted-foreground'
+                          ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                          : 'bg-sky-500/10 text-sky-300 border-sky-500/20'
                       }`}
                     >
                       {link.link_type === 'deep_link' ? 'Deep Link' : 'URL'}
