@@ -62,9 +62,11 @@ const BACKLOG_SCHEMA = {
   },
 }
 
-const round = args?.round ?? 1
-const baselineDir = args?.baselineDir ?? ''
-const prior = JSON.stringify(args?.priorFindings ?? [])
+// args can arrive as a JSON string depending on how it was passed — parse defensively.
+const A = typeof args === 'string' ? JSON.parse(args) : (args ?? {})
+const round = A.round ?? 1
+const baselineDir = A.baselineDir ?? ''
+const prior = JSON.stringify(A.priorFindings ?? [])
 
 phase('Audit')
 const perSurface = await parallel(SURFACES.map((s) => () =>

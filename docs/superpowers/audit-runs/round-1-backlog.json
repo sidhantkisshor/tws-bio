@@ -1,0 +1,570 @@
+[
+  {
+    "id": "sidebar-add-create-campaigns-nav",
+    "surface": "shell",
+    "lens": "gap",
+    "severity": "P0",
+    "title": "Create Link and Campaigns routes are unreachable from any navigation UI",
+    "detail": "DashboardSidebar.tsx's navItems array (lines 15-19) only lists Overview, Links, Analytics. Repo-wide search confirms no <Link>/href anywhere in src points to /dashboard/create, and the only href to /dashboard/campaigns is the campaign-detail page's own back-breadcrumb. Worse, the two 'Create Link' buttons on the Links page point to href=\"/\" (the public homepage), bouncing dashboard users out to marketing instead of the dashboard create flow. Both routes render real, working pages, but a user can only reach them by typing the URL — and a user who creates a campaign inside CreateLinkForm's dropdown has no visible way to ever find it again. Since link creation is the app's core task, this is a hard navigation dead-end. Related: NavItem's active-match logic (lines 77-80) only covers the three enumerated routes, so once on Create/Campaigns/link-detail, zero nav items highlight and the user loses all 'where am I' orientation.",
+    "files": [
+      "src/components/dashboard/DashboardSidebar.tsx",
+      "src/app/dashboard/links/page.tsx",
+      "src/app/dashboard/create/page.tsx",
+      "src/app/dashboard/campaigns/page.tsx"
+    ],
+    "suggested_change": "Add 'Create Link' and 'Campaigns' entries to navItems in DashboardSidebar.tsx (or a persistent '+ Create' button near the wordmark); repoint the two Links-page 'Create Link' buttons from href=\"/\" to /dashboard/create; and extend the active-match logic to cover the new items plus sub-routes (link detail under Links, campaign detail under Campaigns) so the sidebar always reflects the current section."
+  },
+  {
+    "id": "shell-fix-mobile-header-overlap",
+    "surface": "shell",
+    "lens": "ux",
+    "severity": "P0",
+    "title": "Mobile fixed top bar overlaps page content — flex-row spacer div contributes zero vertical offset",
+    "detail": "dashboard/layout.tsx line 18 wraps sidebar + main in a flex ROW container. DashboardSidebar.tsx renders a fixed top-0 h-14 z-40 mobile bar (line 116, out of flow) plus a spacer div `md:hidden h-14 flex-shrink-0` (line 139) intended to push content down — but as a flex-row item the spacer becomes a near-0-width sliver beside <main> instead of above it, contributing 0px of vertical offset. Result on every dashboard route on mobile: <main> content starts at y=0 directly under the fixed bar. overview-mobile.png shows a clipped sliver of the 'Overview' H1; links-mobile.png shows the 'Links' h1 fully hidden and only ~10px of the green Create Link button peeking out.",
+    "files": [
+      "src/app/dashboard/layout.tsx",
+      "src/components/dashboard/DashboardSidebar.tsx"
+    ],
+    "suggested_change": "Apply `pt-14 md:pt-0` directly to <main> (or the content wrapper) in layout.tsx and delete the spacer divs from DashboardSidebar.tsx; alternatively restructure the outer container as `flex flex-col md:flex-row` so the mobile spacer's height is actually respected."
+  },
+  {
+    "id": "global-primary-green-text-contrast",
+    "surface": "shell",
+    "lens": "visual",
+    "severity": "P0",
+    "title": "--primary #00802B used as text color fails WCAG AA contrast on all dark surfaces",
+    "detail": "globals.css sets --primary:#00802B, used as `text-primary` foreground text across the app: sidebar active nav item (DashboardSidebar.tsx line 37), short-code links in the Links table (links/page.tsx line 80) and Recent Links table, and the Create form's 'Advanced Options' toggle, 'View settings' button, detected-platform banner text, and '(Auto-detected)' labels (CreateLinkForm.tsx lines 234, 241, 318, 356, 369, 382). Computed contrast: ~3.4:1 on --accent #1a1a1a, ~3.7:1 on --card #111111, ~3.9-4.1:1 on #0a0a0a — all below the 4.5:1 AA minimum for normal-size text. The short code is the first, most-clicked cell in every table row. The token set already contains --ring:#00B03B (~6.9:1 on #0a0a0a), which passes comfortably. #00802B is fine as a filled-button background behind white text; it should not be foreground text on dark surfaces.",
+    "files": [
+      "src/app/globals.css",
+      "src/components/dashboard/DashboardSidebar.tsx",
+      "src/app/dashboard/links/page.tsx",
+      "src/components/CreateLinkForm.tsx"
+    ],
+    "suggested_change": "Introduce a text-on-dark green token (reuse --ring #00B03B or a dedicated --primary-text token) and swap every `text-primary` foreground usage on #0a0a0a/#111111/#1a1a1a surfaces to it — active nav state, link-cell text, 'View all' links, Create-form toggles/labels. Reserve #00802B for solid fills."
+  },
+  {
+    "id": "dashboard-add-loading-error-boundaries",
+    "surface": "shell",
+    "lens": "ux",
+    "severity": "P0",
+    "title": "Zero loading.tsx or error.tsx anywhere under /dashboard — blank first paints, dead range pickers, and errors that nuke the whole shell",
+    "detail": "Glob confirms no loading.tsx or error.tsx exists anywhere under src/app. Every dashboard route is a Server Component awaiting multiple queries before any HTML: Overview awaits Promise.all of 4 queries plus a follow-up; the links list runs 2 sequential queries; link detail fires 6 parallel analytics RPCs; campaign detail fires 6 more. On slow connections navigation shows a frozen previous page or blank screen with no skeleton. TimeRangePicker (link/campaign detail) and DateRangePicker (analytics) navigate via plain Link/router.push with no useTransition/pending state, so clicking '90 days' does visibly nothing until the full RSC response streams in. And with no route-local error.tsx, any thrown query error bubbles to Next.js's bare default error page, discarding the sidebar, dark theme, and all navigation.",
+    "files": [
+      "src/app/dashboard/page.tsx",
+      "src/app/dashboard/links/page.tsx",
+      "src/app/dashboard/links/[id]/page.tsx",
+      "src/app/dashboard/analytics/page.tsx",
+      "src/app/dashboard/campaigns/page.tsx",
+      "src/app/dashboard/campaigns/[id]/page.tsx",
+      "src/components/TimeRangePicker.tsx",
+      "src/components/dashboard/DateRangePicker.tsx"
+    ],
+    "suggested_change": "Add loading.tsx skeletons (stat-card grid / chart card / table shapes, reusing Card primitives) for each dashboard sub-route, plus a dark-theme error.tsx at the dashboard layout level so failures stay inside the shell. Give TimeRangePicker and DateRangePicker a pending/disabled state via useTransition or useLinkStatus so the clicked control visibly responds immediately."
+  },
+  {
+    "id": "mobile-tables-responsive-layout",
+    "surface": "shell",
+    "lens": "ux",
+    "severity": "P0",
+    "title": "Wide tables on mobile hide most columns — including every row action — behind undiscoverable horizontal scroll",
+    "detail": "The Links page renders a flat 7-column table (Short Code, URL, Type, Clicks, Status, Created, Actions); on mobile only Short Code + truncated URL are visible, and Type, Clicks, Status, Created, and critically every action button (copy/edit/QR/toggle/delete) sit off-screen with no visual hint — blocking the core link-management task per row. The Overview's Recent Links table has the same problem (Type/Clicks/Created cut off). Compounding it, layout.tsx puts overflow-auto on the whole <main> rather than scoping scroll to wide elements, so dragging scrolls the entire page and the row-identifying first columns scroll out of view too. No shadow, fade, or scroll cue exists anywhere.",
+    "files": [
+      "src/app/dashboard/links/page.tsx",
+      "src/app/dashboard/page.tsx",
+      "src/app/dashboard/layout.tsx",
+      "src/components/ui/table.tsx"
+    ],
+    "suggested_change": "Below sm/md, swap the Links table (and optionally Recent Links) for a stacked card-per-link layout with actions always visible; keep <main> overflow-y only and give any remaining wide tables their own overflow-x-auto container with a sticky first column and an edge-fade/shadow affordance."
+  },
+  {
+    "id": "overview-clickchart-no-visible-data",
+    "surface": "overview",
+    "lens": "ux",
+    "severity": "P0",
+    "title": "Clicks Over Time chart renders completely flat/empty despite 200 recorded clicks in the window",
+    "detail": "In the desktop screenshot the 'Clicks Over Time (Last 30 Days)' card shows an empty grid (y-axis 0-8, no line, no fill, no dots) even though Total Clicks = 200 and every Recent Link was created inside the 30-day window with ~28-29 clicks each. This is the most prominent widget on the page and it reads as broken. Root cause is either the date aggregation in page.tsx (lines 88-99) or ClickChart's Area stroke/fill not painting at low per-day values against the 0-8 axis scale — either way the headline chart looks non-functional.",
+    "files": [
+      "src/app/dashboard/page.tsx",
+      "src/components/dashboard/ClickChart.tsx"
+    ],
+    "suggested_change": "Verify ClickChart receives non-empty data in this state and that the Area's stroke/fill isn't collapsing at low values; increase stroke-width, add visible dot markers, and pad the minimum Y-axis domain so 1-2 clicks/day renders distinguishably from zero."
+  },
+  {
+    "id": "linkdetail-barchart-invisible-zero-bars",
+    "surface": "linkDetail",
+    "lens": "ux",
+    "severity": "P0",
+    "title": "BarChart panels render axis + category labels with literally zero visible bars — reads as broken, not empty",
+    "detail": "On the link-detail page, the Referrers and Countries panels show full category labels (google.com, t.co, youtube.com... / IN, CA, GB, AU, US, DE) and a 0-4 numeric axis but no visible bar for any category, despite the header showing '15 clicks in period'. BarChart.tsx only special-cases data.length === 0 ('No data'); it has no handling for categories-exist-but-all-values-zero-or-near-invisible against the #0a0a0a card background. The DonutChart cards on the same page render fine, isolating this to BarChart's zero/low-value presentation.",
+    "files": [
+      "src/components/charts/BarChart.tsx",
+      "src/app/dashboard/links/[id]/page.tsx"
+    ],
+    "suggested_change": "In BarChart.tsx, treat 'all values are 0' the same as 'no data' and show the empty-state message instead of an axis with invisible bars; for small-but-nonzero values, enforce a minimum visible bar width/opacity floor so bars never disappear against the background."
+  },
+  {
+    "id": "overview-url-badge-contrast",
+    "surface": "overview",
+    "lens": "visual",
+    "severity": "P0",
+    "title": "'URL' type badge is nearly invisible against the dark table background",
+    "detail": "The Type column badge for standard links uses `bg-muted text-muted-foreground` (dashboard/page.tsx line ~191), which on the #0a0a0a surface renders as low-contrast gray-on-near-black — the 'URL' pills are barely legible while the purple 'Deep Link' pill reads clearly. Since 'URL' is the majority link type, most rows in the Recent Links table have an effectively illegible status indicator.",
+    "files": [
+      "src/app/dashboard/page.tsx"
+    ],
+    "suggested_change": "Give the URL badge an explicit background/text pair with sufficient contrast against #0a0a0a (a neutral chip with a visible border/fill), matched in visual weight to the Deep Link badge rather than relying on ambient muted tokens."
+  },
+  {
+    "id": "dashboard-remove-duplicate-page-headers",
+    "surface": "shell",
+    "lens": "gap",
+    "severity": "P1",
+    "title": "Create, link-detail, and campaigns pages each stack a redundant inner header + max-w-7xl container inside the shared layout chrome",
+    "detail": "dashboard/layout.tsx:21 already wraps every page in <main class=\"flex-1 overflow-auto\"><div class=\"max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8\">. But create/page.tsx (lines 12-28), links/[id]/page.tsx (lines 55-72), campaigns/page.tsx (48-61), and campaigns/[id]/page.tsx (70-84) each render their own min-h-screen wrapper, a bordered <header> with a back-chevron (a bespoke inline SVG on link detail, inconsistent with the lucide-react icons used everywhere else), and a second nested max-w-7xl px-4 container — doubling horizontal padding and vertical py-8 gaps. On mobile this stacks two top bars (the sidebar's fixed tws.bio bar plus the page's own bar) consuming ~120px before any content, and the create page additionally shows two mismatched title treatments ('Create Link' plain sans in the outer header vs 'Shorten Your URL' in font-heading serif in the card below). No other dashboard route (Overview, Links, Analytics) does this — Overview just renders a plain h1 inside the shared shell.",
+    "files": [
+      "src/app/dashboard/create/page.tsx",
+      "src/app/dashboard/links/[id]/page.tsx",
+      "src/app/dashboard/campaigns/page.tsx",
+      "src/app/dashboard/campaigns/[id]/page.tsx",
+      "src/app/dashboard/layout.tsx"
+    ],
+    "suggested_change": "Delete the page-local min-h-screen/header/max-w-7xl wrappers from all four pages; render the title (plus back-link where wanted) as a plain in-flow block inside the layout's single container, matching Overview's pattern. If back-navigation is kept, style it as a small breadcrumb using lucide-react's ArrowLeft/ChevronLeft, not a full bordered header bar."
+  },
+  {
+    "id": "dashboard-error-vs-empty-states",
+    "surface": "shell",
+    "lens": "ux",
+    "severity": "P1",
+    "title": "Swallowed query errors render identically to genuine empty states across Overview, Links, and Campaigns",
+    "detail": "Overview only console.errors userLinksError/clicksError (page.tsx lines 68-70, 84-86) so a failed query leaves clickChartData [] and ClickChart shows the same 'No click data yet' a brand-new user sees. The Links page destructures only data from both queries and never checks error — a failed fetch renders 'No links yet — Create your first link to get started' to a user who has links. The Campaigns list logs campaignsError/allLinksError then falls through to (campaigns || []), showing 'No campaigns yet.' In all three cases the user cannot distinguish a real failure from legitimately having no data, and there is no retry affordance.",
+    "files": [
+      "src/app/dashboard/page.tsx",
+      "src/app/dashboard/links/page.tsx",
+      "src/app/dashboard/campaigns/page.tsx",
+      "src/components/dashboard/ClickChart.tsx"
+    ],
+    "suggested_change": "Check the error field from every query and render a distinct inline error state ('Couldn't load — try again' with a retry link) instead of falling through to the empty-state branch; thread an error flag to ClickChart so failure and zero-data render differently."
+  },
+  {
+    "id": "dashboard-use-shared-card-primitives",
+    "surface": "linkDetail",
+    "lens": "visual",
+    "severity": "P1",
+    "title": "Link-detail and campaigns pages hand-roll card containers and headers instead of the shared Card/CardTitle primitives, drifting from the design system",
+    "detail": "src/components/ui/card.tsx defines the app's real Card system (rounded-xl, ring-1 ring-foreground/10, CardTitle with font-heading DM Serif). The link-detail page never imports it — every panel is a hand-rolled <div class=\"bg-card rounded-lg border border-border p-6\"> (page.tsx:80,86,90,94,98) with plain h2/h3 headers, and its tws.bio/{short_code} title is plain bold sans. Both campaigns pages do the same (campaigns/page.tsx:65; [id]/page.tsx:94-119, headers at 95-121), so the identical concept 'Clicks Over Time' is typeset two different ways in the same app, and campaigns' cards have a visibly different radius/border than StatCard and Overview's cards. These pages read as un-styled shadcn boilerplate next to the rest of the dashboard.",
+    "files": [
+      "src/app/dashboard/links/[id]/page.tsx",
+      "src/app/dashboard/campaigns/page.tsx",
+      "src/app/dashboard/campaigns/[id]/page.tsx",
+      "src/components/ui/card.tsx"
+    ],
+    "suggested_change": "Replace the hand-rolled divs and raw h2/h3 headers with Card/CardHeader/CardTitle/CardContent so radius, ring, and font-heading are inherited automatically; apply font-heading to the tws.bio/{short_code} h1 to give link detail a branded focal point."
+  },
+  {
+    "id": "charts-consolidate-color-tokens",
+    "surface": "shell",
+    "lens": "visual",
+    "severity": "P1",
+    "title": "Chart colors are a patchwork of hardcoded hex and off-brand greens with no shared token system across five chart components",
+    "detail": "Multiple uncoordinated implementations of the same concepts: ClickChart.tsx (Overview) uses the shadcn ChartContainer system but hardcodes generic Tailwind green #22c55e instead of brand green; ClicksOverTimeChart.tsx (Analytics/link/campaign detail) is a separate hand-rolled component hardcoding #00B03B stroke, #1f1f1f grid, #a3a3a3 ticks, #111111 tooltip, with different tooltip styling and a different locale (en-IN vs en-US). BarChart defaults to #00B03B but the Countries card overrides it to #059669, an emerald that exists nowhere else — except DonutChart's fixed COLORS array independently landed on it too, and applies colors by array index so index 0 means 'desktop' in one chart and 'Chrome' in another. DeviceChart (Analytics) uses the stock --chart-2..5 blue/amber/violet/pink palette, the one chart breaking the green-forward brand. DonutChart's palette ends in #dc2626 (unintended error connotation) and #6b7280 gray (~4.1:1 on #0a0a0a, dimmest wedge). LinkActions' Power icon hardcodes text-green-500 (#22c55e) next to the #00802B Active badge in the same row.",
+    "files": [
+      "src/components/dashboard/ClickChart.tsx",
+      "src/components/charts/ClicksOverTimeChart.tsx",
+      "src/components/charts/BarChart.tsx",
+      "src/components/charts/DonutChart.tsx",
+      "src/components/dashboard/DeviceChart.tsx",
+      "src/components/dashboard/LinkActions.tsx",
+      "src/app/dashboard/links/[id]/page.tsx",
+      "src/app/globals.css"
+    ],
+    "suggested_change": "Define one shared chart-color/token module anchored on the brand green (#00B03B primary, then a deliberate categorical ramp with AA-legible neutrals) and consume it from all chart components; consolidate ClickChart and ClicksOverTimeChart into one component using ChartContainer/ChartTooltipContent with CSS-variable tokens and one locale; drop the ad-hoc #059669 override; replace DeviceChart's --chart-2..5 with a green monochrome ramp; swap LinkActions' text-green-500 for text-primary."
+  },
+  {
+    "id": "dashboard-headings-use-display-font",
+    "surface": "shell",
+    "lens": "visual",
+    "severity": "P1",
+    "title": "Brand display font (DM Serif font-heading) appears only on subordinate card titles — never on the wordmark or any page h1",
+    "detail": "CardTitle (ui/card.tsx line 41) applies font-heading by default, so 'Clicks Over Time' and 'Recent Links' render in the distinctive serif — but every more prominent element skips it: the 'tws.bio' wordmark in DashboardSidebar (lines 70-72 and 117-119) is plain font-bold sans; Overview's h1 (page.tsx:106), Links' h1 (page.tsx:52), and Analytics' h1 (page.tsx:52/167) are plain text-2xl font-bold; Campaigns titles are an even smaller text-lg font-bold. The brand's signature typeface shows up only on widget labels, inverting the intended hierarchy — the most prominent text on every page is the generic one.",
+    "files": [
+      "src/components/dashboard/DashboardSidebar.tsx",
+      "src/app/dashboard/page.tsx",
+      "src/app/dashboard/links/page.tsx",
+      "src/app/dashboard/analytics/page.tsx",
+      "src/app/dashboard/campaigns/page.tsx",
+      "src/app/dashboard/campaigns/[id]/page.tsx",
+      "src/components/ui/card.tsx"
+    ],
+    "suggested_change": "Add font-heading to the wordmark (both SidebarContent instances) and standardize all dashboard page h1s on `font-heading text-2xl` (bumping Campaigns from text-lg) — or, if italic serif is too heavy for utilitarian card labels, reserve font-heading for wordmark + h1s and drop CardTitle back to sans medium. Pick one direction and apply it app-wide."
+  },
+  {
+    "id": "dashboard-stat-trend-deltas",
+    "surface": "overview",
+    "lens": "gap",
+    "severity": "P1",
+    "title": "No prior-period trend delta on any KPI anywhere in the dashboard",
+    "detail": "Every stat is a bare point-in-time number: Overview's four stat cards (Total Links/Clicks/Avg/Active), Analytics' Total Clicks card (lines 174-186, a large card with mostly empty whitespace), link detail's 'N clicks in period' (page.tsx:75-77), and campaign rows/detail summary. The link and campaign detail pages already have a TimeRangePicker, making '+12% vs prior period' directly computable, but nothing computes or displays a comparison — a returning user cannot tell from any surface whether performance is improving or declining.",
+    "files": [
+      "src/components/dashboard/StatCard.tsx",
+      "src/app/dashboard/page.tsx",
+      "src/app/dashboard/analytics/page.tsx",
+      "src/app/dashboard/links/[id]/page.tsx",
+      "src/app/dashboard/campaigns/[id]/page.tsx"
+    ],
+    "suggested_change": "Extend StatCardProps with an optional delta/trend prop; alongside each page's existing queries fetch the equivalent immediately-preceding window's count, compute percent change, and render a small colored delta chip (green up / red down) next to the value on Overview stat cards, the Analytics KPI, and both detail-page period totals."
+  },
+  {
+    "id": "dashboard-csv-export",
+    "surface": "analytics",
+    "lens": "gap",
+    "severity": "P1",
+    "title": "No CSV/export affordance anywhere in an analytics-first product",
+    "detail": "No surface offers any way to get data out: the Links table, Overview's Recent Links and click time-series, Analytics' device/browser/referrer/time breakdowns, link detail's four breakdown cards, and campaign detail's links table and charts all lack an export control. A user reporting campaign performance to a stakeholder has to read numbers off the screen row by row. In every case the data is already server-rendered into the page, so a client-side CSV serialization closes the gap with no backend change.",
+    "files": [
+      "src/app/dashboard/links/page.tsx",
+      "src/app/dashboard/page.tsx",
+      "src/app/dashboard/analytics/page.tsx",
+      "src/app/dashboard/links/[id]/page.tsx",
+      "src/app/dashboard/campaigns/[id]/page.tsx"
+    ],
+    "suggested_change": "Add a shared 'Export CSV' client component (serializes an array of rows to a downloadable CSV) and place it in the header row of the Links page, Analytics page, and both detail pages, exporting the already-fetched links/breakdown data."
+  },
+  {
+    "id": "links-search-filter-sort-bulk",
+    "surface": "links",
+    "lens": "gap",
+    "severity": "P1",
+    "title": "No search, filter, sort, or bulk actions on the Links table, the campaigns list, or the links-in-campaign table",
+    "detail": "The Links page has zero interactive column headers, no search input, no status/type filter, and no row selection (TableHead cells are static; TableRow has no selection state) — beyond page 1 (PAGE_SIZE=20) a user cannot locate a link by code/URL, filter to Active-only, or bulk-deactivate a batch. The links-in-campaign table ([id]/page.tsx:118-141) is server-sorted once by total_clicks with no re-sort, search, or bulk 'remove from campaign' — exactly the context where grouped/bulk link operations matter most. The campaigns list itself (page.tsx:64-92) also has no search box, which breaks down as soon as a user has more than a handful of campaigns.",
+    "files": [
+      "src/app/dashboard/links/page.tsx",
+      "src/app/dashboard/campaigns/[id]/page.tsx",
+      "src/app/dashboard/campaigns/page.tsx"
+    ],
+    "suggested_change": "Add a search input (short code / URL substring) and Type/Status filter above the Links table, clickable sort headers (Clicks/Created), and row checkboxes with a bulk-action bar (bulk deactivate/delete; 'remove from campaign' on the campaign table); add a simple name/description filter input on the campaigns list, reusing the existing searchParams pattern."
+  },
+  {
+    "id": "dashboard-create-link-ctas",
+    "surface": "overview",
+    "lens": "gap",
+    "severity": "P1",
+    "title": "Core-task CTAs missing: no Create Link entry on Overview, and empty states describe actions without offering them",
+    "detail": "The Overview page — the default post-login landing surface — has zero affordance to start creating a short link; every section is reachable from it except the one that matters most. The Analytics empty state renders only a centered sentence ('No links created yet. Create a link to start seeing analytics.') with no button. The Campaigns empty state says 'No campaigns yet. Create one when making a new link.' but links nowhere, requiring the user to already know campaign creation lives inside the link-creation form.",
+    "files": [
+      "src/app/dashboard/page.tsx",
+      "src/app/dashboard/analytics/page.tsx",
+      "src/app/dashboard/campaigns/page.tsx"
+    ],
+    "suggested_change": "Add a primary 'Create Link' button in the Overview header row (top-right of the h1) linking to /dashboard/create, and add the same CTA button inside the Analytics and Campaigns empty-state branches so every empty state is actionable."
+  },
+  {
+    "id": "create-form-double-submit-guards",
+    "surface": "create",
+    "lens": "ux",
+    "severity": "P1",
+    "title": "CreateLinkForm allows duplicate submits — no loading guard on Enter, and the form re-enables during the 1.5s post-success redirect window",
+    "detail": "handleSubmit has no early-return on the current loading state; the submit Button is disabled while loading, but Enter in the URL or custom-code input triggers native form submission ungated by the button, so two fast Enter presses fire two create_link/create_deep_link RPCs. Separately, the finally block (~line 174) calls setLoading(false) synchronously while router.push('/dashboard') is deferred via setTimeout(…, 1500) (lines 145, 168) — for up to 1.5s after success the form is fully interactive again, letting a fast user edit and submit a second link before the redirect yanks them away.",
+    "files": [
+      "src/components/CreateLinkForm.tsx"
+    ],
+    "suggested_change": "Add `if (loading) return` as the first line of handleSubmit, and keep loading (or a separate `submitted` flag) true through the redirect — clear it only in the catch branch — so the form stays disabled until navigation actually happens."
+  },
+  {
+    "id": "create-inline-field-validation",
+    "surface": "create",
+    "lens": "ux",
+    "severity": "P1",
+    "title": "No inline field-level validation on the create form — errors only surface as toasts",
+    "detail": "Both the client-side URL check (CreateLinkForm.tsx line 94) and any backend rejection (taken custom short code, invalid deep-link URL) only produce toast.error. The Input component already supports an aria-invalid style path (src/components/ui/input.tsx) but CreateLinkForm never sets aria-invalid or renders inline helper text, so the offending field never visibly indicates what's wrong.",
+    "files": [
+      "src/components/CreateLinkForm.tsx"
+    ],
+    "suggested_change": "Track a fieldErrors state keyed by field name, set aria-invalid plus a red inline message under the URL/custom-code inputs in addition to the toast, especially for custom-code collisions."
+  },
+  {
+    "id": "create-skip-client-auth-skeleton",
+    "surface": "create",
+    "lens": "ux",
+    "severity": "P1",
+    "title": "Guaranteed loading-skeleton flicker on the dashboard create route despite server-side auth already being resolved",
+    "detail": "dashboard/create/page.tsx resolves the user server-side and redirects to /login if absent (line 9), so every visitor is known-authenticated — yet CreateLinkForm re-derives auth client-side via useAuth() and unconditionally renders its loading-skeleton branch first (lines 180-194) because useAuth's loading starts true, producing a flash of a fake input placeholder on every page load.",
+    "files": [
+      "src/components/CreateLinkForm.tsx",
+      "src/app/dashboard/create/page.tsx"
+    ],
+    "suggested_change": "Add an optional `initialUser` prop (the form is shared with the anonymous homepage flow via HomeInteractive) that the dashboard route passes from its already-resolved server user, letting the dashboard instance skip the authLoading/sign-in branches entirely."
+  },
+  {
+    "id": "links-deactivate-undo",
+    "surface": "links",
+    "lens": "ux",
+    "severity": "P1",
+    "title": "Deactivating a live link is a single click on a 24px icon with no confirmation or undo",
+    "detail": "LinkActions.tsx's handleToggleActive (lines 33-54) fires the Supabase update immediately on Power-icon click — no confirm step (unlike Delete, which opens DeleteLinkDialog) and a fire-and-forget success toast with no Undo. The 24x24px icon sits in a tight 5-icon row directly between Edit/QR and Delete, so an imprecise tap can silently take a live link offline.",
+    "files": [
+      "src/components/dashboard/LinkActions.tsx"
+    ],
+    "suggested_change": "Add an Undo action to the toast (sonner supports toast.success(msg, { action })) that re-toggles the link — a lightweight safety net without a blocking confirm dialog."
+  },
+  {
+    "id": "linkdetail-copy-short-link",
+    "surface": "linkDetail",
+    "lens": "ux",
+    "severity": "P1",
+    "title": "No copy/share affordance for the short link on its own detail page",
+    "detail": "The link-detail header shows 'tws.bio/{short_code}' as plain static text (page.tsx:65) with no copy button, QR, or share action. For a URL shortener, the analytics detail page is exactly where a user most wants to grab the link to share again — currently they must navigate back to the links list to copy it.",
+    "files": [
+      "src/app/dashboard/links/[id]/page.tsx"
+    ],
+    "suggested_change": "Add a small copy-icon client island next to the short_code heading that copies the full short URL with a brief confirmation state."
+  },
+  {
+    "id": "analytics-per-link-breakdown",
+    "surface": "analytics",
+    "lens": "gap",
+    "severity": "P1",
+    "title": "Analytics page has no per-link breakdown — all clicks are one undifferentiated blob",
+    "detail": "analytics/page.tsx aggregates every click across ALL the user's links into single device/browser/referrer/time charts. There is no way on this surface to see which specific links drive the clicks — a user with 10 active links can't answer 'what's working?', the core question analytics exists for. Link metadata is already fetched in the userLinks query (lines 39-42).",
+    "files": [
+      "src/app/dashboard/analytics/page.tsx"
+    ],
+    "suggested_change": "Add a 'Top Links' card (reuse the ReferrerChart bar-list pattern) grouping clicksData by link_id mapped to short_code/title, sorted desc — just select short_code/title alongside id in the existing userLinks query."
+  },
+  {
+    "id": "analytics-country-breakdown",
+    "surface": "analytics",
+    "lens": "gap",
+    "severity": "P1",
+    "title": "No geography breakdown on Analytics despite country data already existing on clicks",
+    "detail": "Clicks already carry a country value derived from Vercel's geo header (migration 017), and the link-detail page renders a Countries chart — but the Analytics page fetches only clicked_at, device_type, browser_name, os_name, referrer_domain (lines 73-75) and never selects or renders country. Geography, arguably the most requested analytics dimension for a link shortener, is absent from the aggregate view.",
+    "files": [
+      "src/app/dashboard/analytics/page.tsx"
+    ],
+    "suggested_change": "Add country to the existing .select() list, aggregate it the same way as referrerData (lines 152-161), and render a 'Top Countries' card reusing the ReferrerChart horizontal-bar pattern — a page-level change, no schema or RPC work."
+  },
+  {
+    "id": "analytics-device-donut-legend",
+    "surface": "analytics",
+    "lens": "visual",
+    "severity": "P1",
+    "title": "Devices donut has no legend — color is the only channel, and mobile has no hover",
+    "detail": "DeviceChart renders only the Pie with a hover ChartTooltip; no ChartLegend or on-chart labels. The donut is three unlabeled colored arcs — a user must mouse over each wedge to learn Desktop/Mobile/Tablet, and on touch devices there is no hover at all, so the chart conveys ratio but never identity.",
+    "files": [
+      "src/components/dashboard/DeviceChart.tsx"
+    ],
+    "suggested_change": "Add `<ChartLegend content={<ChartLegendContent nameKey=\"device\" />} />` below the Pie (ui/chart.tsx already exports these primitives) so device labels are always visible without interaction."
+  },
+  {
+    "id": "links-type-status-badge-differentiation",
+    "surface": "links",
+    "lens": "visual",
+    "severity": "P1",
+    "title": "Type ('Deep Link') and Status ('Active') badges are visually identical green pills, hurting row scannability",
+    "detail": "Both Badge variant=\"default\" uses (Type at links/page.tsx line 92, Status at line 101) resolve to the same bg-primary text-primary-foreground solid green pill (badge.tsx line 12). A row shows two identical green chips side by side and the eye can't distinguish type from status without reading the text — two semantically different columns carry zero differentiating visual signal.",
+    "files": [
+      "src/app/dashboard/links/page.tsx",
+      "src/components/ui/badge.tsx"
+    ],
+    "suggested_change": "Give the Type column a distinct treatment — outline badge or plain text-with-icon (deep-link glyph) — reserving the solid brand-green fill exclusively for the Active/Inactive status signal."
+  },
+  {
+    "id": "campaigns-mobile-row-reflow",
+    "surface": "campaigns",
+    "lens": "ux",
+    "severity": "P1",
+    "title": "Campaign list rows don't reflow on mobile — stats squeeze beside the wrapped description",
+    "detail": "The row markup is a single `flex items-center justify-between` (campaigns/page.tsx line 72) with no mobile stacking variant. In campaigns-mobile.png the description wraps to 3 lines while '3 links / 84 clicks / 15/7/2026' is squeezed into a narrow right column beside it, producing a cluttered, hard-to-scan block.",
+    "files": [
+      "src/app/dashboard/campaigns/page.tsx"
+    ],
+    "suggested_change": "Change the row wrapper to `flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2` so the stats/date group stacks below name+description on narrow viewports."
+  },
+  {
+    "id": "campaigns-empty-links-section",
+    "surface": "campaigns",
+    "lens": "ux",
+    "severity": "P1",
+    "title": "Empty 'Links in Campaign' section disappears entirely instead of showing an empty state",
+    "detail": "`{campaignLinks && campaignLinks.length > 0 && (...)}` ([id]/page.tsx line 118) means a campaign with zero attached links renders no table, no header, nothing — it looks broken/missing rather than intentionally empty, inconsistent with the top-level campaigns list which does show an explicit 'No campaigns yet' message.",
+    "files": [
+      "src/app/dashboard/campaigns/[id]/page.tsx"
+    ],
+    "suggested_change": "Always render the 'Links in Campaign' card; when campaignLinks.length === 0, show an explicit 'No links in this campaign yet' message inside it."
+  },
+  {
+    "id": "links-per-link-sparklines",
+    "surface": "links",
+    "lens": "gap",
+    "severity": "P1",
+    "title": "Click counts everywhere are bare cumulative numbers with no per-link trend signal",
+    "detail": "The Links table (page.tsx lines 97-99), Overview's Recent Links rows, and the links-in-campaign table ([id]/page.tsx line 135) all render `{link.total_clicks || 0}` as a flat number with no time context — no sparkline, no '+12 this week' delta. A user scanning any list can't tell which links are actively trending vs. stale without opening each link's analytics individually, even though the campaign detail page renders an aggregate Clicks Over Time chart one section above its own table.",
+    "files": [
+      "src/app/dashboard/links/page.tsx",
+      "src/app/dashboard/page.tsx",
+      "src/app/dashboard/campaigns/[id]/page.tsx"
+    ],
+    "suggested_change": "Add a small inline sparkline (last 7/30 days, a minimal variant of the consolidated clicks chart) or a secondary muted delta next to click counts in the Links, Recent Links, and campaign-links tables, driven by the same click-aggregation data already powering the page-level charts."
+  },
+  {
+    "id": "analytics-truncation-indicators",
+    "surface": "analytics",
+    "lens": "gap",
+    "severity": "P2",
+    "title": "Breakdown charts silently truncate to top-N with no 'showing N of M' indicator or view-all",
+    "detail": "Analytics slices browserData to top 6 (page.tsx line 150) and referrerData to top 10 (line 161) with no caption or link; link detail's BarChart-backed Referrers/Countries panels likewise show only whatever the analytics query returns as 'top' entries with no 'N more' indicator. A user with 15 referrer domains has 11 vanish with zero indication truncation happened and no way to inspect the long tail.",
+    "files": [
+      "src/app/dashboard/analytics/page.tsx",
+      "src/app/dashboard/links/[id]/page.tsx",
+      "src/components/charts/BarChart.tsx",
+      "src/components/dashboard/BrowserChart.tsx",
+      "src/components/dashboard/ReferrerChart.tsx"
+    ],
+    "suggested_change": "Pass the full distinct count down to each chart and render a small 'Top N of M' caption in the CardHeader when data exceeds the slice length, optionally with a 'View all' expansion."
+  },
+  {
+    "id": "analytics-daterange-trigger-label",
+    "surface": "analytics",
+    "lens": "ux",
+    "severity": "P2",
+    "title": "Date range trigger shows a bare '30' with no unit",
+    "detail": "The rendered SelectTrigger shows just '30' (confirmed in analytics-desktop.png, top right) instead of 'Last 30 days'. A first-time viewer can't tell '30' means days without opening the dropdown — it reads like a stray number floating next to the H1.",
+    "files": [
+      "src/components/dashboard/DateRangePicker.tsx"
+    ],
+    "suggested_change": "Render an explicit label instead of SelectValue's default, e.g. `<SelectValue>{options.find(o => o.value === current)?.label}</SelectValue>` so the trigger always shows 'Last 30 days' / 'All time'."
+  },
+  {
+    "id": "overview-xaxis-tick-thinning",
+    "surface": "overview",
+    "lens": "visual",
+    "severity": "P2",
+    "title": "Chart x-axis renders every daily tick across 30 days, causing label crowding",
+    "detail": "XAxis in ClickChart.tsx has no interval prop, so a 30-day range prints a tick for nearly every date ('Jun 15 Jun 17 ... Jul 15'), visible in the desktop screenshot as a dense, borderline-overlapping row of labels.",
+    "files": [
+      "src/components/dashboard/ClickChart.tsx"
+    ],
+    "suggested_change": "Set `interval=\"preserveStartEnd\"` or a fixed interval (every 3-5 days), or switch to weekly ticks for 30-day ranges, so labels stay legible."
+  },
+  {
+    "id": "overview-chart-range-selector",
+    "surface": "overview",
+    "lens": "gap",
+    "severity": "P2",
+    "title": "Overview chart is hardcoded to a fixed 30-day window with no range control",
+    "detail": "The Clicks Over Time card is locked to 'Last 30 Days' with no way to switch to 7/90-day or custom ranges, even though the link-detail and analytics pages both already ship range pickers — the Overview is the only analytics surface without one.",
+    "files": [
+      "src/app/dashboard/page.tsx",
+      "src/components/dashboard/ClickChart.tsx"
+    ],
+    "suggested_change": "Add a lightweight 7d/30d/90d selector above the chart (reusing the existing TimeRangePicker/searchParams pattern) that re-queries the same click aggregation with a different window."
+  },
+  {
+    "id": "overview-stat-glow-treatment",
+    "surface": "overview",
+    "lens": "visual",
+    "severity": "P2",
+    "title": "Decorative gradient glow behind stat cards reads as an unintegrated template flourish",
+    "detail": "dashboard/page.tsx (lines 110-116) renders a blurred radial-gradient glow positioned only behind the stat-card row. It doesn't recur near the chart or table and has no relationship to the data it sits behind — a generic dark-SaaS accent rather than a deliberate motif.",
+    "files": [
+      "src/app/dashboard/page.tsx"
+    ],
+    "suggested_change": "Either remove the glow, or promote it to a consistent ambient background treatment applied once at the page/layout level so it reads as intentional atmosphere rather than a one-off accent."
+  },
+  {
+    "id": "overview-mobile-stat-grid-2col",
+    "surface": "overview",
+    "lens": "ux",
+    "severity": "P2",
+    "title": "Mobile stat cards stack one-per-row, pushing the chart far below the fold",
+    "detail": "The stat grid is `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` (page.tsx line 109); below sm this collapses to a single column, so all four full-height stat cards stack before the user reaches the Clicks Over Time chart — a long scroll of near-identical shapes in the mobile screenshot.",
+    "files": [
+      "src/app/dashboard/page.tsx"
+    ],
+    "suggested_change": "Use `grid-cols-2 sm:grid-cols-2 lg:grid-cols-4` so the four metrics form a compact 2x2 block on phones and the chart/table appear sooner."
+  },
+  {
+    "id": "links-actions-visual-grouping",
+    "surface": "links",
+    "lens": "visual",
+    "severity": "P2",
+    "title": "Actions column is five near-identical flat ghost icons packed edge-to-edge",
+    "detail": "All five actions (Copy, Edit, QR, Power, Delete) use variant=\"ghost\" size=\"icon-xs\" (24x24) with gap-1 (LinkActions.tsx lines 58-102). Only Delete (red) and active-Power carry any color signal; Copy/Edit/QR are indistinguishable gray glyphs, giving the row a flat 'kebab of icons' look with no grouping between safe, state-changing, and destructive actions.",
+    "files": [
+      "src/components/dashboard/LinkActions.tsx"
+    ],
+    "suggested_change": "Group safe/frequent actions (Copy, QR) apart from state-editing ones (Edit, Power) and the destructive Delete — a thin divider or extra gap before Delete — so the row has intentional rhythm."
+  },
+  {
+    "id": "sidebar-focus-visible-ring",
+    "surface": "shell",
+    "lens": "visual",
+    "severity": "P2",
+    "title": "Sidebar nav links skip the app's standard focus-visible ring",
+    "detail": "ui/button.tsx defines a consistent `focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50` treatment used everywhere Button renders (including SignOutButton in the sidebar), but NavItem (DashboardSidebar.tsx lines 32-44) is a bare <Link> with only transition-colors — keyboard-tabbing through nav items falls back to the browser default outline instead of the app's green ring.",
+    "files": [
+      "src/components/dashboard/DashboardSidebar.tsx",
+      "src/components/ui/button.tsx"
+    ],
+    "suggested_change": "Add the same focus-visible classes used by buttonVariants (plus outline-none) to NavItem's className so keyboard focus in the sidebar matches the rest of the app."
+  },
+  {
+    "id": "linkdetail-show-lifetime-total",
+    "surface": "linkDetail",
+    "lens": "ux",
+    "severity": "P2",
+    "title": "Lifetime total_clicks is fetched but never shown on the link detail page",
+    "detail": "page.tsx:37 selects link.total_clicks (all-time count) but only the period-scoped total from getTotalClicks() is rendered ('N clicks in period', page.tsx:76). Users viewing a 7-day window have no way to see the link's all-time total without leaving the page — the fetched figure is dead data.",
+    "files": [
+      "src/app/dashboard/links/[id]/page.tsx"
+    ],
+    "suggested_change": "Render link.total_clicks alongside the period total, e.g. 'N clicks in period · M all-time'."
+  },
+  {
+    "id": "campaigns-url-hover-title",
+    "surface": "campaigns",
+    "lens": "ux",
+    "severity": "P2",
+    "title": "Truncated original URLs in campaign link rows have no way to see the full value",
+    "detail": "`truncate max-w-md` on original_url ([id]/page.tsx line 133) cuts long URLs with no title attribute or tooltip, so distinguishing similar-looking links in a campaign requires clicking into each one.",
+    "files": [
+      "src/app/dashboard/campaigns/[id]/page.tsx"
+    ],
+    "suggested_change": "Add `title={link.original_url}` to the truncated <p> so the full URL shows on hover."
+  },
+  {
+    "id": "links-last-clicked-column",
+    "surface": "links",
+    "lens": "gap",
+    "severity": "P2",
+    "title": "No 'last clicked' recency signal to spot dead links",
+    "detail": "The Links table shows Created date (page.tsx lines 105-109) but nothing indicating when a link was last used. A year-old link with 0 clicks and a day-old one with 0 clicks look identical; there's no way to spot stale links worth cleaning up without cross-referencing Analytics.",
+    "files": [
+      "src/app/dashboard/links/page.tsx"
+    ],
+    "suggested_change": "Add a 'Last clicked' column (or a tooltip on the Clicks cell) sourced from the most recent clicks row per link."
+  },
+  {
+    "id": "create-desktop-layout-balance",
+    "surface": "create",
+    "lens": "visual",
+    "severity": "P2",
+    "title": "Create page leaves large dead space around a single two-field card at desktop widths",
+    "detail": "The page shell is max-w-7xl but the content is a single max-w-2xl card with a few fields; at desktop width (create-desktop.png) roughly 200-250px of dead space flanks the card plus a large empty region below, with nothing justifying the wide shell. Combined with the card's very subtle ring-foreground/10 border on near-black, the page reads unfinished rather than deliberately minimal.",
+    "files": [
+      "src/app/dashboard/create/page.tsx"
+    ],
+    "suggested_change": "Narrow the page shell closer to the card's width for this single-purpose form, or use the freed space for supporting content (live short-URL/QR preview, or a 'recently created' shortcut list)."
+  },
+  {
+    "id": "create-select-custom-chevron",
+    "surface": "create",
+    "lens": "visual",
+    "severity": "P2",
+    "title": "Native <select> for Campaign clashes with the app's custom control styling",
+    "detail": "The Campaign dropdown (CreateLinkForm.tsx lines 290-301) is a bare HTML <select> restyled with Tailwind to approximate the Input component, but it still renders the browser's default dropdown chevron, visually clashing with the custom lucide-style chevron used for the 'Advanced Options' disclosure two rows below (line 320).",
+    "files": [
+      "src/components/CreateLinkForm.tsx"
+    ],
+    "suggested_change": "Wrap the native select with an absolutely-positioned pointer-events-none custom chevron matching the app's icon language, or adopt a proper Select primitive if one is added to src/components/ui."
+  }
+]
