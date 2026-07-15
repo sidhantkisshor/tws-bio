@@ -356,28 +356,12 @@ export type Database = {
         }
         Returns: Database['public']['Tables']['links']['Row']
       }
-      increment_link_clicks:
-        | { Args: { link_id: string }; Returns: undefined }
-        | { Args: { link_id: string; visitor_id: string }; Returns: undefined }
-      record_click: {
-        Args: {
-          p_link_id: string
-          p_ip_address?: string
-          p_user_agent?: string
-          p_referrer_url?: string
-          p_browser_name?: string
-          p_os_name?: string
-          p_device_type?: Database['public']['Enums']['device_type']
-          p_utm_source?: string
-          p_utm_medium?: string
-          p_utm_campaign?: string
-          p_utm_term?: string
-          p_utm_content?: string
-        }
-        Returns: undefined
-      }
       get_link_by_short_code: {
         Args: { p_short_code: string }
+        Returns: Database['public']['Tables']['links']['Row'][]
+      }
+      get_links_by_ids: {
+        Args: { p_ids: string[] }
         Returns: Database['public']['Tables']['links']['Row'][]
       }
       record_click_and_increment: {
@@ -394,6 +378,7 @@ export type Database = {
           p_utm_campaign?: string
           p_utm_term?: string
           p_utm_content?: string
+          p_country?: string
         }
         Returns: undefined
       }

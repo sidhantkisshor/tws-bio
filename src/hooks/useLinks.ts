@@ -61,16 +61,15 @@ export function useLinks(userId: string | null | undefined) {
           .limit(10)
         if (!ignore) setLinks(data || [])
       } else {
-        // Fetch anonymous links from localStorage IDs
+        // Fetch anonymous links from localStorage IDs. Direct table reads are
+        // owner-only under RLS, so this goes through the get_links_by_ids
+        // definer RPC — possession of a link's UUID is proof of creation.
         const anonIds = getAnonLinkIds()
         if (anonIds.length > 0) {
-          const { data } = await supabase
-            .from('links')
-            .select('*')
-            .in('id', anonIds)
-            .order('created_at', { ascending: false })
-            .limit(10)
-          if (!ignore) setLinks(data || [])
+          const { data } = await supabase.rpc('get_links_by_ids', {
+            p_ids: anonIds,
+          })
+          if (!ignore) setLinks((data || []).slice(0, 10))
         } else {
           if (!ignore) setLinks([])
         }

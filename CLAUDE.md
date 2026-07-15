@@ -106,5 +106,5 @@ Migrations are in `supabase/migrations/` (001–016 + a timestamped drop). The r
 - `unique_clicks` on `links` is always 0 — no logic increments it
 - `custom_domains` and `api_keys` tables exist but have no application code
 - No rate limiting on link creation or redirect endpoints (would require Redis/Upstash)
-- `clicks.country` is read by the analytics charts but never populated — the Countries chart stays empty until wired up (a Vercel geo-header implementation exists unmerged on the `audit-fixes` branch). `referrer_domain` and masked IPs are populated by `record_click_and_increment` since 2026-07-15; rows older than that have raw IPs and NULL referrer_domain
-- Anonymous users' home-page link list (localStorage `anon_links` + direct select) returns empty after the owner-only SELECT policy — links still work and show immediately after creation, but don't survive a reload for anon users (accepted tradeoff of closing the enumeration hole; could be restored with a `get_links_by_ids(uuid[])` definer RPC)
+- `clicks` rows recorded before 2026-07-15 have raw IPs, NULL `referrer_domain`, and NULL `country`; newer rows get masked IPs, derived referrer domains, and country from Vercel's `x-vercel-ip-country` header (migration 017 — country stays NULL in local dev where the header is absent)
+- Anonymous users' home-page link list goes through the `get_links_by_ids(uuid[])` definer RPC (migration 018) since direct `links` reads are owner-only under RLS — possession of a link UUID is treated as proof of creation

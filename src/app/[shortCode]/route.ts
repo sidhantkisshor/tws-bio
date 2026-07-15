@@ -79,6 +79,10 @@ export async function GET(
   const forwardedFor = request.headers.get('x-forwarded-for')
   const ip = realIp?.trim() || (forwardedFor ? forwardedFor.split(',')[0].trim() : null)
 
+  // Client country from Vercel's edge geo header (ISO-3166 alpha-2), when present.
+  // No external geo-IP service required; absent in local dev (stays null).
+  const country = request.headers.get('x-vercel-ip-country') || undefined
+
   // Get the link. The RPC enforces is_active server-side and returns the single
   // active row (or null). PostgREST may hand back a single object or an array
   // depending on the function shape, so normalize defensively.
@@ -102,8 +106,6 @@ export async function GET(
   }
 
   // Track analytics asynchronously via after()
-  // NOTE: Full IP is stored for analytics. Consider hashing or truncating
-  // for PII compliance in production (e.g., zero last octet for IPv4).
   after(async () => {
     try {
       // Atomic increment + click insert. The RPC masks the IP and derives the
@@ -121,6 +123,7 @@ export async function GET(
         p_utm_campaign: utmCampaign,
         p_utm_term: utmTerm,
         p_utm_content: utmContent,
+        p_country: country,
       })
     } catch (err) {
       console.error('Error tracking analytics:', err)

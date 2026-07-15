@@ -51,7 +51,7 @@ Commit `ffa8e0d` (`fix(app): use gated RPCs…`) switches `route.ts` and `lib/an
 - **Anon lockdown:** with only the anon key, `supabase.from('links').select('*')` must now return **0 rows** (or RLS error), not the table.
 - **Ownership guard:** try `rpc('create_link', { p_user_id: '<someone-else-uuid>' })` with the anon key → must RAISE (rejected).
 - **Analytics:** dashboard charts still render for the owner (aggregation RPCs honor clicks RLS). Referrers now show real domains (once new clicks accrue).
-- **`get_country_breakdown`** will still be empty — `country` is never populated (see remaining work).
+- **Countries:** `record_click_and_increment` now stores `country` from Vercel's `x-vercel-ip-country` edge header (migration 017), so the Countries chart populates for real traffic on Vercel (it stays empty in local dev, where the header is absent).
 
 ## 4. Regenerate types (recommended, after migrations land)
 
@@ -65,7 +65,7 @@ npx supabase gen types typescript --project-id <ref> > src/types/database.ts
 ## Still NOT done (need decisions/infra)
 
 - **G-9 rate limiting + anonymous analytics-write authz (M-2, M-9)** — needs Upstash/Redis (or similar). Not authored; the atomic RPC narrows the surface but does not throttle. Provision infra, then add a token-bucket in the redirect + creation paths.
-- **G-8 `country` population** — the Countries chart stays empty until a geo-IP lookup feeds `record_click_and_increment`, or the chart is removed. Migration 013 derives `referrer_domain` but not `country`.
+- **G-8 `country` population** — DONE (migration 017). `record_click_and_increment` + `route.ts` capture `country` from Vercel's `x-vercel-ip-country` header (no external geo-IP service). Populates on Vercel; null in local dev.
 - **Backlog (autonomous, deferred):** H-7 chart/aggregation component consolidation (now unblocked by 014 — do next), M-14 deeplinks table-driven refactor, M-15 useAuth context, `text-primary` contrast token, exotic-IPv6 SSRF residuals. See REMEDIATION_SUMMARY.md §5.
 
 ## Rollback
