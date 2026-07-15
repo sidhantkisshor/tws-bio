@@ -12,10 +12,17 @@ tws.bio is a URL shortener with analytics and mobile deep linking, built with Ne
 npm run dev       # Start dev server (Next.js)
 npm run build     # Production build
 npm run start     # Start production server
-npm run lint      # ESLint (flat config, eslint.config.mjs)
+npm run lint      # ESLint 10 (flat config, eslint.config.mjs)
+npm run test      # Vitest (run mode) — unit tests for pure functions
+npm run typecheck # tsc --noEmit
 ```
 
-No test framework is configured.
+Testing uses **Vitest** (`vitest.config.ts`, `environment: node`). Specs live in `src/**/__tests__/`
+(currently 4 files / 46 tests covering `utils`, `deeplinks`, and the `anonLinks` hook). Add tests
+for pure/logic functions; there is no component/E2E harness.
+
+**Runtime:** Node 22 is pinned via `engines.node` (`>=22.13.0 <23.0.0`) and `.nvmrc`. This floor is
+required by ESLint 10; Vercel and local dev should run Node 22.x.
 
 ## Environment Variables
 
