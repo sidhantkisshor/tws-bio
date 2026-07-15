@@ -7,19 +7,27 @@ export default async function CampaignsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: campaigns } = await supabase
+  const { data: campaigns, error: campaignsError } = await supabase
     .from('campaigns')
     .select('id, name, description, created_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
+  if (campaignsError) {
+    console.error('[campaigns] campaigns query:', campaignsError)
+  }
+
   const campaignIds = (campaigns || []).map((c) => c.id)
-  const { data: allLinks } = campaignIds.length > 0
+  const { data: allLinks, error: allLinksError } = campaignIds.length > 0
     ? await supabase
         .from('links')
         .select('campaign_id, total_clicks')
         .in('campaign_id', campaignIds)
-    : { data: [] as { campaign_id: string | null; total_clicks: number | null }[] }
+    : { data: [] as { campaign_id: string | null; total_clicks: number | null }[], error: null }
+
+  if (allLinksError) {
+    console.error('[campaigns] links query:', allLinksError)
+  }
 
   const linksByCampaign = new Map<string, { count: number; clicks: number }>()
   for (const link of allLinks || []) {
