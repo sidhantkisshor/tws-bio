@@ -36,10 +36,14 @@ export default async function AnalyticsPage({
   }
 
   // Get user's link IDs
-  const { data: userLinks } = await supabase
+  const { data: userLinks, error: userLinksError } = await supabase
     .from('links')
     .select('id')
     .eq('user_id', user.id)
+
+  if (userLinksError) {
+    console.error('[analytics-page] userLinks query:', userLinksError)
+  }
 
   if (!userLinks || userLinks.length === 0) {
     return (
@@ -75,7 +79,11 @@ export default async function AnalyticsPage({
     query = query.gte('clicked_at', startDate.toISOString())
   }
 
-  const { data: clicks } = await query
+  const { data: clicks, error: clicksError } = await query
+
+  if (clicksError) {
+    console.error('[analytics-page] clicks query:', clicksError)
+  }
 
   // Process data
   const clicksData = clicks || []
@@ -100,14 +108,14 @@ export default async function AnalyticsPage({
         date: dateStr,
         clicks: clicksByDate[dateStr] || 0,
       })
-      current.setDate(current.getDate() + 1)
+      current.setUTCDate(current.getUTCDate() + 1)
     }
   } else {
     // "all" range: just use existing dates sorted
     const sortedDates = Object.keys(clicksByDate).sort()
     if (sortedDates.length > 0) {
-      const first = new Date(sortedDates[0] + 'T00:00:00')
-      const last = new Date(sortedDates[sortedDates.length - 1] + 'T00:00:00')
+      const first = new Date(sortedDates[0] + 'T00:00:00Z')
+      const last = new Date(sortedDates[sortedDates.length - 1] + 'T00:00:00Z')
       const current = new Date(first)
       while (current <= last) {
         const dateStr = current.toISOString().split('T')[0]
@@ -115,7 +123,7 @@ export default async function AnalyticsPage({
           date: dateStr,
           clicks: clicksByDate[dateStr] || 0,
         })
-        current.setDate(current.getDate() + 1)
+        current.setUTCDate(current.getUTCDate() + 1)
       }
     }
   }

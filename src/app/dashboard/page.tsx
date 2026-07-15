@@ -60,22 +60,30 @@ export default async function DashboardPage() {
   const thirtyDaysAgo = new Date()
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-  const { data: userLinks } = await supabase
+  const { data: userLinks, error: userLinksError } = await supabase
     .from('links')
     .select('id')
     .eq('user_id', user.id)
+
+  if (userLinksError) {
+    console.error('[dashboard] userLinks query:', userLinksError)
+  }
 
   const linkIds = (userLinks || []).map((l) => l.id)
 
   let clickChartData: { date: string; clicks: number }[] = []
 
   if (linkIds.length > 0) {
-    const { data: clicks } = await supabase
+    const { data: clicks, error: clicksError } = await supabase
       .from('clicks')
       .select('clicked_at')
       .in('link_id', linkIds)
       .gte('clicked_at', thirtyDaysAgo.toISOString())
       .order('clicked_at')
+
+    if (clicksError) {
+      console.error('[dashboard] clicks query:', clicksError)
+    }
 
     if (clicks && clicks.length > 0) {
       const clicksByDate = new Map<string, number>()

@@ -36,7 +36,10 @@ export async function getClicksOverTime(filter: AnalyticsFilter) {
   query = applyFilters(query, filter, dateFrom)
 
   const { data, error } = await query.order('clicked_at', { ascending: true })
-  if (error || !data) return []
+  if (error || !data) {
+    console.error('[analytics] getClicksOverTime:', error)
+    return []
+  }
 
   const grouped: Record<string, number> = {}
   for (const click of data) {
@@ -56,7 +59,10 @@ export async function getTopReferrers(filter: AnalyticsFilter) {
   query = applyFilters(query, filter, dateFrom)
 
   const { data, error } = await query
-  if (error || !data) return []
+  if (error || !data) {
+    console.error('[analytics] getTopReferrers:', error)
+    return []
+  }
 
   const counts: Record<string, number> = {}
   for (const click of data) {
@@ -78,7 +84,10 @@ export async function getDeviceBreakdown(filter: AnalyticsFilter) {
   query = applyFilters(query, filter, dateFrom)
 
   const { data, error } = await query
-  if (error || !data) return []
+  if (error || !data) {
+    console.error('[analytics] getDeviceBreakdown:', error)
+    return []
+  }
 
   const counts: Record<string, number> = {}
   for (const click of data) {
@@ -99,7 +108,10 @@ export async function getCountryBreakdown(filter: AnalyticsFilter) {
   query = applyFilters(query, filter, dateFrom)
 
   const { data, error } = await query
-  if (error || !data) return []
+  if (error || !data) {
+    console.error('[analytics] getCountryBreakdown:', error)
+    return []
+  }
 
   const counts: Record<string, number> = {}
   for (const click of data) {
@@ -121,7 +133,10 @@ export async function getBrowserBreakdown(filter: AnalyticsFilter) {
   query = applyFilters(query, filter, dateFrom)
 
   const { data, error } = await query
-  if (error || !data) return []
+  if (error || !data) {
+    console.error('[analytics] getBrowserBreakdown:', error)
+    return []
+  }
 
   const counts: Record<string, number> = {}
   for (const click of data) {
@@ -144,7 +159,10 @@ export async function getTotalClicks(filter: AnalyticsFilter): Promise<number> {
   if (dateFrom) query = query.gte('clicked_at', dateFrom)
 
   const { count, error } = await query
-  if (error) return 0
+  if (error) {
+    console.error('[analytics] getTotalClicks:', error)
+    return 0
+  }
   return count || 0
 }
 
