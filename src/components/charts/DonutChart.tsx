@@ -14,8 +14,9 @@ export function DonutChart({ data }: DonutChartProps) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={192}>
-      <PieChart>
+    <div role="img" aria-label="Donut chart showing distribution by category">
+      <ResponsiveContainer width="100%" height={192}>
+      <PieChart accessibilityLayer>
         <Pie
           data={data}
           cx="50%"
@@ -25,8 +26,8 @@ export function DonutChart({ data }: DonutChartProps) {
           paddingAngle={2}
           dataKey="value"
         >
-          {data.map((_, index) => (
-            <Cell key={index} fill={COLORS[index % COLORS.length]} />
+          {data.map((entry, index) => (
+            <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
         <Tooltip
@@ -37,5 +38,6 @@ export function DonutChart({ data }: DonutChartProps) {
         />
       </PieChart>
     </ResponsiveContainer>
+    </div>
   )
 }

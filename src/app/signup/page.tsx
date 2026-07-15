@@ -47,8 +47,8 @@ export default function SignupPage() {
       if (error) throw error
 
       setSuccess(true)
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to sign up')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to sign up')
     } finally {
       setLoading(false)
     }
@@ -67,8 +67,8 @@ export default function SignupPage() {
       })
 
       if (error) throw error
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to sign up with Google')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to sign up with Google')
       setLoading(false)
     }
   }
