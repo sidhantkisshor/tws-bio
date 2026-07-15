@@ -87,9 +87,9 @@ The `[shortCode]/route.ts` handler validates URLs against a `SAFE_DEEP_LINK_SCHE
 
 Ghost tables (exist in schema but not wired into the app): `custom_domains`, `api_keys`. Ghost columns on `links`: `password_hash`, `unique_clicks`, `custom_meta`, `tags`, `qr_code_url`.
 
-RLS is enabled on all tables. `SECURITY DEFINER` RPCs (`create_link`, `create_deep_link`, `increment_link_clicks`, `record_click`) bypass RLS intentionally — all have `SET search_path = 'public'` to prevent search path injection.
+RLS is enabled on all tables. `SECURITY DEFINER` RPCs (`create_link`, `create_deep_link`, `get_link_by_short_code`, `record_click_and_increment`) bypass RLS intentionally — all have `SET search_path = 'public'` to prevent search path injection. The analytics aggregation RPCs (`get_clicks_over_time`, `get_*_breakdown`, `get_total_clicks`) are SECURITY INVOKER on purpose so clicks RLS applies. Anonymous SELECT on `links` is disabled (owner-only policy); the redirect path uses `get_link_by_short_code`.
 
-Migrations are in `supabase/migrations/` (8 files, 001–007 + a timestamped drop) — run manually via Supabase SQL Editor. Migration 007 must be applied before deploying code changes from the security audit fix.
+Migrations are in `supabase/migrations/` (001–016 + a timestamped drop). The remote DB is managed via the Supabase MCP `apply_migration` tool (tracked migration history); local files are the canonical intent but the remote drifted historically — always preflight actual remote state (`pg_proc`, `pg_indexes`, `pg_policies`) before applying. All migrations through 016 were applied to production on 2026-07-15.
 
 ## Conventions
 
@@ -106,5 +106,5 @@ Migrations are in `supabase/migrations/` (8 files, 001–007 + a timestamped dro
 - `unique_clicks` on `links` is always 0 — no logic increments it
 - `custom_domains` and `api_keys` tables exist but have no application code
 - No rate limiting on link creation or redirect endpoints (would require Redis/Upstash)
-- IP addresses are stored raw in `clicks` — consider hashing/truncating for privacy compliance
-- `clicks.referrer_domain` and `clicks.country` are read by the analytics charts but never populated by `record_click` — the Top Referrers / Countries charts are effectively empty until wired up
+- `clicks.country` is read by the analytics charts but never populated — the Countries chart stays empty until wired up (a Vercel geo-header implementation exists unmerged on the `audit-fixes` branch). `referrer_domain` and masked IPs are populated by `record_click_and_increment` since 2026-07-15; rows older than that have raw IPs and NULL referrer_domain
+- Anonymous users' home-page link list (localStorage `anon_links` + direct select) returns empty after the owner-only SELECT policy — links still work and show immediately after creation, but don't survive a reload for anon users (accepted tradeoff of closing the enumeration hole; could be restored with a `get_links_by_ids(uuid[])` definer RPC)
