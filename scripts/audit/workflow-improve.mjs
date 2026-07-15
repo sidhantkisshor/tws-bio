@@ -63,7 +63,7 @@ for (const g of groupList) {
     `Use each finding's "detail" and "suggested_change" fields from the backlog file as your spec.\n\n` +
     `Hard rules:\n` +
     `- Edit ONLY within: src/app/dashboard/**, src/components/dashboard/**, src/components/charts/**, src/components/ui/**, src/components/CreateLinkForm.tsx, src/components/TimeRangePicker.tsx, src/components/SocialIcon.tsx, and src/app/globals.css (tokens only).\n` +
-    `- NO database, RPC, Supabase query-shape, auth, middleware, or public/marketing-page changes. NO new npm dependencies.\n` +
+    `- NO database schema, migration, RPC-definition, auth, middleware, or public/marketing-page changes. NO new npm dependencies. You MAY add additional READ-ONLY Supabase SELECT queries against EXISTING tables/columns when a finding needs more data (e.g. a prior-period count, a per-link aggregation) — keep them RLS-safe (scoped to the user's own rows) and match existing query patterns.\n` +
     `- Preserve server/client component boundaries: keep server components server-only; add "use client" only when introducing interactivity, and factor interactivity into a small child client component rather than converting a data-fetching server component.\n` +
     `- Earlier improvers in this same run may have ALREADY added design tokens or refactors — re-read globals.css and any shared file before editing so you build on (not clobber) prior changes.\n` +
     `- Match conventions: named exports, inline Tailwind, green primary (#00802B solid-fill only; use the AA-legible green token for green TEXT on dark — check globals.css for --ring/#00B03B or a --primary-text token), --font-heading (DM Serif) for display headings, existing Card/Table/Badge/Button primitives.\n` +
