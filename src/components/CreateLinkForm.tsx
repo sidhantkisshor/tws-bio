@@ -73,7 +73,10 @@ export function CreateLinkForm() {
           setDetectedPlatform(null)
           setAutoDetected(false)
         }
-      })()
+      })().catch(() => {
+        // Deep-link chunk failed to load (offline/network) — detection is a
+        // best-effort enhancement, so silently skip rather than reject.
+      })
     } else if (autoDetected) {
       // URL cleared or invalidated — clear any previously auto-detected state
       setIosDeepLink('')
