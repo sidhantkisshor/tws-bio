@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -41,6 +41,26 @@ export function EditLinkDialog({
   const [maxClicks, setMaxClicks] = useState(
     link.max_clicks != null ? String(link.max_clicks) : ''
   )
+
+  // Re-seed fields from the current link whenever the dialog opens, since the
+  // dialog stays mounted and the initial useState values can go stale.
+  useEffect(() => {
+    if (!open) return
+    setOriginalUrl(link.original_url)
+    setIosDeepLink(link.ios_deep_link || '')
+    setAndroidDeepLink(link.android_deep_link || '')
+    setFallbackUrl(link.fallback_url || '')
+    setExpiresAt(link.expires_at ? link.expires_at.slice(0, 16) : '')
+    setMaxClicks(link.max_clicks != null ? String(link.max_clicks) : '')
+  }, [
+    open,
+    link.original_url,
+    link.ios_deep_link,
+    link.android_deep_link,
+    link.fallback_url,
+    link.expires_at,
+    link.max_clicks,
+  ])
 
   async function handleSave() {
     if (!isValidUrl(originalUrl)) {
