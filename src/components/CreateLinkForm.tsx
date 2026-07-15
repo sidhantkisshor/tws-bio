@@ -3,19 +3,18 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { generateShortCode, isValidUrl, getShortUrl } from '@/lib/utils'
+import { cn, generateShortCode, isValidUrl, getShortUrl } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { useAuth } from '@/hooks/useAuth'
-import { saveAnonLinkId } from '@/hooks/useLinks'
 
 export function CreateLinkForm() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [url, setUrl] = useState('')
   const [customCode, setCustomCode] = useState('')
   const [loading, setLoading] = useState(false)
@@ -32,6 +31,7 @@ export function CreateLinkForm() {
   const latestUrlRef = useRef('')
 
   useEffect(() => {
+    if (!user) return
     async function loadCampaigns() {
       const supabase = createClient()
       const { data, error } = await supabase
@@ -42,7 +42,7 @@ export function CreateLinkForm() {
       setCampaigns(data || [])
     }
     loadCampaigns()
-  }, [])
+  }, [user])
 
   const handleUrlChange = (newUrl: string) => {
     setUrl(newUrl)
@@ -135,7 +135,6 @@ export function CreateLinkForm() {
             const { error: campaignErr } = await supabase.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
             if (campaignErr) campaignFailed = true
           }
-          if (!user) saveAnonLinkId(data.id)
           const shortUrl = getShortUrl(data.short_code)
           try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
           if (campaignFailed) {
@@ -143,7 +142,7 @@ export function CreateLinkForm() {
           } else {
             toast.success('Deep link created and copied to clipboard!')
           }
-          if (user) setTimeout(() => router.push('/dashboard'), 1500)
+          setTimeout(() => router.push('/dashboard'), 1500)
         }
       } else {
         const { data, error: rpcError } = await supabase.rpc('create_link', {
@@ -159,7 +158,6 @@ export function CreateLinkForm() {
             const { error: campaignErr } = await supabase.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
             if (campaignErr) campaignFailed = true
           }
-          if (!user) saveAnonLinkId(data.id)
           const shortUrl = getShortUrl(data.short_code)
           try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
           if (campaignFailed) {
@@ -167,7 +165,7 @@ export function CreateLinkForm() {
           } else {
             toast.success('Link created and copied to clipboard!')
           }
-          if (user) setTimeout(() => router.push('/dashboard'), 1500)
+          setTimeout(() => router.push('/dashboard'), 1500)
         }
       }
     } catch (err: unknown) {
@@ -175,6 +173,47 @@ export function CreateLinkForm() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Link creation requires authentication. While auth state resolves, show a
+  // neutral placeholder; once resolved, gate anonymous visitors behind sign-in.
+  if (authLoading) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="text-xl text-foreground">Shorten Your URL</CardTitle>
+            <CardDescription>Create a short, memorable link in seconds</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-10 w-full bg-muted animate-pulse rounded-lg" />
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="text-xl text-foreground">Sign in to shorten URLs</CardTitle>
+            <CardDescription>
+              Create an account or sign in to create short links, deep links, and campaigns — all saved to your dashboard with analytics.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            <a href="/login" className={cn(buttonVariants(), 'h-10 px-6')}>
+              Sign in
+            </a>
+            <a href="/signup" className={cn(buttonVariants({ variant: 'outline' }), 'h-10 px-6')}>
+              Create account
+            </a>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -185,15 +224,6 @@ export function CreateLinkForm() {
           <CardDescription>Create a short, memorable link in seconds</CardDescription>
         </CardHeader>
         <CardContent>
-          {!user && (
-            <div className="mb-6 rounded-lg border border-primary/20 bg-primary/10 p-4">
-              <p className="text-sm text-primary">
-                <a href="/login" className="font-semibold underline underline-offset-4 hover:text-primary/80">Sign in</a>{' '}
-                to save links to your dashboard and access analytics.
-              </p>
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="space-y-5">
             {detectedPlatform && (
               <div className="rounded-lg border border-primary/20 bg-primary/10 p-4 flex items-center justify-between">
