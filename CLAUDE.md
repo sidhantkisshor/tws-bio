@@ -100,4 +100,4 @@ Migrations are in `supabase/migrations/` (8 files, 001–007 + a timestamped dro
 - `custom_domains` and `api_keys` tables exist but have no application code
 - No rate limiting on link creation or redirect endpoints (would require Redis/Upstash)
 - IP addresses are stored raw in `clicks` — consider hashing/truncating for privacy compliance
-- `recharts` and `react-qr-code` are in `package.json` but not used in current code
+- `clicks.referrer_domain` and `clicks.country` are read by the analytics charts but never populated by `record_click` — the Top Referrers / Countries charts are effectively empty until wired up
