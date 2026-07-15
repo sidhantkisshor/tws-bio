@@ -8,7 +8,7 @@ Everything on branch `audit-fixes`. The autonomous fixes are already safe to mer
 
 The `sbp_` Supabase **management** token was committed in `.cursor/mcp.json`. This branch already untracked the file and gitignored `.cursor/`, but **the value still exists in git history and is fully valid until you rotate it.**
 
-1. **Rotate now:** Supabase Dashboard → Account → Access Tokens → revoke `sbp_77fcac7df2ddbf364c0b55a5a494ee6a5516bb3c` → generate a new one → put it in your local `.cursor/mcp.json` (now gitignored, won't be committed).
+1. **Rotate now:** Supabase Dashboard → Account → Access Tokens → revoke `sbp_REDACTED_ROTATED` → generate a new one → put it in your local `.cursor/mcp.json` (now gitignored, won't be committed).
 2. **Purge history** (destructive rewrite — coordinate with anyone who has the repo cloned). With [git-filter-repo](https://github.com/newren/git-filter-repo):
    ```bash
    # from a fresh mirror clone, ideally

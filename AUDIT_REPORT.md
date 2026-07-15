@@ -37,7 +37,7 @@ Overall the app is competently built — the redirect hot path is minimal and co
 **C-1 — Live Supabase management token committed to git**
 `.cursor/mcp.json:13` (git-tracked; `.cursor/` is *not* gitignored)
 ```json
-"SUPABASE_ACCESS_TOKEN": "sbp_77fcac7df2ddbf364c0b55a5a494ee6a5516bb3c"
+"SUPABASE_ACCESS_TOKEN": "sbp_REDACTED_ROTATED"
 ```
 An `sbp_`-prefixed token is a Supabase **personal/management API token** granting account-level control (list/modify/delete projects, run arbitrary SQL, rotate keys). It is committed and present in history. Anyone with repo access — or anyone, if the repo is ever public — has full control of the Supabase account.
 **Fix:** (1) Revoke/rotate the token now in Supabase → Account → Access Tokens. (2) `git rm --cached .cursor/mcp.json`; add `.cursor/` to `.gitignore`. (3) Purge from history (BFG / `git filter-repo`). *Verified by 2 independent agents; `git ls-files` + `git check-ignore` confirm tracked & not ignored.*
