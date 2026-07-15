@@ -6,7 +6,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'tws.bio - URL Shortener',
-  description: 'Create short links with analytics and mobile deep linking. Free, fast, no account required.',
+  description: 'Create short links with analytics and mobile deep linking. Free, fast, and secure — sign in to get started.',
 }
 
 export default function HomePage() {
@@ -32,7 +32,7 @@ export default function HomePage() {
             </span>
           </h1>
           <p className="relative text-muted-foreground text-xl mt-6 max-w-2xl">
-            Create short links with analytics and mobile deep linking. Free, fast, no account required.
+            Create short links with analytics and mobile deep linking. Free, fast, and secure — sign in to get started.
           </p>
         </section>
 
