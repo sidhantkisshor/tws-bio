@@ -38,7 +38,7 @@ Created by this plan (harness + artifacts; NOT dashboard source — that is edit
 - Create: `scripts/audit/seed-test-account.sql`
 
 **Interfaces:**
-- Produces: a confirmed Supabase auth user `audit-bot@tws.bio` / password `AuditBot!2026`, with ~8 links (mix of `url` and `deep_link`, active + inactive) and ~200 `clicks` rows spread across dates (last 60 days), devices, browsers, and referrer domains — enough that every dashboard chart and table renders a populated state.
+- Produces: a confirmed Supabase auth user `audit-bot@tws.bio` / password `__AUDIT_BOT_PASSWORD__`, with ~8 links (mix of `url` and `deep_link`, active + inactive) and ~200 `clicks` rows spread across dates (last 60 days), devices, browsers, and referrer domains — enough that every dashboard chart and table renders a populated state.
 
 - [ ] **Step 1: Write the seed SQL**
 
@@ -60,7 +60,7 @@ with new_user as (
   ) values (
     '00000000-0000-0000-0000-000000000000',
     gen_random_uuid(), 'authenticated', 'authenticated',
-    'audit-bot@tws.bio', crypt('AuditBot!2026', gen_salt('bf')),
+    'audit-bot@tws.bio', crypt('__AUDIT_BOT_PASSWORD__', gen_salt('bf')),
     now(), now(), now(),
     '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb
   ) returning id
@@ -127,7 +127,7 @@ Expected: no error; final `update` reports 8 rows.
 
 - [ ] **Step 3: Verify the account logs in and data renders**
 
-Start dev server (Task 2 covers reuse). Using Playwright MCP: navigate to `http://localhost:3000/login`, fill `audit-bot@tws.bio` / `AuditBot!2026`, submit.
+Start dev server (Task 2 covers reuse). Using Playwright MCP: navigate to `http://localhost:3000/login`, fill `audit-bot@tws.bio` / `__AUDIT_BOT_PASSWORD__`, submit.
 Expected: redirect to `/dashboard`; Overview shows non-zero Total Links / Total Clicks and a populated Recent Links table.
 
 - [ ] **Step 4: Commit**
