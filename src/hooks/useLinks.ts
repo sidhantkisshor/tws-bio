@@ -1,15 +1,23 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import type { Database } from '@/types/database'
 
-type Link = Database['public']['Tables']['links']['Row']
+// Only the columns the home links list actually renders — keeps the query
+// payload small and the ghost columns (custom_meta, tags, qr_code_url,
+// password_hash) out of the wire format.
+export type HomeLink = Pick<
+  Database['public']['Tables']['links']['Row'],
+  'id' | 'short_code' | 'original_url' | 'link_type' | 'total_clicks' | 'created_at'
+>
+
+const HOME_LINK_COLUMNS =
+  'id, short_code, original_url, link_type, total_clicks, created_at'
 
 const ANON_LINKS_KEY = 'anon_links'
 const MAX_ANON_LINKS = 50
 
-function getAnonLinkIds(): string[] {
+export function getAnonLinkIds(): string[] {
   if (typeof window === 'undefined') return []
   try {
     const stored = localStorage.getItem(ANON_LINKS_KEY)
@@ -41,21 +49,31 @@ export function saveAnonLinkId(id: string) {
   }
 }
 
-export function useLinks(userId: string | null | undefined) {
-  const [links, setLinks] = useState<Link[]>([])
+export function useLinks(
+  userId: string | null | undefined,
+  authLoading = false
+) {
+  const [links, setLinks] = useState<HomeLink[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Wait for auth to resolve before fetching: firing with userId=undefined
+    // while a session is still being read would issue a throwaway request
+    // that is superseded moments later.
+    if (authLoading) return
+
     let ignore = false
 
     async function fetchLinks() {
       setLoading(true)
+      // Dynamic import keeps supabase-js out of the static home-page bundle.
+      const { createClient } = await import('@/lib/supabase/client')
       const supabase = createClient()
 
       if (userId) {
         const { data } = await supabase
           .from('links')
-          .select('*')
+          .select(HOME_LINK_COLUMNS)
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .limit(10)
@@ -83,9 +101,9 @@ export function useLinks(userId: string | null | undefined) {
     return () => {
       ignore = true
     }
-  }, [userId])
+  }, [userId, authLoading])
 
-  const addLink = useCallback((link: Link) => {
+  const addLink = useCallback((link: HomeLink) => {
     setLinks((prev) => [link, ...prev])
   }, [])
 

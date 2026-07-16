@@ -109,7 +109,7 @@ export function StatCard({ title, value, icon, trend, trendLabel }: StatCardProp
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-3xl font-bold font-mono text-foreground mt-1">{value}</p>
+            <p className="text-3xl font-bold font-mono tabular-nums text-foreground mt-1">{value}</p>
             {trend && (
               <div className="flex items-center gap-1.5 mt-1.5">
                 <TrendChip trend={trend} />

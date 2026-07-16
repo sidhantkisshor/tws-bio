@@ -1,8 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useRef } from 'react'
 import { cn, generateShortCode, isValidUrl, getShortUrl } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
@@ -10,27 +8,59 @@ import { Input } from '@/components/ui/input'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { TickerChip } from '@/components/TickerChip'
 import { useAuth } from '@/hooks/useAuth'
+import type { HomeLink } from '@/hooks/useLinks'
 
 type FieldName = 'url' | 'customCode' | 'iosDeepLink' | 'androidDeepLink' | 'fallbackUrl'
 type FieldErrors = Partial<Record<FieldName, string>>
+
+// Sentinel for "no campaign selected" — the Select needs a non-empty value.
+const NO_CAMPAIGN = 'none'
+
+interface CreatedLink {
+  shortCode: string
+  /** HH:MM:SS UTC, captured client-side at creation time. */
+  filledAt: string
+  destHost: string
+  copied: boolean
+}
+
+// Destination host for the execution ticket row: bare hostname, www. stripped,
+// truncated so the mono label can't wrap on mobile.
+function formatDestHost(rawUrl: string): string {
+  let host: string
+  try {
+    host = new URL(rawUrl).hostname.replace(/^www\./, '')
+  } catch {
+    host = rawUrl
+  }
+  return host.length > 30 ? `${host.slice(0, 29)}…` : host
+}
 
 interface CreateLinkFormProps {
   /**
    * Server-resolved user, passed by routes (e.g. the dashboard create page)
    * that already redirect unauthenticated visitors before rendering this
-   * form. Lets the form skip its own client-side auth loading skeleton and
-   * sign-in gate on first paint; once useAuth resolves client-side, its
+   * form. Lets the form render immediately instead of showing the sign-in
+   * gate while client auth resolves; once useAuth resolves client-side, its
    * result takes over as the source of truth.
    */
   initialUser?: { id: string } | null
+  /** Called with the created row so a parent list can prepend it. */
+  onCreated?: (link: HomeLink) => void
 }
 
-export function CreateLinkForm({ initialUser = null }: CreateLinkFormProps) {
-  const router = useRouter()
+export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkFormProps) {
   const { user: authUser, loading: authLoading } = useAuth()
   const user = initialUser && authLoading ? initialUser : authUser
-  const showAuthSkeleton = !initialUser && authLoading
   const [url, setUrl] = useState('')
   const [customCode, setCustomCode] = useState('')
   const [loading, setLoading] = useState(false)
@@ -43,9 +73,11 @@ export function CreateLinkForm({ initialUser = null }: CreateLinkFormProps) {
   const [detectedPlatform, setDetectedPlatform] = useState<string | null>(null)
   const [autoDetected, setAutoDetected] = useState(false)
   const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([])
-  const [selectedCampaignId, setSelectedCampaignId] = useState('')
+  const [selectedCampaignId, setSelectedCampaignId] = useState(NO_CAMPAIGN)
   const [newCampaignName, setNewCampaignName] = useState('')
+  const [createdLink, setCreatedLink] = useState<CreatedLink | null>(null)
   const latestUrlRef = useRef('')
+  const campaignsLoadedRef = useRef(false)
 
   const clearFieldError = (field: FieldName) => {
     setFieldErrors((prev) => {
@@ -56,19 +88,24 @@ export function CreateLinkForm({ initialUser = null }: CreateLinkFormProps) {
     })
   }
 
-  useEffect(() => {
-    if (!user) return
-    async function loadCampaigns() {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('campaigns')
-        .select('id, name')
-        .order('created_at', { ascending: false })
-      if (error) console.error('Failed to load campaigns:', error)
-      setCampaigns(data || [])
+  // Deferred until the selector is first opened, so users who never touch the
+  // optional campaign field don't pay the query on mount.
+  const loadCampaigns = async () => {
+    if (campaignsLoadedRef.current) return
+    campaignsLoadedRef.current = true
+    const { createClient } = await import('@/lib/supabase/client')
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('campaigns')
+      .select('id, name')
+      .order('created_at', { ascending: false })
+    if (error) {
+      console.error('Failed to load campaigns:', error)
+      campaignsLoadedRef.current = false // allow a retry on the next open
+      return
     }
-    loadCampaigns()
-  }, [user])
+    setCampaigns(data || [])
+  }
 
   const handleUrlChange = (newUrl: string) => {
     setUrl(newUrl)
@@ -115,6 +152,36 @@ export function CreateLinkForm({ initialUser = null }: CreateLinkFormProps) {
     }
   }
 
+  // Success: swap the form for the execution ticket. The row is computed
+  // client-side at creation time (FILLED · HH:MM:SS UTC · → destination-host).
+  const showTicket = (link: HomeLink, copied: boolean) => {
+    setCreatedLink({
+      shortCode: link.short_code,
+      filledAt: new Date().toISOString().slice(11, 19),
+      destHost: formatDestHost(link.original_url),
+      copied,
+    })
+    onCreated?.(link)
+    setLoading(false)
+  }
+
+  const resetForm = () => {
+    setCreatedLink(null)
+    setUrl('')
+    latestUrlRef.current = ''
+    setCustomCode('')
+    setLinkType('url')
+    setIosDeepLink('')
+    setAndroidDeepLink('')
+    setFallbackUrl('')
+    setDetectedPlatform(null)
+    setAutoDetected(false)
+    setShowAdvanced(false)
+    setSelectedCampaignId(NO_CAMPAIGN)
+    setNewCampaignName('')
+    setFieldErrors({})
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -130,9 +197,11 @@ export function CreateLinkForm({ initialUser = null }: CreateLinkFormProps) {
 
     setFieldErrors({})
     setLoading(true)
-    const supabase = createClient()
 
     try {
+      // Dynamic import keeps supabase-js out of the static home-page bundle
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
 
       const shortCode = customCode || generateShortCode()
@@ -147,7 +216,7 @@ export function CreateLinkForm({ initialUser = null }: CreateLinkFormProps) {
           .single()
         if (campaignError) throw new Error(campaignError.message)
         campaignId = newCampaign.id
-      } else if (selectedCampaignId && selectedCampaignId !== '__new__') {
+      } else if (selectedCampaignId !== NO_CAMPAIGN && selectedCampaignId !== '__new__') {
         campaignId = selectedCampaignId
       }
 
@@ -169,15 +238,21 @@ export function CreateLinkForm({ initialUser = null }: CreateLinkFormProps) {
             if (campaignErr) campaignFailed = true
           }
           const shortUrl = getShortUrl(data.short_code)
-          try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
+          let copied = false
+          try {
+            await navigator.clipboard.writeText(shortUrl)
+            copied = true
+          } catch {
+            // The execution ticket remains visible with its own copy control.
+          }
           if (campaignFailed) {
             toast.warning('Deep link created, but could not assign it to the campaign.')
-          } else {
+          } else if (copied) {
             toast.success('Deep link created and copied to clipboard!')
+          } else {
+            toast.success('Deep link created. Copy it from the ticket below.')
           }
-          // Keep the form disabled through the redirect delay so a fast
-          // second submit can't fire before navigation actually happens.
-          setTimeout(() => router.push('/dashboard'), 1500)
+          showTicket(data, copied)
         } else {
           toast.error('Failed to create link. Please try again.')
           setLoading(false)
@@ -197,15 +272,21 @@ export function CreateLinkForm({ initialUser = null }: CreateLinkFormProps) {
             if (campaignErr) campaignFailed = true
           }
           const shortUrl = getShortUrl(data.short_code)
-          try { await navigator.clipboard.writeText(shortUrl) } catch { /* clipboard unavailable */ }
+          let copied = false
+          try {
+            await navigator.clipboard.writeText(shortUrl)
+            copied = true
+          } catch {
+            // The execution ticket remains visible with its own copy control.
+          }
           if (campaignFailed) {
             toast.warning('Link created, but could not assign it to the campaign.')
-          } else {
+          } else if (copied) {
             toast.success('Link created and copied to clipboard!')
+          } else {
+            toast.success('Link created. Copy it from the ticket below.')
           }
-          // Keep the form disabled through the redirect delay so a fast
-          // second submit can't fire before navigation actually happens.
-          setTimeout(() => router.push('/dashboard'), 1500)
+          showTicket(data, copied)
         } else {
           toast.error('Failed to create link. Please try again.')
           setLoading(false)
@@ -232,32 +313,17 @@ export function CreateLinkForm({ initialUser = null }: CreateLinkFormProps) {
         setFieldErrors((prev) => ({ ...prev, url: message }))
       }
 
-      // Only clear loading on failure — on success the form should stay
-      // disabled through the pending redirect (see setTimeout above).
+      // Only clear loading on failure — on success the ticket replaces the
+      // form, so the double-submit window is closed either way.
       setLoading(false)
     }
   }
 
-  // Link creation requires authentication. While client auth state resolves,
-  // show a neutral placeholder; once resolved, gate anonymous visitors behind
-  // sign-in. Callers that already resolved auth server-side (e.g. the
-  // dashboard create route) pass initialUser to skip this skeleton entirely.
-  if (showAuthSkeleton) {
-    return (
-      <div className="max-w-2xl mx-auto">
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-xl text-foreground">Shorten Your URL</CardTitle>
-            <CardDescription>Create a short, memorable link in seconds</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-10 w-full bg-muted animate-pulse rounded-lg" />
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
+  // Link creation requires authentication. The sign-in gate is the optimistic
+  // default while client auth state resolves (anonymous is the common case on
+  // the marketing page — no skeleton, no title flicker); the form appears once
+  // a session is present. Routes that already resolved auth server-side (e.g.
+  // the dashboard create route) pass initialUser to render the form directly.
   if (!user) {
     return (
       <div className="max-w-2xl mx-auto">
@@ -280,6 +346,43 @@ export function CreateLinkForm({ initialUser = null }: CreateLinkFormProps) {
       </div>
     )
   }
+
+  // Execution ticket: the success state. The one-time green fill flash is the
+  // creation signal (collapsed by the global reduced-motion backstop).
+  if (createdLink) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <Card className="bg-card border-border">
+          <CardContent>
+            <div role="status" className="rounded-lg space-y-3">
+              <TickerChip
+                code={createdLink.shortCode}
+                flashOnMount
+                copiedOnMount={createdLink.copied}
+              />
+              <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                FILLED · {createdLink.filledAt} UTC · → {createdLink.destHost}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3 mt-6">
+              <Button type="button" onClick={resetForm} className="h-10 px-6">
+                Create another
+              </Button>
+              <a href="/dashboard" className={cn(buttonVariants({ variant: 'outline' }), 'h-10 px-6')}>
+                View in dashboard
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const campaignOptions = [
+    { value: NO_CAMPAIGN, label: 'No campaign' },
+    ...campaigns.map((c) => ({ value: c.id, label: c.name })),
+    { value: '__new__', label: '+ New campaign...' },
+  ]
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -369,18 +472,27 @@ export function CreateLinkForm({ initialUser = null }: CreateLinkFormProps) {
               {/* Campaign selector */}
               <div>
                 <Label htmlFor="campaign" className="mb-2">Campaign (optional)</Label>
-                <select
-                  id="campaign"
+                <Select
                   value={selectedCampaignId}
-                  onChange={(e) => setSelectedCampaignId(e.target.value)}
-                  className="w-full h-10 rounded-lg border border-input bg-muted px-3 text-sm text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                  onValueChange={(v) => setSelectedCampaignId(v || NO_CAMPAIGN)}
+                  onOpenChange={(open) => {
+                    if (open) void loadCampaigns()
+                  }}
                 >
-                  <option value="">No campaign</option>
-                  {campaigns.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                  <option value="__new__">+ New campaign...</option>
-                </select>
+                  <SelectTrigger
+                    id="campaign"
+                    className="w-full data-[size=default]:h-10 bg-muted dark:bg-muted dark:hover:bg-muted"
+                  >
+                    <SelectValue options={campaignOptions} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {campaignOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {selectedCampaignId === '__new__' && (
                   <Input
                     type="text"
@@ -400,7 +512,7 @@ export function CreateLinkForm({ initialUser = null }: CreateLinkFormProps) {
                   className="text-sm text-primary-text hover:text-primary-text/80 font-medium flex items-center gap-1"
                 >
                   <svg
-                    className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
+                    className={`w-4 h-4 ${showAdvanced ? 'rotate-90' : ''}`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -421,12 +533,12 @@ export function CreateLinkForm({ initialUser = null }: CreateLinkFormProps) {
                       className="flex gap-6"
                     >
                       <div className="flex items-center gap-2">
-                        <RadioGroupItem value="url" />
-                        <Label className="font-normal cursor-pointer">Regular URL</Label>
+                        <RadioGroupItem value="url" id="type-url" />
+                        <Label htmlFor="type-url" className="font-normal cursor-pointer">Regular URL</Label>
                       </div>
                       <div className="flex items-center gap-2">
-                        <RadioGroupItem value="deep_link" />
-                        <Label className="font-normal cursor-pointer">Deep Link (Mobile App)</Label>
+                        <RadioGroupItem value="deep_link" id="type-deep" />
+                        <Label htmlFor="type-deep" className="font-normal cursor-pointer">Deep Link (Mobile App)</Label>
                       </div>
                     </RadioGroup>
                   </div>

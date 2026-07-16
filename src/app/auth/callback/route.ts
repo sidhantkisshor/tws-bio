@@ -6,17 +6,19 @@ export async function GET(request: Request) {
   const code = requestUrl.searchParams.get('code')
   const origin = process.env.NEXT_PUBLIC_APP_URL || requestUrl.origin
 
-  if (code) {
-    const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+  // OAuth denial/provider failures arrive without a code (usually with
+  // `error`/`error_description`). Never echo provider text into the URL; the
+  // login page recognizes this fixed key only.
+  if (!code || requestUrl.searchParams.has('error')) {
+    return NextResponse.redirect(`${origin}/login?error=auth_failed`)
+  }
 
-    if (error) {
-      // Exchange failed - redirect to login with error indication
-      return NextResponse.redirect(`${origin}/login?error=auth_failed`)
-    }
-  } else {
-    // No code provided - redirect to login
-    return NextResponse.redirect(`${origin}/login`)
+  const supabase = await createClient()
+  const { error } = await supabase.auth.exchangeCodeForSession(code)
+
+  if (error) {
+    // Exchange failed - redirect to login with error indication
+    return NextResponse.redirect(`${origin}/login?error=auth_failed`)
   }
 
   return NextResponse.redirect(`${origin}/dashboard`)

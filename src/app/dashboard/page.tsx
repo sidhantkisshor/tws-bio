@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
+import { getClicksOverTimeResult, getTotalClicksResult } from '@/lib/analytics'
 import { StatCard, computeTrend } from '@/components/dashboard/StatCard'
 import { ClickChart } from '@/components/dashboard/ClickChart'
 import { TypeBadge } from '@/components/dashboard/TypeBadge'
@@ -18,9 +19,7 @@ import { formatDate } from '@/lib/utils'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
 
   if (!user) {
     return null
@@ -51,10 +50,13 @@ export default async function DashboardPage() {
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('is_active', true),
+      // `id` rides along so linkIds for the clicks queries below come out of
+      // this same wave instead of a separate round trip.
       supabase
         .from('links')
-        .select('total_clicks')
-        .eq('user_id', user.id),
+        .select('id, total_clicks')
+        .eq('user_id', user.id)
+        .order('id', { ascending: true }),
       supabase
         .from('links')
         .select('id, short_code, original_url, link_type, total_clicks, created_at')
@@ -65,14 +67,15 @@ export default async function DashboardPage() {
       // derive "new links" / "new active links" trend deltas below.
       supabase
         .from('links')
-        .select('id, created_at, is_active')
+        .select('id, created_at, is_active', { count: 'exact' })
         .eq('user_id', user.id)
-        .gte('created_at', prevWindowStart.toISOString()),
+        .gte('created_at', prevWindowStart.toISOString())
+        .order('id', { ascending: true }),
     ])
 
   // Any of these failing silently degrades a stat to 0 — surface it instead
   // of letting a genuine query error render identically to "no data yet".
-  const statsError = Boolean(
+  let statsError = Boolean(
     totalLinksResult.error ||
       activeLinksResult.error ||
       clicksDataResult.error ||
@@ -91,7 +94,33 @@ export default async function DashboardPage() {
 
   const totalLinks = totalLinksResult.count || 0
   const activeLinks = activeLinksResult.count || 0
-  const totalClicks = (clicksDataResult.data || []).reduce(
+  let linkRows = clicksDataResult.data || []
+  if (!clicksDataResult.error && totalLinks > linkRows.length && linkRows.length > 0) {
+    const pageSize = linkRows.length
+    const extraPages = await Promise.all(
+      Array.from(
+        { length: Math.ceil((totalLinks - pageSize) / pageSize) },
+        (_, index) => {
+          const from = pageSize * (index + 1)
+          return supabase
+            .from('links')
+            .select('id, total_clicks')
+            .eq('user_id', user.id)
+            .order('id', { ascending: true })
+            .range(from, Math.min(from + pageSize - 1, totalLinks - 1))
+        },
+      ),
+    )
+    const failedPage = extraPages.find((page) => page.error)
+    if (failedPage?.error) {
+      console.error('[dashboard] paginated links query:', failedPage.error)
+      statsError = true
+    } else {
+      linkRows = linkRows.concat(extraPages.flatMap((page) => page.data || []))
+    }
+  }
+
+  const totalClicks = linkRows.reduce(
     (sum, link) => sum + (link.total_clicks || 0),
     0
   )
@@ -99,7 +128,33 @@ export default async function DashboardPage() {
     totalLinks > 0 ? Math.round((totalClicks / totalLinks) * 10) / 10 : 0
 
   // Bucket links-created-in-window data into current vs. prior period counts.
-  const trendLinks = trendLinksResult.data || []
+  let trendLinks = trendLinksResult.data || []
+  const totalTrendLinks = trendLinksResult.count || 0
+  if (!trendLinksResult.error && totalTrendLinks > trendLinks.length && trendLinks.length > 0) {
+    const pageSize = trendLinks.length
+    const extraPages = await Promise.all(
+      Array.from(
+        { length: Math.ceil((totalTrendLinks - pageSize) / pageSize) },
+        (_, index) => {
+          const from = pageSize * (index + 1)
+          return supabase
+            .from('links')
+            .select('id, created_at, is_active')
+            .eq('user_id', user.id)
+            .gte('created_at', prevWindowStart.toISOString())
+            .order('id', { ascending: true })
+            .range(from, Math.min(from + pageSize - 1, totalTrendLinks - 1))
+        },
+      ),
+    )
+    const failedPage = extraPages.find((page) => page.error)
+    if (failedPage?.error) {
+      console.error('[dashboard] paginated trend-links query:', failedPage.error)
+      statsError = true
+    } else {
+      trendLinks = trendLinks.concat(extraPages.flatMap((page) => page.data || []))
+    }
+  }
   let linksCurrentCount = 0
   let linksPrevCount = 0
   let activeLinksCurrentCount = 0
@@ -116,52 +171,50 @@ export default async function DashboardPage() {
     }
   }
 
-  const { data: userLinks, error: userLinksError } = await supabase
-    .from('links')
-    .select('id')
-    .eq('user_id', user.id)
-
-  if (userLinksError) {
-    console.error('[dashboard] userLinks query:', userLinksError)
-  }
-
-  const linkIds = (userLinks || []).map((l) => l.id)
+  const linkIds = linkRows.map((l) => l.id)
 
   let clickChartData: { date: string; clicks: number }[] = []
   let clicksCurrentWindow = 0
   let clicksPrevWindow = 0
+  let clickTrendAvailable = false
   // Distinguishes "the click query failed" from "this link genuinely has no
   // clicks yet" — ClickChart renders a different message for each so a
   // swallowed error doesn't masquerade as a brand-new-user empty state.
-  let chartError = Boolean(userLinksError)
+  let chartError = Boolean(clicksDataResult.error)
 
   if (linkIds.length > 0) {
-    const [{ data: clicks, error: clicksError }, prevClicksResult] = await Promise.all([
-      supabase
-        .from('clicks')
-        .select('clicked_at')
-        .in('link_id', linkIds)
-        .gte('clicked_at', thirtyDaysAgo.toISOString())
-        .order('clicked_at'),
-      supabase
-        .from('clicks')
-        .select('id', { count: 'exact', head: true })
-        .in('link_id', linkIds)
-        .gte('clicked_at', prevWindowStart.toISOString())
-        .lt('clicked_at', thirtyDaysAgo.toISOString()),
+    const [clicksSeriesResult, combinedClicksResult] = await Promise.all([
+      // Day buckets aggregated DB-side via the SECURITY INVOKER RPC (clicks
+      // RLS applies — called as the logged-in user) instead of one raw row
+      // per click, which silently undercounted past PostgREST's 1000-row
+      // response cap. `since` pins the RPC to the same UTC-anchored window
+      // boundary used by the prior-period count below.
+      getClicksOverTimeResult({
+        timeRange: '30d',
+        linkIds,
+        since: thirtyDaysAgo.toISOString(),
+      }),
+      // Combined current + prior span. Subtract the current series below to
+      // derive the prior window without putting every UUID in a GET query.
+      getTotalClicksResult({
+        timeRange: 'all',
+        linkIds,
+        since: prevWindowStart.toISOString(),
+      }),
     ])
 
-    if (clicksError) {
-      console.error('[dashboard] clicks query:', clicksError)
+    if (clicksSeriesResult.error) {
       chartError = true
+      statsError = true
+    }
+    if (combinedClicksResult.error) {
+      console.error('[dashboard] prior clicks query failed')
+      statsError = true
     }
 
     const clicksByDate = new Map<string, number>()
-    for (const click of clicks || []) {
-      if (click.clicked_at) {
-        const date = click.clicked_at.slice(0, 10)
-        clicksByDate.set(date, (clicksByDate.get(date) || 0) + 1)
-      }
+    for (const row of clicksSeriesResult.data) {
+      clicksByDate.set(row.date.slice(0, 10), row.clicks)
     }
 
     // Zero-fill every day in the window so the chart always renders a
@@ -172,8 +225,13 @@ export default async function DashboardPage() {
       return { date, clicks: clicksByDate.get(date) || 0 }
     })
 
-    clicksCurrentWindow = (clicks || []).length
-    clicksPrevWindow = prevClicksResult.count || 0
+    if (!clicksSeriesResult.error) {
+      clicksCurrentWindow = clicksSeriesResult.data.reduce((sum, row) => sum + row.clicks, 0)
+    }
+    if (!combinedClicksResult.error) {
+      clicksPrevWindow = Math.max(combinedClicksResult.data - clicksCurrentWindow, 0)
+    }
+    clickTrendAvailable = !clicksSeriesResult.error && !combinedClicksResult.error
   }
 
   const recentLinks = recentLinksResult.data || []
@@ -190,19 +248,21 @@ export default async function DashboardPage() {
     totalLinksAtCurrentStart > 0 ? clicksPrevWindow / totalLinksAtCurrentStart : 0
 
   const totalLinksTrend = computeTrend(linksCurrentCount, linksPrevCount)
-  const totalClicksTrend = computeTrend(clicksCurrentWindow, clicksPrevWindow)
-  const avgClicksTrend = computeTrend(avgClicksCurrentWindow, avgClicksPrevWindow, {
-    isRatio: true,
-  })
+  const totalClicksTrend = clickTrendAvailable
+    ? computeTrend(clicksCurrentWindow, clicksPrevWindow)
+    : null
+  const avgClicksTrend = clickTrendAvailable
+    ? computeTrend(avgClicksCurrentWindow, avgClicksPrevWindow, { isRatio: true })
+    : null
   const activeLinksTrend = computeTrend(activeLinksCurrentCount, activeLinksPrevCount)
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6 gap-4">
         <h1 className="font-heading text-2xl text-foreground">Overview</h1>
-        <Link href="/dashboard/create">
-          <Button>Create Link</Button>
-        </Link>
+        <Button render={<Link href="/dashboard/create" />}>
+          Create Link
+        </Button>
       </div>
 
       {statsError && (
@@ -222,12 +282,13 @@ export default async function DashboardPage() {
 
       {/* Stat Cards */}
       <div className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {/* Gradient glow effect behind stat cards */}
+        {/* Gradient glow effect behind stat cards — the shared brand-green
+            radial token; the gradient already fades to transparent, so no
+            blur filter (a 100px blur forced an expensive GPU pass over a
+            large region for a visually identical result). */}
         <div
-          className="pointer-events-none absolute -top-16 left-1/2 -translate-x-1/2 w-[500px] h-[200px] opacity-20 blur-[100px]"
-          style={{
-            background: 'radial-gradient(ellipse at center, rgba(0,176,59,0.5) 0%, rgba(20,184,166,0.25) 50%, transparent 80%)',
-          }}
+          className="pointer-events-none absolute -top-16 left-1/2 -translate-x-1/2 w-[500px] h-[200px] opacity-20"
+          style={{ background: 'var(--gradient-hero)' }}
         />
         <StatCard
           title="Total Links"
@@ -345,9 +406,9 @@ export default async function DashboardPage() {
           <CardContent>
             <div className="flex flex-col items-center text-center py-12 gap-4">
               <p className="text-muted-foreground">No links created yet.</p>
-              <Link href="/dashboard/create">
-                <Button>Create Link</Button>
-              </Link>
+              <Button render={<Link href="/dashboard/create" />}>
+                Create Link
+              </Button>
             </div>
           </CardContent>
         )}

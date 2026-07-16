@@ -2,8 +2,8 @@
 
 import { useRef, useCallback } from 'react'
 import QRCode from 'react-qr-code'
-import { toast } from 'sonner'
 import { getShortUrl } from '@/lib/utils'
+import { TickerChip } from '@/components/TickerChip'
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,23 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Copy, Download } from 'lucide-react'
+import { Download } from 'lucide-react'
+
+// The QR SVG and download canvas need literal color strings, so the theme
+// tokens are resolved from the stylesheet once and cached (hex fallbacks match
+// the current globals.css values for the pre-hydration edge case).
+let qrColors: { bg: string; fg: string } | null = null
+function getQrColors() {
+  if (!qrColors) {
+    const styles =
+      typeof document !== 'undefined' ? getComputedStyle(document.documentElement) : null
+    qrColors = {
+      bg: styles?.getPropertyValue('--card').trim() || '#111111',
+      fg: styles?.getPropertyValue('--chart-1').trim() || '#00B03B',
+    }
+  }
+  return qrColors
+}
 
 export function QRCodeDialog({
   shortCode,
@@ -44,7 +60,7 @@ export function QRCodeDialog({
       canvas.height = img.height + padding * 2
 
       // Fill background
-      ctx.fillStyle = '#111111'
+      ctx.fillStyle = getQrColors().bg
       ctx.fillRect(0, 0, canvas.width, canvas.height)
 
       // Draw QR code centered
@@ -59,15 +75,6 @@ export function QRCodeDialog({
     img.src = 'data:image/svg+xml;base64,' + btoa(svgData)
   }, [shortCode])
 
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(url)
-      toast.success('Copied!')
-    } catch {
-      toast.error('Failed to copy')
-    }
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
@@ -76,30 +83,24 @@ export function QRCodeDialog({
           <DialogDescription>
             Scan this QR code to open the short link.
           </DialogDescription>
+          <TickerChip code={shortCode} className="self-start" />
         </DialogHeader>
 
         <div className="flex flex-col items-center gap-4 py-4">
           <div
             ref={qrRef}
-            className="rounded-xl bg-[#111111] p-6"
+            className="rounded-xl bg-card p-6"
           >
             <QRCode
               value={url}
               size={256}
-              bgColor="#111111"
-              fgColor="#00B03B"
+              bgColor={getQrColors().bg}
+              fgColor={getQrColors().fg}
             />
           </div>
-          <p className="font-mono text-primary-text text-center text-sm">
-            {url}
-          </p>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleCopy}>
-            <Copy className="size-4 mr-1.5" />
-            Copy Link
-          </Button>
           <Button onClick={handleDownload}>
             <Download className="size-4 mr-1.5" />
             Download PNG

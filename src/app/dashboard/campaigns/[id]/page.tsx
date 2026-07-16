@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -29,7 +29,7 @@ export default async function CampaignDetailPage({
   searchParams: Promise<{ range?: string }>
 }) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
   if (!user) redirect('/login')
 
   const { id } = await params
@@ -192,9 +192,9 @@ export default async function CampaignDetailPage({
             <CardContent>
               <div className="flex flex-col items-center text-center gap-4 py-12">
                 <p className="text-muted-foreground">No links in this campaign yet.</p>
-                <Link href="/dashboard/create">
-                  <Button>Create Link</Button>
-                </Link>
+                <Button render={<Link href="/dashboard/create" />}>
+                  Create Link
+                </Button>
               </div>
             </CardContent>
           )}

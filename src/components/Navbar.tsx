@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { Menu } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
+import { cn } from '@/lib/utils'
 import {
   Sheet,
   SheetTrigger,
@@ -15,7 +17,7 @@ import {
 } from '@/components/ui/sheet'
 
 export function Navbar() {
-  const { user, loading } = useAuth()
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
 
   return (
@@ -25,11 +27,10 @@ export function Navbar() {
         tws.bio
       </Link>
 
-      {/* Desktop nav links */}
+      {/* Desktop nav links — the logged-out set is the optimistic default (no
+          skeleton on the marketing shell); it swaps once a session resolves. */}
       <div className="hidden md:flex items-center gap-4">
-        {loading ? (
-          <div className="bg-muted animate-pulse rounded h-8 w-24" />
-        ) : user ? (
+        {user ? (
           <>
             <Link
               href="/"
@@ -37,9 +38,9 @@ export function Navbar() {
             >
               Home
             </Link>
-            <Link href="/dashboard">
-              <Button size="sm">Dashboard</Button>
-            </Link>
+            <Button render={<Link href="/dashboard" />} size="sm">
+              Dashboard
+            </Button>
           </>
         ) : (
           <>
@@ -55,9 +56,9 @@ export function Navbar() {
             >
               Log in
             </Link>
-            <Link href="/signup">
-              <Button size="sm">Sign up</Button>
-            </Link>
+            <Button render={<Link href="/signup" />} size="sm">
+              Sign up
+            </Button>
           </>
         )}
       </div>
@@ -77,9 +78,7 @@ export function Navbar() {
               <SheetTitle>Navigation</SheetTitle>
             </SheetHeader>
             <nav className="flex flex-col gap-4 mt-4">
-              {loading ? (
-                <div className="bg-muted animate-pulse rounded h-8 w-24" />
-              ) : user ? (
+              {user ? (
                 <>
                   <SheetClose
                     render={
@@ -124,10 +123,15 @@ export function Navbar() {
                   >
                     Log in
                   </SheetClose>
-                  <SheetClose render={<Link href="/signup" />}>
-                    <Button size="sm" className="w-full">
-                      Sign up
-                    </Button>
+                  <SheetClose
+                    render={
+                      <Link
+                        href="/signup"
+                        className={cn(buttonVariants({ size: 'sm' }), 'w-full')}
+                      />
+                    }
+                  >
+                    Sign up
                   </SheetClose>
                 </>
               )}

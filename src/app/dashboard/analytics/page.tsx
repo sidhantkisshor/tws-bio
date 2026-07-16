@@ -1,7 +1,16 @@
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
+import {
+  getClicksOverTimeResult,
+  getDeviceBreakdownResult,
+  getBrowserBreakdownResult,
+  getTopReferrersResult,
+  getCountryBreakdownResult,
+  getTotalClicksResult,
+  type TimeRange,
+} from '@/lib/analytics'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { DeviceChart } from '@/components/dashboard/DeviceChart'
@@ -9,11 +18,17 @@ import { BrowserChart } from '@/components/dashboard/BrowserChart'
 import { ReferrerChart } from '@/components/dashboard/ReferrerChart'
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
 import { ClicksOverTimeChart } from '@/components/charts/ClicksOverTimeChart'
-import { TrendChip, computeTrend } from '@/components/dashboard/StatCard'
+import { StatCard, computeTrend } from '@/components/dashboard/StatCard'
 import { BarListChart } from '@/components/dashboard/BarListChart'
 import { AlertTriangle } from 'lucide-react'
 
 const VALID_RANGES = new Set(['7', '30', '90', 'all'])
+const RANGE_TO_TIME_RANGE: Record<string, TimeRange> = {
+  '7': '7d',
+  '30': '30d',
+  '90': '90d',
+  all: 'all',
+}
 
 export default async function AnalyticsPage({
   searchParams,
@@ -21,9 +36,7 @@ export default async function AnalyticsPage({
   searchParams: Promise<{ range?: string }>
 }) {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
 
   if (!user) {
     redirect('/login')
@@ -31,6 +44,7 @@ export default async function AnalyticsPage({
 
   const { range: rangeParam } = await searchParams
   const range = VALID_RANGES.has(rangeParam || '') ? rangeParam! : '30'
+  const timeRange = RANGE_TO_TIME_RANGE[range]
 
   // Calculate start date
   let startDate: Date | null = null
@@ -39,12 +53,53 @@ export default async function AnalyticsPage({
     startDate = new Date()
     startDate.setDate(startDate.getDate() - days)
   }
+  // One exact window boundary shared by every aggregation below (RPC helpers
+  // and the prior-period count), so no two queries disagree by milliseconds.
+  const since = startDate ? startDate.toISOString() : null
 
-  // Get user's link IDs (short_code needed for the per-link breakdown below)
-  const { data: userLinks, error: userLinksError } = await supabase
+  // Get user's link IDs (short_code + a per-link ranged click count ride
+  // along via the embedded `clicks(count)` aggregate — it feeds the Top
+  // Links breakdown below without fetching a single raw click row, and
+  // clicks RLS still applies to the embedded count).
+  let firstLinksQuery = supabase
     .from('links')
-    .select('id, short_code')
+    .select('id, short_code, clicks(count)', { count: 'exact' })
     .eq('user_id', user.id)
+    .order('id', { ascending: true })
+    .range(0, 999)
+  if (since) {
+    firstLinksQuery = firstLinksQuery.gte('clicks.clicked_at', since)
+  }
+  const firstLinksResult = await firstLinksQuery
+  let userLinks = firstLinksResult.data || []
+  let userLinksError = firstLinksResult.error
+
+  // PostgREST caps response rows. Page through any remaining links so the
+  // downstream RPCs receive every owned ID instead of silently stopping at
+  // the project's row limit. The common case remains a single request.
+  const totalOwnedLinks = firstLinksResult.count || 0
+  if (!userLinksError && totalOwnedLinks > userLinks.length && userLinks.length > 0) {
+    const pageSize = userLinks.length
+    const pageRequests = []
+    for (let from = pageSize; from < totalOwnedLinks; from += pageSize) {
+      let pageQuery = supabase
+        .from('links')
+        .select('id, short_code, clicks(count)')
+        .eq('user_id', user.id)
+        .order('id', { ascending: true })
+        .range(from, Math.min(from + pageSize - 1, totalOwnedLinks - 1))
+      if (since) pageQuery = pageQuery.gte('clicks.clicked_at', since)
+      pageRequests.push(pageQuery)
+    }
+
+    const extraPages = await Promise.all(pageRequests)
+    const failedPage = extraPages.find((page) => page.error)
+    if (failedPage?.error) {
+      userLinksError = failedPage.error
+    } else {
+      userLinks = userLinks.concat(extraPages.flatMap((page) => page.data || []))
+    }
+  }
 
   if (userLinksError) {
     console.error('[analytics-page] userLinks query:', userLinksError)
@@ -53,7 +108,7 @@ export default async function AnalyticsPage({
     // yet" — surface a distinct error state with a retry affordance.
     return (
       <div>
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <h1 className="font-heading text-2xl text-foreground">Analytics</h1>
           <Suspense>
             <DateRangePicker />
@@ -70,9 +125,9 @@ export default async function AnalyticsPage({
                 Something went wrong. Please try again.
               </p>
             </div>
-            <Link href="/dashboard/analytics">
-              <Button variant="outline">Try again</Button>
-            </Link>
+            <Button render={<Link href="/dashboard/analytics" />} variant="outline">
+              Try again
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -82,7 +137,7 @@ export default async function AnalyticsPage({
   if (!userLinks || userLinks.length === 0) {
     return (
       <div>
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <h1 className="font-heading text-2xl text-foreground">Analytics</h1>
           <Suspense>
             <DateRangePicker />
@@ -93,9 +148,9 @@ export default async function AnalyticsPage({
             <p className="text-muted-foreground">
               No links created yet. Create a link to start seeing analytics.
             </p>
-            <Link href="/dashboard/create">
-              <Button>Create Link</Button>
-            </Link>
+            <Button render={<Link href="/dashboard/create" />}>
+              Create Link
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -103,63 +158,101 @@ export default async function AnalyticsPage({
   }
 
   const linkIds = userLinks.map((l) => l.id)
-  const shortCodeByLinkId: Record<string, string> = {}
-  for (const l of userLinks) {
-    shortCodeByLinkId[l.id] = l.short_code
-  }
 
-  // Query clicks with date filter
-  let query = supabase
-    .from('clicks')
-    .select(
-      'clicked_at, device_type, browser_name, os_name, referrer_domain, link_id, country'
+  // Every aggregation runs DB-side via the SECURITY INVOKER RPC helpers
+  // (clicks RLS applies — called as the logged-in user) in a single parallel
+  // wave, replacing the old fetch-every-raw-click-row + JS aggregation that
+  // silently undercounted past PostgREST's 1000-row response cap.
+  const filter = { timeRange, linkIds, since }
+  const [
+    clicksSeriesResult,
+    devicesResult,
+    browsersResult,
+    referrersResult,
+    countriesResult,
+    totalClicksResult,
+    priorClicksResult,
+  ] = await Promise.all([
+    getClicksOverTimeResult(filter),
+    getDeviceBreakdownResult(filter),
+    getBrowserBreakdownResult(filter),
+    getTopReferrersResult(filter),
+    getCountryBreakdownResult(filter),
+    getTotalClicksResult(filter),
+    // Count the combined current + prior span via the existing POST-based RPC;
+    // subtracting the current total below yields the bounded prior window. This
+    // avoids a potentially oversized `.in(linkIds)` query string for accounts
+    // with many links.
+    (async () => {
+      if (!startDate) return null
+      const days = parseInt(range, 10)
+      const priorStart = new Date(startDate)
+      priorStart.setDate(priorStart.getDate() - days)
+      return getTotalClicksResult({
+        timeRange,
+        linkIds,
+        since: priorStart.toISOString(),
+      })
+    })(),
+  ])
+
+  // A failed aggregation must never masquerade as "0 clicks" — render the
+  // same destructive-tinted error state used for the links query above.
+  const mainError =
+    clicksSeriesResult.error ||
+    devicesResult.error ||
+    browsersResult.error ||
+    referrersResult.error ||
+    countriesResult.error ||
+    totalClicksResult.error
+
+  if (mainError) {
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="font-heading text-2xl text-foreground">Analytics</h1>
+          <Suspense>
+            <DateRangePicker />
+          </Suspense>
+        </div>
+        <Card className="bg-card border-border">
+          <CardContent className="flex flex-col items-center text-center gap-4 py-12">
+            <div className="rounded-full bg-destructive/10 p-3">
+              <AlertTriangle className="size-6 text-destructive" />
+            </div>
+            <div>
+              <p className="text-foreground font-medium">Couldn&apos;t load analytics</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Something went wrong. Please try again.
+              </p>
+            </div>
+            <Button render={<Link href="/dashboard/analytics" />} variant="outline">
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     )
-    .in('link_id', linkIds)
-
-  if (range !== 'all' && startDate) {
-    query = query.gte('clicked_at', startDate.toISOString())
   }
 
-  // Prior-period click count (same-length window immediately preceding the
-  // current one) for the Total Clicks trend delta. Not meaningful for "all
-  // time" since there's no bounded prior window to compare against.
-  let priorTotalClicks: number | null = null
-  if (range !== 'all' && startDate) {
-    const days = parseInt(range, 10)
-    const priorStart = new Date(startDate)
-    priorStart.setDate(priorStart.getDate() - days)
-
-    const { count: priorCount, error: priorClicksError } = await supabase
-      .from('clicks')
-      .select('id', { count: 'exact', head: true })
-      .in('link_id', linkIds)
-      .gte('clicked_at', priorStart.toISOString())
-      .lt('clicked_at', startDate.toISOString())
-
-    if (priorClicksError) {
-      console.error('[analytics-page] prior clicks query:', priorClicksError)
-    }
-    priorTotalClicks = priorCount || 0
+  if (priorClicksResult?.error) {
+    console.error('[analytics-page] prior clicks query failed')
   }
+  // On a prior-count failure hide the trend chip rather than comparing the
+  // current window against a fake zero baseline.
+  const priorTotalClicks =
+    priorClicksResult && !priorClicksResult.error
+      ? Math.max(priorClicksResult.data - totalClicksResult.data, 0)
+      : null
 
-  const { data: clicks, error: clicksError } = await query
-
-  if (clicksError) {
-    console.error('[analytics-page] clicks query:', clicksError)
-  }
-
-  // Process data
-  const clicksData = clicks || []
-  const totalClicks = clicksData.length
+  const totalClicks = totalClicksResult.data
   const totalClicksTrend =
     priorTotalClicks !== null ? computeTrend(totalClicks, priorTotalClicks) : null
 
-  // Clicks over time: group by date
+  // Clicks over time: day buckets from the RPC, keyed by date
   const clicksByDate: Record<string, number> = {}
-  for (const click of clicksData) {
-    if (!click.clicked_at) continue
-    const date = click.clicked_at.split('T')[0]
-    clicksByDate[date] = (clicksByDate[date] || 0) + 1
+  for (const row of clicksSeriesResult.data) {
+    clicksByDate[row.date.slice(0, 10)] = row.clicks
   }
 
   // Fill in missing dates for a continuous chart
@@ -193,68 +286,32 @@ export default async function AnalyticsPage({
     }
   }
 
-  // Device breakdown
-  const deviceCounts: Record<string, number> = {}
-  for (const click of clicksData) {
-    const device = click.device_type || 'unknown'
-    deviceCounts[device] = (deviceCounts[device] || 0) + 1
-  }
-  const deviceData = Object.entries(deviceCounts)
-    .map(([device, count]) => ({ device, count }))
-    .sort((a, b) => b.count - a.count)
+  // Device breakdown (RPC rows arrive pre-sorted, largest first)
+  const deviceData = devicesResult.data.map((d) => ({ device: d.name, count: d.value }))
 
   // Browser breakdown (top 6)
-  const browserCounts: Record<string, number> = {}
-  for (const click of clicksData) {
-    const browser = click.browser_name || 'Unknown'
-    browserCounts[browser] = (browserCounts[browser] || 0) + 1
-  }
-  const browserData = Object.entries(browserCounts)
-    .map(([browser, count]) => ({ browser, count }))
-    .sort((a, b) => b.count - a.count)
+  const browserData = browsersResult.data
+    .map((b) => ({ browser: b.name, count: b.value }))
     .slice(0, 6)
 
   // Top referrers (top 10)
-  const referrerCounts: Record<string, number> = {}
-  for (const click of clicksData) {
-    const referrer = click.referrer_domain || 'Direct'
-    referrerCounts[referrer] = (referrerCounts[referrer] || 0) + 1
-  }
-  const referrerData = Object.entries(referrerCounts)
-    .map(([referrer, count]) => ({ referrer, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10)
-
-  // Top links: which of the user's links are actually driving these clicks
-  // (top 10)
-  const linkCounts: Record<string, number> = {}
-  for (const click of clicksData) {
-    if (!click.link_id) continue
-    linkCounts[click.link_id] = (linkCounts[click.link_id] || 0) + 1
-  }
-  const topLinksData = Object.entries(linkCounts)
-    .map(([linkId, count]) => ({
-      label: shortCodeByLinkId[linkId] || 'Unknown',
-      count,
-    }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10)
+  const referrerData = referrersResult.data.map((r) => ({ referrer: r.name, count: r.clicks }))
 
   // Top countries (top 10)
-  const countryCounts: Record<string, number> = {}
-  for (const click of clicksData) {
-    const country = click.country || 'Unknown'
-    countryCounts[country] = (countryCounts[country] || 0) + 1
-  }
-  const countryData = Object.entries(countryCounts)
-    .map(([country, count]) => ({ label: country, count }))
+  const countryData = countriesResult.data.map((c) => ({ label: c.name, count: c.clicks }))
+
+  // Top links: which of the user's links are actually driving these clicks
+  // (top 10) — per-link ranged counts from the embedded aggregate above.
+  const topLinksData = userLinks
+    .map((l) => ({ label: l.short_code, count: l.clicks[0]?.count ?? 0 }))
+    .filter((l) => l.count > 0)
     .sort((a, b) => b.count - a.count)
     .slice(0, 10)
 
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="font-heading text-2xl text-foreground">Analytics</h1>
         <Suspense>
           <DateRangePicker />
@@ -262,27 +319,14 @@ export default async function AnalyticsPage({
       </div>
 
       {/* Total clicks stat */}
-      <Card className="bg-card border-border mb-8">
-        <CardContent className="p-5">
-          <p className="text-sm text-muted-foreground">
-            Total Clicks{' '}
-            {range !== 'all'
-              ? `(Last ${range} days)`
-              : '(All time)'}
-          </p>
-          <p className="text-3xl font-bold font-mono text-foreground">
-            {totalClicks.toLocaleString()}
-          </p>
-          {totalClicksTrend && (
-            <div className="flex items-center gap-1.5 mt-1.5">
-              <TrendChip trend={totalClicksTrend} />
-              <span className="text-xs text-muted-foreground">
-                vs prior {range} days
-              </span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <div className="mb-8">
+        <StatCard
+          title={range !== 'all' ? `Total Clicks (Last ${range} days)` : 'Total Clicks (All time)'}
+          value={totalClicks.toLocaleString()}
+          trend={totalClicksTrend}
+          trendLabel={`vs prior ${range} days`}
+        />
+      </div>
 
       {/* Clicks Over Time */}
       <Card className="bg-card border-border mb-8">

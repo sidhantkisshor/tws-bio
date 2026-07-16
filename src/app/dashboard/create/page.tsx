@@ -1,12 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
+import { getAuthenticatedUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { CreateLinkForm } from '@/components/CreateLinkForm'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
 export default async function CreateLinkPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
   if (!user) redirect('/login')
 
   return (

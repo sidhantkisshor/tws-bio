@@ -1,19 +1,21 @@
 'use client'
 
+import { BarChart as RechartsBarChart, Bar, XAxis, YAxis } from 'recharts'
 import {
-  BarChart as RechartsBarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from '@/components/ui/chart'
 
 interface BarChartProps {
   data: { name: string; clicks: number }[]
   color?: string
 }
 
+// Rendered via ChartContainer (like ClickChart/BrowserChart) so tick fill and
+// tooltip styling come from the chart tokens instead of the hardcoded hexes
+// this component used to carry — one tooltip appearance across the dashboard.
 export function BarChart({ data, color = 'var(--chart-1)' }: BarChartProps) {
   // Categories with zero clicks in every slot are indistinguishable from "no data" —
   // an axis with only invisible zero-width bars reads as broken, not empty.
@@ -23,22 +25,20 @@ export function BarChart({ data, color = 'var(--chart-1)' }: BarChartProps) {
     return <div className="h-48 flex items-center justify-center text-muted-foreground">No data</div>
   }
 
+  const chartConfig = {
+    clicks: { label: 'Clicks', color },
+  } satisfies ChartConfig
+
   return (
-    <ResponsiveContainer width="100%" height={192}>
+    <ChartContainer config={chartConfig} className="h-48 w-full">
+      {/* margin left:80 + YAxis width:75 are layout-load-bearing — category labels need the room */}
       <RechartsBarChart data={data} layout="vertical" margin={{ left: 80 }}>
-        <XAxis type="number" tick={{ fontSize: 12, fill: '#a3a3a3' }} allowDecimals={false} />
-        <YAxis
-          type="category"
-          dataKey="name"
-          tick={{ fontSize: 12, fill: '#a3a3a3' }}
-          width={75}
-        />
-        <Tooltip
-          contentStyle={{ backgroundColor: '#111111', border: '1px solid #1f1f1f', borderRadius: '8px', color: '#e5e5e5' }}
-        />
+        <XAxis type="number" tick={{ fontSize: 12 }} allowDecimals={false} />
+        <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={75} />
+        <ChartTooltip content={<ChartTooltipContent />} />
         {/* minPointSize keeps small-but-nonzero values from collapsing to an invisible sliver */}
-        <Bar dataKey="clicks" fill={color} radius={[0, 4, 4, 0]} minPointSize={4} />
+        <Bar dataKey="clicks" fill="var(--color-clicks)" radius={[0, 4, 4, 0]} minPointSize={4} />
       </RechartsBarChart>
-    </ResponsiveContainer>
+    </ChartContainer>
   )
 }

@@ -1,16 +1,30 @@
 'use client'
 
 import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Copy, Pencil, QrCode, Power, Trash2 } from 'lucide-react'
+import { Pencil, QrCode, Power, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { getShortUrl } from '@/lib/utils'
 import type { Database } from '@/types/database'
 import { Button } from '@/components/ui/button'
-import { EditLinkDialog } from '@/components/dashboard/EditLinkDialog'
-import { DeleteLinkDialog } from '@/components/dashboard/DeleteLinkDialog'
-import { QRCodeDialog } from '@/components/dashboard/QRCodeDialog'
+
+// The dialogs only matter after a click, yet they were statically imported and
+// mounted for every row — react-qr-code alone is ~51KB of table bundle. Loading
+// them via next/dynamic and mounting on first open keeps that JS out of the
+// initial links-page chunk entirely.
+const EditLinkDialog = dynamic(
+  () => import('@/components/dashboard/EditLinkDialog').then((m) => m.EditLinkDialog),
+  { ssr: false, loading: () => null },
+)
+const DeleteLinkDialog = dynamic(
+  () => import('@/components/dashboard/DeleteLinkDialog').then((m) => m.DeleteLinkDialog),
+  { ssr: false, loading: () => null },
+)
+const QRCodeDialog = dynamic(
+  () => import('@/components/dashboard/QRCodeDialog').then((m) => m.QRCodeDialog),
+  { ssr: false, loading: () => null },
+)
 
 type Link = Database['public']['Tables']['links']['Row']
 
@@ -19,16 +33,12 @@ export function LinkActions({ link }: { link: Link }) {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [qrOpen, setQrOpen] = useState(false)
+  // "Mounted" flips true on first open and stays true, so a dialog is never in
+  // the tree (or downloaded) before it is first needed.
+  const [editMounted, setEditMounted] = useState(false)
+  const [deleteMounted, setDeleteMounted] = useState(false)
+  const [qrMounted, setQrMounted] = useState(false)
   const [toggling, setToggling] = useState(false)
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(getShortUrl(link.short_code))
-      toast.success('Copied!')
-    } catch {
-      toast.error('Failed to copy')
-    }
-  }
 
   async function setActive(nextActive: boolean) {
     const supabase = createClient()
@@ -92,19 +102,16 @@ export function LinkActions({ link }: { link: Link }) {
 
   return (
     <>
+      {/* No Copy button here — the row's TickerChip (LinksTable short-code cell)
+          is the single copy affordance, with the fill flash + Check morph. */}
       <div className="flex items-center gap-1">
         <Button
           variant="ghost"
           size="icon-xs"
-          onClick={handleCopy}
-          aria-label="Copy short URL"
-        >
-          <Copy className="size-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={() => setEditOpen(true)}
+          onClick={() => {
+            setEditMounted(true)
+            setEditOpen(true)
+          }}
           aria-label="Edit link"
         >
           <Pencil className="size-3.5" />
@@ -112,7 +119,10 @@ export function LinkActions({ link }: { link: Link }) {
         <Button
           variant="ghost"
           size="icon-xs"
-          onClick={() => setQrOpen(true)}
+          onClick={() => {
+            setQrMounted(true)
+            setQrOpen(true)
+          }}
           aria-label="Show QR code"
         >
           <QrCode className="size-3.5" />
@@ -130,7 +140,10 @@ export function LinkActions({ link }: { link: Link }) {
         <Button
           variant="ghost"
           size="icon-xs"
-          onClick={() => setDeleteOpen(true)}
+          onClick={() => {
+            setDeleteMounted(true)
+            setDeleteOpen(true)
+          }}
           aria-label="Delete link"
           className="text-destructive hover:text-destructive"
         >
@@ -138,21 +151,27 @@ export function LinkActions({ link }: { link: Link }) {
         </Button>
       </div>
 
-      <EditLinkDialog
-        link={link}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-      />
-      <DeleteLinkDialog
-        link={link}
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-      />
-      <QRCodeDialog
-        shortCode={link.short_code}
-        open={qrOpen}
-        onOpenChange={setQrOpen}
-      />
+      {editMounted && (
+        <EditLinkDialog
+          link={link}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+        />
+      )}
+      {deleteMounted && (
+        <DeleteLinkDialog
+          link={link}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+        />
+      )}
+      {qrMounted && (
+        <QRCodeDialog
+          shortCode={link.short_code}
+          open={qrOpen}
+          onOpenChange={setQrOpen}
+        />
+      )}
     </>
   )
 }

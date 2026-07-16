@@ -39,9 +39,9 @@ export default function DashboardError({
           </p>
           <div className="flex gap-3 mt-2">
             <Button onClick={() => reset()}>Try again</Button>
-            <Link href="/dashboard">
-              <Button variant="outline">Back to Overview</Button>
-            </Link>
+            <Button render={<Link href="/dashboard" />} variant="outline">
+              Back to Overview
+            </Button>
           </div>
         </CardContent>
       </Card>

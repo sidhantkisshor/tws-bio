@@ -1,6 +1,17 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse, after } from 'next/server'
 import { BLOCKED_HOSTNAMES } from '@/lib/utils'
+import type { Database } from '@/types/database'
+
+// This route only calls SECURITY DEFINER RPCs (get_link_by_short_code,
+// record_click_and_increment), so it never needs the caller's session. A
+// module-level anon client skips the per-request cookies() await and cookie-jar
+// copy the @supabase/ssr server client pays on the app's hottest path.
+const supabase = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  { auth: { persistSession: false, autoRefreshToken: false } }
+)
 
 function isIOS(userAgent: string): boolean {
   // iPadOS 13+ reports as Macintosh, detect via touch support hint in UA
@@ -54,12 +65,93 @@ function jsonEscapeForHtml(value: string): string {
     .replace(/>/g, '\\u003e')
 }
 
+function htmlEscape(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+const SHORT_DOMAIN = process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'
+
+// Branded dark shell shared by the deep-link interstitial and dead-link pages.
+// The CSP (default-src 'none') blocks every external asset, so everything is
+// inline: system font stacks, pure-CSS spinner, no images or webfonts.
+function brandPageHtml(opts: {
+  title: string
+  cardHtml: string
+  extraCss?: string
+  footerScript?: string
+}): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0a0a0a">
+<title>${opts.title}</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:20px;min-height:100vh;margin:0;padding:24px;background:#0a0a0a;color:#FAFAFA}
+.card{text-align:center;padding:32px 28px;background:#111111;border:1px solid #1f1f1f;border-radius:10px;max-width:400px;width:100%}
+.eyebrow{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.14em;color:#999999;margin:0 0 16px}
+h1{font-size:22px;font-weight:600;margin:0 0 10px}
+p{color:#999999;font-size:14px;line-height:1.5;margin:0}
+.btn{display:inline-block;margin-top:20px;padding:12px 24px;background:#00802B;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:500;font-size:14px;transition:background-color 150ms}
+.btn:hover{background:#00B03B}
+.btn:focus-visible{outline:2px solid #00B03B;outline-offset:2px}
+.wordmark{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12px;letter-spacing:0.08em;color:#999999}
+${opts.extraCss ?? ''}
+</style>
+</head>
+<body>
+<div class="card">
+${opts.cardHtml}
+</div>
+<p class="wordmark">${htmlEscape(SHORT_DOMAIN)}</p>
+${opts.footerScript ?? ''}
+</body>
+</html>`
+}
+
+// Dead-link pages: same branded shell and security posture as the interstitial
+// (script-src omitted from the CSP — these pages ship no JS), same status codes
+// as the old plain-text responses. The request-origin fallback is escaped
+// before interpolation; all other copy is fixed.
+function deadLinkResponse(
+  status: 403 | 404 | 410,
+  eyebrow: string,
+  message: string,
+  homeUrl: string,
+): NextResponse {
+  const safeHomeUrl = htmlEscape(homeUrl)
+  const safeDomain = htmlEscape(SHORT_DOMAIN)
+  const html = brandPageHtml({
+    title: eyebrow,
+    cardHtml: `<h1 class="eyebrow">${eyebrow}</h1>
+<p>${message}</p>
+<a class="btn" href="${safeHomeUrl}">Go to ${safeDomain}</a>`,
+  })
+  return new NextResponse(html, {
+    status,
+    headers: {
+      'Content-Type': 'text/html',
+      'Cache-Control': 'private, no-store',
+      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+    },
+  })
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ shortCode: string }> }
 ) {
   const { shortCode } = await params
-  const supabase = await createClient()
+  const homeUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
 
   const userAgent = request.headers.get('user-agent') || ''
   const referer = request.headers.get('referer') || null
@@ -92,17 +184,17 @@ export async function GET(
   const link = Array.isArray(linkResult) ? linkResult[0] : linkResult
 
   if (error || !link) {
-    return new NextResponse('Link not found', { status: 404 })
+    return deadLinkResponse(404, '404 — LINK NOT FOUND', "This short link doesn't exist or is no longer active.", homeUrl)
   }
 
   // Check if the link has expired
   if (link.expires_at && new Date(link.expires_at) < new Date()) {
-    return new NextResponse('This link has expired', { status: 410 })
+    return deadLinkResponse(410, '410 — LINK EXPIRED', 'This link has passed its expiry date and no longer redirects.', homeUrl)
   }
 
   // Check if the link has exceeded max clicks
   if (link.max_clicks && (link.total_clicks ?? 0) >= link.max_clicks) {
-    return new NextResponse('This link has reached its click limit', { status: 410 })
+    return deadLinkResponse(410, '410 — CLICK LIMIT REACHED', 'This link has reached its maximum number of clicks.', homeUrl)
   }
 
   // Track analytics asynchronously via after()
@@ -149,68 +241,46 @@ export async function GET(
       const safeFallbackUrl = jsonEscapeForHtml(fallbackUrl)
       const fallbackUrlAttr = encodeURI(fallbackUrl)
 
-      const html = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Redirecting...</title>
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              min-height: 100vh;
-              margin: 0;
-              background: #f5f5f5;
-            }
-            .container {
-              text-align: center;
-              padding: 20px;
-              background: white;
-              border-radius: 10px;
-              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-              max-width: 400px;
-            }
-            h1 { color: #333; font-size: 24px; margin-bottom: 10px; }
-            p { color: #666; margin: 10px 0; }
-            a {
-              display: inline-block;
-              margin-top: 20px;
-              padding: 12px 24px;
-              background: #007AFF;
-              color: white;
-              text-decoration: none;
-              border-radius: 6px;
-              font-weight: 500;
-            }
-            a:hover { background: #0051D5; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>Opening app...</h1>
-            <p>If the app doesn't open automatically, click below:</p>
-            <a href="${fallbackUrlAttr}" id="fallback">Continue to website</a>
-          </div>
-          <script>
-            // Attempt to open the deep link
-            window.location.href = ${safeDeepLink};
+      const html = brandPageHtml({
+        title: 'Redirecting...',
+        // Spinner only when motion is allowed; static text otherwise (and in
+        // browsers without media-query support, which fail safe to the text).
+        extraCss: `.spin{display:none}
+.spin-static{margin:0 0 14px;font-size:13px}
+@media (prefers-reduced-motion:no-preference){
+.spin{display:inline-block;width:16px;height:16px;border:2px solid #1f1f1f;border-top-color:#00B03B;border-radius:50%;animation:spin .8s linear infinite;margin:0 0 14px}
+.spin-static{display:none}
+}
+@keyframes spin{to{transform:rotate(360deg)}}`,
+        cardHtml: `<p class="eyebrow">Redirecting</p>
+<div class="spin" aria-hidden="true"></div>
+<p class="spin-static">One moment&hellip;</p>
+<h1>Opening app...</h1>
+<p>If the app doesn't open automatically, click below:</p>
+<a href="${fallbackUrlAttr}" id="fallback" class="btn">Continue to website</a>`,
+        footerScript: `<script>
+// Attempt to open the deep link
+window.location.href = ${safeDeepLink};
 
-            // Fallback to web URL after a delay
-            setTimeout(function() {
-              window.location.href = ${safeFallbackUrl};
-            }, 2500);
-          </script>
-        </body>
-        </html>
-      `
+// Fall back to the web URL after a delay, but cancel the timer once the page is
+// backgrounded (the app opened) so returning users aren't dragged to the fallback.
+// The visible fallback anchor stays tappable either way.
+var fallbackTimer = setTimeout(function () {
+  window.location.href = ${safeFallbackUrl};
+}, 2500);
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden) clearTimeout(fallbackTimer);
+});
+window.addEventListener('pagehide', function () {
+  clearTimeout(fallbackTimer);
+});
+</script>`,
+      })
 
       return new NextResponse(html, {
         headers: {
           'Content-Type': 'text/html',
+          'Cache-Control': 'private, no-store',
           // Escaping is already sound; frame-ancestors/base-uri are defense-in-depth.
           // Future improvement: replace 'unsafe-inline' with a per-response nonce.
           'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
@@ -221,11 +291,14 @@ export async function GET(
     }
   }
 
-  // Regular redirect
+  // Regular redirect. Explicit no-store: click analytics depend on every click
+  // reaching the server, so no browser or CDN may ever cache this 307.
   if (!isSafeUrl(link.original_url)) {
-    return new NextResponse('This link has been flagged as unsafe and cannot be accessed.', { status: 403 })
+    return deadLinkResponse(403, '403 — FLAGGED AS UNSAFE', 'This destination has been flagged as unsafe and cannot be opened.', homeUrl)
   }
-  return NextResponse.redirect(link.original_url)
+  return NextResponse.redirect(link.original_url, {
+    headers: { 'Cache-Control': 'no-store' },
+  })
 }
 
 // Browser detection - order matters: check specific browsers before generic ones

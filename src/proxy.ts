@@ -8,12 +8,15 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder assets
+     * Allowlist: only routes that can use a refreshed Supabase session.
+     * /[shortCode] redirects — the hottest path in the app — never need one,
+     * so short-link clicks skip the Supabase auth round trip entirely.
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/',
+    '/dashboard/:path*',
+    '/login',
+    '/signup',
+    '/resources',
+    '/auth/:path*',
   ],
 }

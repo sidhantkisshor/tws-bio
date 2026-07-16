@@ -11,7 +11,11 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 export default function DashboardLoading() {
   return (
     <div aria-busy="true" aria-live="polite">
-      <div className="h-8 w-40 rounded-md bg-muted animate-pulse mb-6" />
+      <div className="flex items-center justify-between mb-6 gap-4">
+        <div className="h-8 w-40 rounded-md bg-muted" />
+        {/* Create Link button */}
+        <div className="h-9 w-28 rounded-md bg-muted" />
+      </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -20,10 +24,12 @@ export default function DashboardLoading() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="h-3.5 w-20 rounded bg-muted animate-pulse" />
-                  <div className="h-7 w-14 rounded bg-muted animate-pulse mt-2" />
+                  <div className="h-3.5 w-20 rounded bg-muted" />
+                  <div className="h-7 w-14 rounded bg-muted mt-2" />
+                  {/* Trend chip + "vs prior 30 days" row */}
+                  <div className="h-3 w-28 rounded bg-muted mt-2" />
                 </div>
-                <div className="h-6 w-6 rounded bg-muted animate-pulse" />
+                <div className="h-6 w-6 rounded bg-muted" />
               </div>
             </CardContent>
           </Card>
@@ -33,22 +39,22 @@ export default function DashboardLoading() {
       {/* Chart card */}
       <Card className="bg-card border-border mb-8">
         <CardHeader>
-          <div className="h-4 w-52 rounded bg-muted animate-pulse" />
+          <div className="h-4 w-52 rounded bg-muted" />
         </CardHeader>
         <CardContent>
-          <div className="h-64 w-full rounded-md bg-muted/50 animate-pulse" />
+          <div className="h-64 w-full rounded-md bg-muted/50" />
         </CardContent>
       </Card>
 
       {/* Table card */}
       <Card className="bg-card border-border">
         <CardHeader className="flex flex-row items-center justify-between">
-          <div className="h-4 w-28 rounded bg-muted animate-pulse" />
-          <div className="h-4 w-14 rounded bg-muted animate-pulse" />
+          <div className="h-4 w-28 rounded bg-muted" />
+          <div className="h-4 w-14 rounded bg-muted" />
         </CardHeader>
         <CardContent className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-10 w-full rounded bg-muted/50 animate-pulse" />
+            <div key={i} className="h-10 w-full rounded bg-muted/50" />
           ))}
         </CardContent>
       </Card>

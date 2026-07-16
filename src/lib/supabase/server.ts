@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { cache } from 'react'
 import type { Database } from '@/types/database'
 
 export async function createClient() {
@@ -28,3 +29,20 @@ export async function createClient() {
     }
   )
 }
+
+/**
+ * Returns the authenticated user for the current request, or null.
+ *
+ * `auth.getUser()` is a network round trip to the Supabase Auth server, and
+ * the dashboard layout plus every dashboard page need the result — React
+ * `cache()` memoizes it per request so one navigation pays for exactly one
+ * validation call instead of one per segment. Deliberately stays on
+ * getUser() (not getSession()) since this feeds security-sensitive guards.
+ */
+export const getAuthenticatedUser = cache(async () => {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  return user
+})

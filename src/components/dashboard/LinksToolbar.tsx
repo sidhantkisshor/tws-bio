@@ -113,7 +113,7 @@ export function LinksToolbar() {
       </div>
 
       <div
-        className={`flex flex-wrap items-center gap-2 transition-opacity ${isPending ? 'opacity-60' : ''}`}
+        className={`flex flex-wrap items-center gap-2 ${isPending ? 'opacity-60' : ''}`}
         aria-busy={isPending}
       >
         <Select value={currentType} onValueChange={(v) => v && updateParam('type', v)}>

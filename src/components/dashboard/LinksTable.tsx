@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { getShortUrl, formatDate } from '@/lib/utils'
+import { formatDate, getShortUrl } from '@/lib/utils'
 import type { Database } from '@/types/database'
+import { TickerChip } from '@/components/TickerChip'
 import { LinkActions } from '@/components/dashboard/LinkActions'
 import { MiniSparkline } from '@/components/charts/MiniSparkline'
 import { TypeBadge } from '@/components/dashboard/TypeBadge'
@@ -181,14 +182,9 @@ export function LinksTable({
                   />
                 </TableCell>
                 <TableCell className="px-4 py-3">
-                  <a
-                    href={getShortUrl(link.short_code)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-primary-text hover:text-primary-text/80 hover:underline"
-                  >
-                    {link.short_code}
-                  </a>
+                  {/* Signature ticker chip — brings the row's single copy affordance
+                      (fill flash + Check morph), so LinkActions carries no Copy button. */}
+                  <TickerChip code={link.short_code} href={getShortUrl(link.short_code)} />
                 </TableCell>
                 <TableCell className="px-4 py-3">
                   <span
@@ -204,13 +200,13 @@ export function LinksTable({
                 <TableCell className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <MiniSparkline data={sparklines[link.id] || []} />
-                    <span className="font-mono">{link.total_clicks || 0}</span>
+                    <span className="font-mono tabular-nums">{link.total_clicks || 0}</span>
                   </div>
                 </TableCell>
                 <TableCell className="px-4 py-3">
                   <StatusBadge active={link.is_active} />
                 </TableCell>
-                <TableCell className="px-4 py-3 text-sm text-muted-foreground">
+                <TableCell className="px-4 py-3 text-sm tabular-nums text-muted-foreground">
                   {link.created_at ? formatDate(link.created_at) : '---'}
                 </TableCell>
                 <TableCell className="px-4 py-3">
@@ -237,15 +233,8 @@ export function LinksTable({
                   aria-label={`Select ${link.short_code}`}
                 />
                 <div className="min-w-0">
-                  <a
-                    href={getShortUrl(link.short_code)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block truncate font-mono text-primary-text hover:text-primary-text/80 hover:underline"
-                  >
-                    {link.short_code}
-                  </a>
-                  <span className="mt-0.5 block truncate text-sm text-muted-foreground">
+                  <TickerChip code={link.short_code} href={getShortUrl(link.short_code)} />
+                  <span className="mt-1 block truncate text-sm text-muted-foreground">
                     {link.original_url}
                   </span>
                 </div>
@@ -256,8 +245,8 @@ export function LinksTable({
             <div className="flex items-center gap-3 pl-7 text-sm text-muted-foreground">
               <TypeBadge type={link.link_type} />
               <MiniSparkline data={sparklines[link.id] || []} />
-              <span className="font-mono">{link.total_clicks || 0} clicks</span>
-              <span className="ml-auto">
+              <span className="font-mono tabular-nums">{link.total_clicks || 0} clicks</span>
+              <span className="ml-auto tabular-nums">
                 {link.created_at ? formatDate(link.created_at) : '---'}
               </span>
             </div>

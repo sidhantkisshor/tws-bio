@@ -1,5 +1,6 @@
+import { Navbar } from '@/components/Navbar'
+import { Footer } from '@/components/Footer'
 import { resources } from '@/config/resources'
-import Link from 'next/link'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -9,31 +10,32 @@ export const metadata: Metadata = {
 
 export default function ResourcesPage() {
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-lg font-bold text-foreground">tws.bio</Link>
-        </div>
-      </header>
+    <div className="min-h-screen bg-background flex flex-col">
+      <Navbar />
 
-      <main className="max-w-2xl mx-auto px-4 py-12">
-        <h1 className="text-2xl font-bold text-foreground mb-2">Resources</h1>
-        <p className="text-muted-foreground mb-10">Tools, platforms, and links I use for trading.</p>
+      <main className="flex-1 w-full max-w-2xl mx-auto px-4 pt-28 pb-16">
+        <h1 className="text-3xl md:text-4xl font-bold text-foreground leading-tight">
+          Trading{' '}
+          <span className="font-[family-name:var(--font-dm-serif)] italic text-primary-text">
+            resources
+          </span>
+        </h1>
+        <p className="text-muted-foreground mt-3 mb-10">Tools, platforms, and links I use for trading.</p>
 
         <div className="space-y-10">
           {resources.map((group) => (
             <section key={group.category}>
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+              <h2 className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground mb-3">
                 {group.category}
               </h2>
-              <div className="divide-y divide-border border border-border rounded-lg overflow-hidden">
+              <div className="divide-y divide-border border border-border rounded-lg overflow-hidden transition-colors hover:border-primary/30">
                 {group.items.map((item) => (
                   <a
                     key={item.title}
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-between px-4 py-3 hover:bg-muted transition"
+                    className="flex items-center justify-between px-4 py-3 hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
                   >
                     <div>
                       <span className="text-sm font-medium text-foreground">{item.title}</span>
@@ -51,6 +53,8 @@ export default function ResourcesPage() {
           ))}
         </div>
       </main>
+
+      <Footer />
     </div>
   )
 }

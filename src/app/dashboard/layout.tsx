@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { getAuthenticatedUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { DashboardSidebar } from '@/components/dashboard/DashboardSidebar'
 
@@ -7,8 +7,9 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  // Per-request cached — the dashboard pages reuse this same auth lookup
+  // instead of each paying their own round trip to the Auth server.
+  const user = await getAuthenticatedUser()
 
   if (!user) {
     redirect('/login')
