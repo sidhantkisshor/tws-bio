@@ -89,7 +89,7 @@ Ghost tables (exist in schema but not wired into the app): `custom_domains`, `ap
 
 RLS is enabled on all tables. `SECURITY DEFINER` RPCs (`create_link`, `create_deep_link`, `get_link_by_short_code`, `record_click_and_increment`) bypass RLS intentionally — all have `SET search_path = 'public'` to prevent search path injection. The analytics aggregation RPCs (`get_clicks_over_time`, `get_*_breakdown`, `get_total_clicks`) are SECURITY INVOKER on purpose so clicks RLS applies. Anonymous SELECT on `links` is disabled (owner-only policy); the redirect path uses `get_link_by_short_code`.
 
-Migrations are in `supabase/migrations/` (001–016 + a timestamped drop). The remote DB is managed via the Supabase MCP `apply_migration` tool (tracked migration history); local files are the canonical intent but the remote drifted historically — always preflight actual remote state (`pg_proc`, `pg_indexes`, `pg_policies`) before applying. All migrations through 016 were applied to production on 2026-07-15.
+Migrations are in `supabase/migrations/` (001–020 + a timestamped drop). The remote DB is managed via the Supabase MCP `apply_migration` tool (tracked migration history); local files are the canonical intent but the remote drifted historically — always preflight actual remote state (`pg_proc`, `pg_indexes`, `pg_policies`) before applying. All migrations through 020 were applied to production (020 on 2026-07-18: ownership consolidation to the active user account, `youtube:///` URI repair, `total_clicks` reconciliation, unconditional counter increment in `record_click_and_increment`; pre-repair state snapshotted in `_repair_backup_20260718`).
 
 ## Conventions
 

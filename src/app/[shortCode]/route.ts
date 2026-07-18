@@ -262,16 +262,29 @@ export async function GET(
 // Attempt to open the deep link
 window.location.href = ${safeDeepLink};
 
-// Fall back to the web URL after a delay, but cancel the timer once the page is
-// backgrounded (the app opened) so returning users aren't dragged to the fallback.
-// The visible fallback anchor stays tappable either way.
-var fallbackTimer = setTimeout(function () {
+// Fall back to the web URL after a delay. A sustained hide means the app took
+// over — cancel the timer so returning users aren't dragged to the fallback.
+// A brief hide-then-show blip (scheme prompt, failed hand-off) is not an app
+// open, so the timer re-arms; without this, one spurious visibilitychange
+// would strand no-app users on this page. The anchor stays tappable either way.
+var hiddenAt = 0;
+function goFallback() {
   window.location.href = ${safeFallbackUrl};
-}, 2500);
+}
+var fallbackTimer = setTimeout(goFallback, 2500);
 document.addEventListener('visibilitychange', function () {
-  if (document.hidden) clearTimeout(fallbackTimer);
+  if (document.hidden) {
+    hiddenAt = Date.now();
+    clearTimeout(fallbackTimer);
+  } else if (hiddenAt && Date.now() - hiddenAt < 1500) {
+    fallbackTimer = setTimeout(goFallback, 1500);
+  }
 });
 window.addEventListener('pagehide', function () {
+  // Real navigation (unlike an app hand-off, which never fires pagehide):
+  // kill the timer and the blip marker so a bfcache restore of this page
+  // doesn't re-arm and bounce the user straight back out.
+  hiddenAt = 0;
   clearTimeout(fallbackTimer);
 });
 </script>`,

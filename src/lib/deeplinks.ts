@@ -181,9 +181,11 @@ function generateYouTubeDeepLinks(url: URL): DeepLinkConfig {
     }
   }
   
-  // For channels, playlists, etc.
+  // For channels, playlists, etc. The youtube:// scheme mirrors the web URL
+  // structure and requires the full host — an empty authority (youtube:///...)
+  // opens the app but cannot route to the target.
   return {
-    ios: `youtube://${url.pathname}${url.search}`,
+    ios: `youtube://www.youtube.com${url.pathname}${url.search}`,
     android: `https://www.youtube.com${url.pathname}${url.search}`,
     fallback: url.href,
     platform: 'YouTube'
