@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse, after } from 'next/server'
 import { BLOCKED_HOSTNAMES } from '@/lib/utils'
+import { toAndroidLaunchUri } from '@/lib/deeplinks'
 import type { Database } from '@/types/database'
 
 // This route only calls SECURITY DEFINER RPCs (get_link_by_short_code,
@@ -26,6 +27,17 @@ function isAndroid(userAgent: string): boolean {
 
 function isMobile(userAgent: string): boolean {
   return isIOS(userAgent) || isAndroid(userAgent)
+}
+
+// A bare Android WebView only understands intent: URIs if its host app
+// intercepts them; otherwise the redirect dead-ends on ERR_UNKNOWN_URL_SCHEME.
+// Full browsers (no "; wv)" marker — Chrome, Samsung Internet, Firefox) all
+// parse intent:, as do Meta's in-app browsers. Everyone else keeps the
+// graceful interstitial.
+function supportsIntentRedirect(userAgent: string): boolean {
+  const isWebView = /;\s*wv\)/i.test(userAgent)
+  if (!isWebView) return true
+  return /\b(Instagram|FBAV|FBAN|FB_IAB)\b/i.test(userAgent)
 }
 
 const SAFE_DEEP_LINK_SCHEMES = new Set([
@@ -237,9 +249,21 @@ export async function GET(
         : null
 
     if (deepLink && isSafeUrl(deepLink) && fallbackUrl) {
+      if (isAndroid(userAgent) && supportsIntentRedirect(userAgent)) {
+        // Chromium (Chrome and in-app WebViews like Instagram's) blocks
+        // gesture-less JS navigation to app schemes, so an interstitial can
+        // never launch the app on Android. A server redirect keeps the
+        // original tap's user gesture, and the intent's embedded
+        // S.browser_fallback_url covers the app-not-installed case.
+        return NextResponse.redirect(toAndroidLaunchUri(deepLink, fallbackUrl), {
+          headers: { 'Cache-Control': 'no-store' },
+        })
+      }
+
       const safeDeepLink = jsonEscapeForHtml(deepLink)
       const safeFallbackUrl = jsonEscapeForHtml(fallbackUrl)
       const fallbackUrlAttr = encodeURI(fallbackUrl)
+      const deepLinkAttr = encodeURI(deepLink)
 
       const html = brandPageHtml({
         title: 'Redirecting...',
@@ -251,13 +275,16 @@ export async function GET(
 .spin{display:inline-block;width:16px;height:16px;border:2px solid #1f1f1f;border-top-color:#00B03B;border-radius:50%;animation:spin .8s linear infinite;margin:0 0 14px}
 .spin-static{display:none}
 }
-@keyframes spin{to{transform:rotate(360deg)}}`,
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn-link{display:inline-block;margin-top:12px;color:#999999;font-size:13px;text-decoration:underline}
+.btn-link:hover{color:#FAFAFA}`,
         cardHtml: `<p class="eyebrow">Redirecting</p>
 <div class="spin" aria-hidden="true"></div>
 <p class="spin-static">One moment&hellip;</p>
 <h1>Opening app...</h1>
-<p>If the app doesn't open automatically, click below:</p>
-<a href="${fallbackUrlAttr}" id="fallback" class="btn">Continue to website</a>`,
+<p>If the app doesn't open automatically, tap below:</p>
+<a href="${deepLinkAttr}" class="btn">Open in app</a>
+<a href="${fallbackUrlAttr}" id="fallback" class="btn-link">Continue to website</a>`,
         footerScript: `<script>
 // Attempt to open the deep link
 window.location.href = ${safeDeepLink};

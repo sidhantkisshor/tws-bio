@@ -5,6 +5,105 @@ export interface DeepLinkConfig {
   platform: string
 }
 
+// Android packages for schemes we can name explicitly. A package makes intent
+// resolution unambiguous; schemes not listed here still resolve by scheme.
+const ANDROID_PACKAGE_BY_SCHEME: Record<string, string> = {
+  'vnd.youtube': 'com.google.android.youtube',
+  youtube: 'com.google.android.youtube',
+  tg: 'org.telegram.messenger',
+  instagram: 'com.instagram.android',
+  twitter: 'com.twitter.android',
+  spotify: 'com.spotify.music',
+  whatsapp: 'com.whatsapp',
+}
+
+const YOUTUBE_HOST = /(^|\.)youtube\.com$|(^|\.)youtu\.be$/i
+const YOUTUBE_MUSIC_HOST = /(^|\.)music\.youtube\.com$/i
+const INTENT_SCHEME_SHAPE = /^[a-z][a-z0-9+.-]*$/i
+
+// '#' and ';' are the intent URI's structural delimiters. Percent-encoding
+// them in reconstructed content makes a crafted stored deep link inert data
+// instead of a way to smuggle Intent params (package=, action=, ...).
+function encodeIntentPart(part: string): string {
+  return part.replace(/#/g, '%23').replace(/;/g, '%3B')
+}
+
+/**
+ * Convert a stored Android deep link into a URI that actually launches the
+ * app when served as an HTTP redirect. Chromium (Chrome and in-app WebViews
+ * like Instagram's) blocks JavaScript-initiated navigations to custom
+ * schemes, but honors intent:// URIs reached via server redirect from a
+ * user-initiated tap — with S.browser_fallback_url covering the
+ * app-not-installed case.
+ *
+ * Anything that cannot be expressed as a well-formed authority-style intent
+ * (opaque URIs like spotify:track:ID or geo:0,0, malformed schemes, output
+ * that fails to parse) degrades to the plain web fallback URL — never an
+ * error, never a raw unlaunchable URI.
+ */
+export function toAndroidLaunchUri(androidDeepLink: string, fallbackUrl: string): string {
+  if (androidDeepLink.startsWith('intent://')) return androidDeepLink
+
+  const fallbackParam = `S.browser_fallback_url=${encodeURIComponent(fallbackUrl)}`
+  const guard = (uri: string): string => {
+    try {
+      new URL(uri)
+      return uri
+    } catch {
+      return fallbackUrl
+    }
+  }
+
+  // https "deep links" (App Links) never leave an in-app browser on their
+  // own. For YouTube we know the package, so force the hand-off; other
+  // https URLs stay plain redirects.
+  if (androidDeepLink.startsWith('https://') || androidDeepLink.startsWith('http://')) {
+    try {
+      const parsed = new URL(androidDeepLink)
+      const pkg = YOUTUBE_MUSIC_HOST.test(parsed.hostname)
+        ? 'com.google.android.apps.youtube.music'
+        : YOUTUBE_HOST.test(parsed.hostname)
+          ? 'com.google.android.youtube'
+          : null
+      if (pkg) {
+        const hostPath = encodeIntentPart(`${parsed.host}${parsed.pathname}${parsed.search}`)
+        return guard(`intent://${hostPath}#Intent;scheme=https;package=${pkg};${fallbackParam};end`)
+      }
+    } catch {
+      // fall through to the plain URL
+    }
+    return androidDeepLink
+  }
+
+  const colonIndex = androidDeepLink.indexOf(':')
+  if (colonIndex === -1) return androidDeepLink
+  const scheme = androidDeepLink.slice(0, colonIndex).toLowerCase()
+  if (!INTENT_SCHEME_SHAPE.test(scheme)) return fallbackUrl
+  const opaque = androidDeepLink.slice(colonIndex + 1)
+
+  // vnd.youtube:VIDEO_ID carries an opaque ID; rebuild the canonical watch
+  // URL so the packaged https intent form works.
+  if (scheme === 'vnd.youtube') {
+    return guard(
+      `intent://www.youtube.com/watch?v=${encodeIntentPart(opaque)}#Intent;scheme=https;package=com.google.android.youtube;${fallbackParam};end`
+    )
+  }
+
+  // Opaque (no-authority) URIs like spotify:track:ID or geo:0,0?q=... can't
+  // be expressed in the intent://<authority> form without corrupting their
+  // scheme-specific part — send those users to the web instead.
+  if (!opaque.startsWith('//')) return fallbackUrl
+  const rest = encodeIntentPart(opaque.slice(2))
+
+  // Object.hasOwn: a plain-object lookup would resolve Object.prototype
+  // members for schemes named constructor/toString/etc.
+  const pkg = Object.hasOwn(ANDROID_PACKAGE_BY_SCHEME, scheme)
+    ? ANDROID_PACKAGE_BY_SCHEME[scheme]
+    : undefined
+  const pkgParam = pkg ? `package=${pkg};` : ''
+  return guard(`intent://${rest}#Intent;scheme=${scheme};${pkgParam}${fallbackParam};end`)
+}
+
 export function detectDeepLinks(url: string): DeepLinkConfig | null {
   try {
     const urlObj = new URL(url)
