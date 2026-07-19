@@ -18,7 +18,7 @@ npm run typecheck # tsc --noEmit
 ```
 
 Testing uses **Vitest** (`vitest.config.ts`, `environment: node`). Specs live in `src/**/__tests__/`
-(currently 4 files / 46 tests covering `utils`, `deeplinks`, and the `anonLinks` hook). Add tests
+(currently 6 files / 66 tests covering `utils`, `deeplinks`, and the `anonLinks` hook). Add tests
 for pure/logic functions; there is no component/E2E harness.
 
 **Runtime:** Node 22 is pinned via `engines.node` (`>=22.13.0 <23.0.0`) and `.nvmrc`. This floor is

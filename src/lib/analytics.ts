@@ -191,15 +191,3 @@ export async function getTotalClicksResult(
 export async function getTotalClicks(filter: AnalyticsFilter): Promise<number> {
   return (await getTotalClicksResult(filter)).data
 }
-
-export async function getTopStats(filter: AnalyticsFilter) {
-  const [referrers, devices] = await Promise.all([
-    getTopReferrers(filter),
-    getDeviceBreakdown(filter),
-  ])
-
-  return {
-    topReferrer: referrers[0]?.name || 'None',
-    topDevice: devices[0]?.name || 'Unknown',
-  }
-}
