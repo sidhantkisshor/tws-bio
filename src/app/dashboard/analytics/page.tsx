@@ -13,14 +13,22 @@ import {
 } from '@/lib/analytics'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { DeviceChart } from '@/components/dashboard/DeviceChart'
-import { BrowserChart } from '@/components/dashboard/BrowserChart'
-import { ReferrerChart } from '@/components/dashboard/ReferrerChart'
+import { BarChart } from '@/components/charts/BarChart'
+import { PieChart } from '@/components/charts/PieChart'
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
 import { ClicksOverTimeChart } from '@/components/charts/ClicksOverTimeChart'
 import { StatCard, computeTrend } from '@/components/dashboard/StatCard'
-import { BarListChart } from '@/components/dashboard/BarListChart'
 import { AlertTriangle } from 'lucide-react'
+
+// Stable per-device colors so a device keeps the same slice color across
+// renders regardless of its rank in the data.
+const DEVICE_COLORS: Record<string, string> = {
+  desktop: 'var(--chart-1)',
+  mobile: 'var(--chart-2)',
+  tablet: 'var(--chart-3)',
+  bot: 'var(--chart-4)',
+  unknown: 'var(--chart-5)',
+}
 
 const VALID_RANGES = new Set(['7', '30', '90', 'all'])
 const RANGE_TO_TIME_RANGE: Record<string, TimeRange> = {
@@ -286,26 +294,27 @@ export default async function AnalyticsPage({
     }
   }
 
-  // Device breakdown (RPC rows arrive pre-sorted, largest first)
-  const deviceData = devicesResult.data.map((d) => ({ device: d.name, count: d.value }))
+  // Device breakdown (RPC rows arrive pre-sorted, largest first) — already
+  // `{ name, value }`, the shape PieChart consumes.
+  const deviceData = devicesResult.data
 
   // Browser breakdown (top 6)
   const browserData = browsersResult.data
-    .map((b) => ({ browser: b.name, count: b.value }))
+    .map((b) => ({ label: b.name, value: b.value }))
     .slice(0, 6)
 
   // Top referrers (top 10)
-  const referrerData = referrersResult.data.map((r) => ({ referrer: r.name, count: r.clicks }))
+  const referrerData = referrersResult.data.map((r) => ({ label: r.name, value: r.clicks }))
 
   // Top countries (top 10)
-  const countryData = countriesResult.data.map((c) => ({ label: c.name, count: c.clicks }))
+  const countryData = countriesResult.data.map((c) => ({ label: c.name, value: c.clicks }))
 
   // Top links: which of the user's links are actually driving these clicks
   // (top 10) — per-link ranged counts from the embedded aggregate above.
   const topLinksData = userLinks
-    .map((l) => ({ label: l.short_code, count: l.clicks[0]?.count ?? 0 }))
-    .filter((l) => l.count > 0)
-    .sort((a, b) => b.count - a.count)
+    .map((l) => ({ label: l.short_code, value: l.clicks[0]?.count ?? 0 }))
+    .filter((l) => l.value > 0)
+    .sort((a, b) => b.value - a.value)
     .slice(0, 10)
 
   return (
@@ -344,7 +353,7 @@ export default async function AnalyticsPage({
           <CardTitle>Top Links</CardTitle>
         </CardHeader>
         <CardContent>
-          <BarListChart
+          <BarChart
             data={topLinksData}
             emptyMessage="No clicks yet"
           />
@@ -358,7 +367,14 @@ export default async function AnalyticsPage({
             <CardTitle>Devices</CardTitle>
           </CardHeader>
           <CardContent>
-            <DeviceChart data={deviceData} />
+            <PieChart
+              data={deviceData}
+              colorMap={DEVICE_COLORS}
+              innerRadius={60}
+              outerRadius={80}
+              className="mx-auto h-[260px] w-full"
+              ariaLabel="Donut chart showing device breakdown"
+            />
           </CardContent>
         </Card>
 
@@ -367,7 +383,11 @@ export default async function AnalyticsPage({
             <CardTitle>Browsers</CardTitle>
           </CardHeader>
           <CardContent>
-            <BrowserChart data={browserData} />
+            <BarChart
+              data={browserData}
+              orientation="vertical"
+              className="h-[220px] w-full"
+            />
           </CardContent>
         </Card>
       </div>
@@ -379,7 +399,7 @@ export default async function AnalyticsPage({
             <CardTitle>Top Referrers</CardTitle>
           </CardHeader>
           <CardContent>
-            <ReferrerChart data={referrerData} />
+            <BarChart data={referrerData} />
           </CardContent>
         </Card>
 
@@ -388,7 +408,7 @@ export default async function AnalyticsPage({
             <CardTitle>Top Countries</CardTitle>
           </CardHeader>
           <CardContent>
-            <BarListChart data={countryData} />
+            <BarChart data={countryData} />
           </CardContent>
         </Card>
       </div>

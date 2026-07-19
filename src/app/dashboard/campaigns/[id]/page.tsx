@@ -12,7 +12,7 @@ import {
 } from '@/lib/analytics'
 import { ClicksOverTimeChart } from '@/components/charts/ClicksOverTimeChart'
 import { BarChart } from '@/components/charts/BarChart'
-import { DonutChart } from '@/components/charts/DonutChart'
+import { PieChart } from '@/components/charts/PieChart'
 import { TimeRangePicker } from '@/components/TimeRangePicker'
 import { TrendChip, computeTrend, type StatTrend } from '@/components/dashboard/StatCard'
 import { Button } from '@/components/ui/button'
@@ -137,7 +137,10 @@ export default async function CampaignDetailPage({
               <CardTitle>Referrers</CardTitle>
             </CardHeader>
             <CardContent>
-              <BarChart data={referrers} />
+              <BarChart
+                data={referrers.map((r) => ({ label: r.name, value: r.clicks }))}
+                className="h-48 w-full"
+              />
             </CardContent>
           </Card>
           <Card className="bg-card border-border">
@@ -145,7 +148,7 @@ export default async function CampaignDetailPage({
               <CardTitle>Devices</CardTitle>
             </CardHeader>
             <CardContent>
-              <DonutChart data={devices} />
+              <PieChart data={devices} className="h-48 w-full" />
             </CardContent>
           </Card>
           <Card className="bg-card border-border">
@@ -153,7 +156,11 @@ export default async function CampaignDetailPage({
               <CardTitle>Countries</CardTitle>
             </CardHeader>
             <CardContent>
-              <BarChart data={countries} color="var(--chart-3)" />
+              <BarChart
+                data={countries.map((c) => ({ label: c.name, value: c.clicks }))}
+                color="var(--chart-3)"
+                className="h-48 w-full"
+              />
             </CardContent>
           </Card>
           <Card className="bg-card border-border">
@@ -161,7 +168,7 @@ export default async function CampaignDetailPage({
               <CardTitle>Browsers</CardTitle>
             </CardHeader>
             <CardContent>
-              <DonutChart data={browsers} />
+              <PieChart data={browsers} className="h-48 w-full" />
             </CardContent>
           </Card>
         </div>

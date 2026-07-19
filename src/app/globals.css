@@ -102,13 +102,12 @@
     transparent 70%
   );
 
-  /* Chart colors: shared token ramp for every chart component (ClickChart,
-     ClicksOverTimeChart, BarChart, DonutChart, DeviceChart, ReferrerChart,
-     BrowserChart). Single-series charts use --chart-1 (brand green). Multi-
-     series/categorical charts (DonutChart, DeviceChart) draw from the full
-     --chart-1..5 ramp in order — never invent a one-off hex per chart. All
-     five stay in the brand's green family, alternating light/dark so
-     adjacent pie/bar segments stay distinguishable. */
+  /* Chart colors: shared token ramp for every chart component (ClickChart /
+     ClicksOverTimeChart, BarChart, PieChart, MiniSparkline). Single-series
+     charts use --chart-1 (brand green). Multi-series/categorical charts
+     (PieChart donuts) draw from the full --chart-1..5 ramp in order — never
+     invent a one-off hex per chart. All five stay in the brand's green family,
+     alternating light/dark so adjacent pie/bar segments stay distinguishable. */
   --chart-1: #00B03B;
   --chart-2: #6EE7B7;
   --chart-3: #047857;
