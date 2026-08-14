@@ -18,8 +18,9 @@ npm run typecheck # tsc --noEmit
 ```
 
 Testing uses **Vitest** (`vitest.config.ts`, `environment: node`). Specs live in `src/**/__tests__/`
-(currently 6 files / 66 tests covering `utils`, `deeplinks`, and the `anonLinks` hook). Add tests
-for pure/logic functions; there is no component/E2E harness.
+(currently 9 files, covering `utils`, `deeplinks`, the `anonLinks` hook, and the measurement layer:
+`sgtm`, `forwardParams`, `shortLinkAttribution`). Add tests for pure/logic functions; there is
+no component/E2E harness.
 
 **Runtime:** Node 22 is pinned via `engines.node` (`>=22.13.0 <23.0.0`) and `.nvmrc`. This floor is
 required by ESLint 10; Vercel and local dev should run Node 22.x.
@@ -32,6 +33,16 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_APP_URL=              # e.g. http://localhost:3000
 NEXT_PUBLIC_SHORT_DOMAIN=         # e.g. tws.bio
+```
+
+Optional, for server-side click measurement (see "Measurement and Tagging" below). Every one of
+these degrades to "measurement disabled" when unset, nothing errors. There is no client-side
+container ID here on purpose:
+```
+SGTM_ENDPOINT=                    # server-only, GTM server container base URL
+GA4_MEASUREMENT_ID=               # server-only, GA4 property the server container forwards to
+SGTM_CID_SALT=                    # server-only, salt for the derived cookieless client ID
+SHORTLINK_AUTOTAG=                # optional, `off` disables default utm auto-tagging (anything else, or unset, leaves it on)
 ```
 
 ## Architecture
@@ -75,6 +86,22 @@ The home page demonstrates the app's core split: `page.tsx` is a Server Componen
 
 `src/lib/deeplinks.ts` maps 30+ platform URLs to native app URI schemes (iOS/Android). `CreateLinkForm` calls `detectDeepLinks()` on URL input change to auto-fill deep link fields and switch form mode.
 
+### Measurement and Tagging
+
+tws.bio reports into the business's shared measurement stack. It uses exactly one piece of it:
+- Server container `GTM-PTXDM3M7` at `https://sgtm.tradingwithsidhant.com`. Its GA4 client claims `/g/collect`; an "All GA4 client events" trigger forwards everything on to GA4 `G-L7PYFJM9QB`, the same property tradingwithsidhant.com reports into.
+- Web container `GTM-P3PR2NBT` is the business's browser container. It is **not** installed here, on purpose (see below).
+
+**There is deliberately no client-side tagging.** The app pages (`/`, `/dashboard/*`, `/login`, ...) load no GTM container, no GA4, no pixel and no session recorder, and push nothing to a dataLayer. tws.bio is a private link tool built to replace a Bitly subscription, not an audience source: the people using the app are the business itself, so there is no audience to build from them and no reason to hand a third party a record of internal work. Installing the shared web container here would also have fired the Meta pixel and Microsoft Clarity on every dashboard page, because those tags fire on all pages with no hostname condition. Do not add a container here without deciding that question again.
+
+What tws.bio measures is the **click**, not the app. That path is server-side and runs whether or not anyone has the dashboard open.
+
+**Server-side click path**: a short link is a 302, so there is no page to run the web container's tag on. `src/lib/sgtm.ts` posts a GA4 Measurement Protocol v2 hit straight from the `[shortCode]` redirect's `after()` block to the server container (`sendClickToServerContainer`, event `short_link_click`). The client ID is derived from IP + user agent + `SGTM_CID_SALT` (`deriveClientId`), since a server hit has no cookie to read; the session ID buckets by a 30-minute window (`deriveSessionId`). `isLikelyBot()` drops crawler and uptime-monitor traffic before it reaches GA4.
+
+**Naming constraint (important)**: the server container forwards a whitelist of standard GA4/Meta event names on to the Meta Conversions API (pixel `1139413964970750`) as business conversions. The whitelist includes `page_view`, `sign_up` and `purchase`. tws.bio is an internal link tool, not a storefront, so its server click event is named `short_link_click`, deliberately off that whitelist. Any new event sent from here must stay off it, or tool activity gets counted as a business conversion and corrupts Meta's ad optimisation.
+
+**Attribution forwarding and auto-tagging**: `src/lib/forwardParams.ts` forwards an explicit allowlist of inbound `utm_*` params and vendor click IDs (`gclid`, `fbclid`, `ttclid`, ...) through to the destination, so a paid click keeps its attribution. `src/lib/shortLinkAttribution.ts` stamps default `utm_source`/`utm_medium`/`utm_campaign` on links that arrive with none, naming the individual short link instead of letting GA4 file the visit as `tws.bio / referral`. `resolveDestination()` in `route.ts` runs both, in order: forward the click's own params first, then stamp defaults only if neither the destination nor the click already carries a `utm_source`/`medium`/`campaign`. Kill switch: `SHORTLINK_AUTOTAG=off`, takes effect on the next request, no deploy.
+
 ### Security in Redirect Handler
 
 The `[shortCode]/route.ts` handler validates URLs against a `SAFE_DEEP_LINK_SCHEMES` allowlist and `BLOCKED_HOSTNAMES` regex, rejects `javascript:`, `data:`, and `vbscript:` schemes, and sets `Content-Security-Policy` and `X-Frame-Options: DENY` headers on deep link HTML responses.
@@ -108,3 +135,4 @@ Migrations are in `supabase/migrations/` (001–020 + a timestamped drop). The r
 - No rate limiting on link creation or redirect endpoints (would require Redis/Upstash)
 - `clicks` rows recorded before 2026-07-15 have raw IPs, NULL `referrer_domain`, and NULL `country`; newer rows get masked IPs, derived referrer domains, and country from Vercel's `x-vercel-ip-country` header (migration 017 — country stays NULL in local dev where the header is absent)
 - Anonymous users' home-page link list goes through the `get_links_by_ids(uuid[])` definer RPC (migration 018) since direct `links` reads are owner-only under RLS — possession of a link UUID is treated as proof of creation
+- A tag-server outage surfaces only as a `console.error` from `route.ts` (`'failed'` is logged, `'skipped'` deliberately is not). There is no alert on it, so a sustained GA4 gap is found by reading logs, not by being told
