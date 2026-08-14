@@ -2,7 +2,6 @@
 
 import { useState, useRef } from 'react'
 import { cn, generateShortCode, isValidUrl, getShortUrl } from '@/lib/utils'
-import { gtmEvent, TWS_EVENTS } from '@/lib/gtm'
 import { toast } from 'sonner'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -44,16 +43,6 @@ function formatDestHost(rawUrl: string): string {
     host = rawUrl
   }
   return host.length > 30 ? `${host.slice(0, 29)}…` : host
-}
-
-// Destination domain for GTM: bare hostname only, never the full URL (which
-// may carry query params/PII). undefined when the URL can't be parsed.
-function destinationDomain(rawUrl: string): string | undefined {
-  try {
-    return new URL(rawUrl).hostname
-  } catch {
-    return undefined
-  }
 }
 
 interface CreateLinkFormProps {
@@ -243,12 +232,6 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
 
         if (rpcError) throw new Error(rpcError.message)
         if (data) {
-          gtmEvent(TWS_EVENTS.linkCreated, {
-            link_type: 'deep_link',
-            short_code: data.short_code,
-            has_custom_code: Boolean(customCode),
-            destination_domain: destinationDomain(url),
-          })
           let campaignFailed = false
           if (campaignId) {
             const { error: campaignErr } = await supabase.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
@@ -259,7 +242,6 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
           try {
             await navigator.clipboard.writeText(shortUrl)
             copied = true
-            gtmEvent(TWS_EVENTS.linkCopied, { short_code: data.short_code })
           } catch {
             // The execution ticket remains visible with its own copy control.
           }
@@ -284,12 +266,6 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
 
         if (rpcError) throw new Error(rpcError.message)
         if (data) {
-          gtmEvent(TWS_EVENTS.linkCreated, {
-            link_type: 'url',
-            short_code: data.short_code,
-            has_custom_code: Boolean(customCode),
-            destination_domain: destinationDomain(url),
-          })
           let campaignFailed = false
           if (campaignId) {
             const { error: campaignErr } = await supabase.from('links').update({ campaign_id: campaignId }).eq('id', data.id)
@@ -300,7 +276,6 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
           try {
             await navigator.clipboard.writeText(shortUrl)
             copied = true
-            gtmEvent(TWS_EVENTS.linkCopied, { short_code: data.short_code })
           } catch {
             // The execution ticket remains visible with its own copy control.
           }

@@ -3,7 +3,6 @@
 import { useRef, useCallback } from 'react'
 import QRCode from 'react-qr-code'
 import { getShortUrl } from '@/lib/utils'
-import { gtmEvent, TWS_EVENTS } from '@/lib/gtm'
 import { TickerChip } from '@/components/TickerChip'
 import {
   Dialog,
@@ -72,7 +71,6 @@ export function QRCodeDialog({
       downloadLink.download = `qr-${shortCode}.png`
       downloadLink.href = pngUrl
       downloadLink.click()
-      gtmEvent(TWS_EVENTS.qrDownloaded, { short_code: shortCode })
     }
     img.src = 'data:image/svg+xml;base64,' + btoa(svgData)
   }, [shortCode])

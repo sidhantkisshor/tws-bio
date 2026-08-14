@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, DM_Serif_Display } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
-import { GoogleTagManager, GoogleTagManagerNoScript } from "@/components/analytics/GoogleTagManager";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -43,10 +42,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${inter.variable} ${dmSerif.variable}`}>
       <body className={inter.className}>
-        <GoogleTagManagerNoScript />
         {children}
         <Toaster />
-        <GoogleTagManager />
       </body>
     </html>
   );

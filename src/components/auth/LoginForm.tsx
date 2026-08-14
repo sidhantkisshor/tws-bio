@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton'
-import { gtmEvent, TWS_EVENTS } from '@/lib/gtm'
 
 /**
  * Surfaces ?error=auth_failed set by src/app/auth/callback/route.ts when the
@@ -55,7 +54,6 @@ export function LoginForm() {
 
       if (error) throw error
 
-      gtmEvent(TWS_EVENTS.login, { method: 'password' })
       // Success: stay disabled through the redirect — loading resets only on failure.
       router.push('/dashboard')
       router.refresh()
@@ -111,7 +109,6 @@ export function LoginForm() {
         </Button>
 
         <GoogleAuthButton
-          intent="login"
           disabled={loading}
           errorMessage="Failed to log in with Google"
           onPendingChange={setGooglePending}

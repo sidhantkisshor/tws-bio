@@ -18,8 +18,8 @@ npm run typecheck # tsc --noEmit
 ```
 
 Testing uses **Vitest** (`vitest.config.ts`, `environment: node`). Specs live in `src/**/__tests__/`
-(currently 10 files, covering `utils`, `deeplinks`, the `anonLinks` hook, and the measurement layer:
-`gtm`, `sgtm`, `forwardParams`, `shortLinkAttribution`). Add tests for pure/logic functions; there is
+(currently 9 files, covering `utils`, `deeplinks`, the `anonLinks` hook, and the measurement layer:
+`sgtm`, `forwardParams`, `shortLinkAttribution`). Add tests for pure/logic functions; there is
 no component/E2E harness.
 
 **Runtime:** Node 22 is pinned via `engines.node` (`>=22.13.0 <23.0.0`) and `.nvmrc`. This floor is
@@ -35,10 +35,10 @@ NEXT_PUBLIC_APP_URL=              # e.g. http://localhost:3000
 NEXT_PUBLIC_SHORT_DOMAIN=         # e.g. tws.bio
 ```
 
-Optional, for the measurement layer (see "Measurement and Tagging" below). Every one of these
-degrades to "tagging disabled" when unset, nothing errors:
+Optional, for server-side click measurement (see "Measurement and Tagging" below). Every one of
+these degrades to "measurement disabled" when unset, nothing errors. There is no client-side
+container ID here on purpose:
 ```
-NEXT_PUBLIC_GTM_ID=               # public, GTM web container ID (e.g. GTM-XXXXXXX)
 SGTM_ENDPOINT=                    # server-only, GTM server container base URL
 GA4_MEASUREMENT_ID=               # server-only, GA4 property the server container forwards to
 SGTM_CID_SALT=                    # server-only, salt for the derived cookieless client ID
@@ -88,15 +88,17 @@ The home page demonstrates the app's core split: `page.tsx` is a Server Componen
 
 ### Measurement and Tagging
 
-Two GTM containers, shared with the rest of the business rather than tws.bio-only:
-- Web container `GTM-P3PR2NBT` ("Trading with Sidhant", also used by tradingwithsidhant.com). Reports into GA4 `G-L7PYFJM9QB` via `transport_url` pointed at the server container.
-- Server container `GTM-PTXDM3M7` at `https://sgtm.tradingwithsidhant.com`. Its GA4 client claims `/g/collect`; an "All GA4 client events" trigger forwards everything on to GA4.
+tws.bio reports into the business's shared measurement stack. It uses exactly one piece of it:
+- Server container `GTM-PTXDM3M7` at `https://sgtm.tradingwithsidhant.com`. Its GA4 client claims `/g/collect`; an "All GA4 client events" trigger forwards everything on to GA4 `G-L7PYFJM9QB`, the same property tradingwithsidhant.com reports into.
+- Web container `GTM-P3PR2NBT` is the business's browser container. It is **not** installed here, on purpose (see below).
 
-**Client-side path**: `src/lib/gtm.ts` exports `GTM_ID` (shape-checked against `/^GTM-[A-Z0-9]+$/`), `gtmEvent()`, `ensureDataLayer()`, and `TWS_EVENTS`. `src/components/analytics/GoogleTagManager.tsx` exports `GoogleTagManager` and `GoogleTagManagerNoScript`, rendered from `src/app/layout.tsx`. Both render null when `NEXT_PUBLIC_GTM_ID` is unset, so local dev and preview deploys stay free of third-party calls.
+**There is deliberately no client-side tagging.** The app pages (`/`, `/dashboard/*`, `/login`, ...) load no GTM container, no GA4, no pixel and no session recorder, and push nothing to a dataLayer. tws.bio is a private link tool built to replace a Bitly subscription, not an audience source: the people using the app are the business itself, so there is no audience to build from them and no reason to hand a third party a record of internal work. Installing the shared web container here would also have fired the Meta pixel and Microsoft Clarity on every dashboard page, because those tags fire on all pages with no hostname condition. Do not add a container here without deciding that question again.
+
+What tws.bio measures is the **click**, not the app. That path is server-side and runs whether or not anyone has the dashboard open.
 
 **Server-side click path**: a short link is a 302, so there is no page to run the web container's tag on. `src/lib/sgtm.ts` posts a GA4 Measurement Protocol v2 hit straight from the `[shortCode]` redirect's `after()` block to the server container (`sendClickToServerContainer`, event `short_link_click`). The client ID is derived from IP + user agent + `SGTM_CID_SALT` (`deriveClientId`), since a server hit has no cookie to read; the session ID buckets by a 30-minute window (`deriveSessionId`). `isLikelyBot()` drops crawler and uptime-monitor traffic before it reaches GA4.
 
-**Naming constraint (important)**: the server container forwards a whitelist of standard GA4/Meta event names on to the Meta Conversions API (pixel `1139413964970750`) as business conversions. tws.bio is an internal link tool, not a storefront, so every dataLayer event it emits is prefixed `tws_` (see `TWS_EVENTS`) and the server click event is named `short_link_click`, both deliberately off that whitelist. Anyone adding a new event must keep its name off the whitelist, or internal tool activity gets counted as a business conversion. A tag in the web container fires a GA4 event on any custom dataLayer event (regex `.+`, `gtm.` excluded), so new `tws_*` events reach GA4 with no container change required.
+**Naming constraint (important)**: the server container forwards a whitelist of standard GA4/Meta event names on to the Meta Conversions API (pixel `1139413964970750`) as business conversions. The whitelist includes `page_view`, `sign_up` and `purchase`. tws.bio is an internal link tool, not a storefront, so its server click event is named `short_link_click`, deliberately off that whitelist. Any new event sent from here must stay off it, or tool activity gets counted as a business conversion and corrupts Meta's ad optimisation.
 
 **Attribution forwarding and auto-tagging**: `src/lib/forwardParams.ts` forwards an explicit allowlist of inbound `utm_*` params and vendor click IDs (`gclid`, `fbclid`, `ttclid`, ...) through to the destination, so a paid click keeps its attribution. `src/lib/shortLinkAttribution.ts` stamps default `utm_source`/`utm_medium`/`utm_campaign` on links that arrive with none, naming the individual short link instead of letting GA4 file the visit as `tws.bio / referral`. `resolveDestination()` in `route.ts` runs both, in order: forward the click's own params first, then stamp defaults only if neither the destination nor the click already carries a `utm_source`/`medium`/`campaign`. Kill switch: `SHORTLINK_AUTOTAG=off`, takes effect on the next request, no deploy.
 
