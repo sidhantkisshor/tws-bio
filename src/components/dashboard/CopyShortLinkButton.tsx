@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Check, Copy } from 'lucide-react'
 import { getShortUrl } from '@/lib/utils'
+import { gtmEvent, TWS_EVENTS } from '@/lib/gtm'
 import { Button } from '@/components/ui/button'
 
 /**
@@ -18,6 +19,7 @@ export function CopyShortLinkButton({ shortCode }: { shortCode: string }) {
     try {
       await navigator.clipboard.writeText(getShortUrl(shortCode))
       setCopied(true)
+      gtmEvent(TWS_EVENTS.linkCopied, { short_code: shortCode })
       toast.success('Copied!')
       setTimeout(() => setCopied(false), 1500)
     } catch {

@@ -2,6 +2,13 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse, after } from 'next/server'
 import { BLOCKED_HOSTNAMES } from '@/lib/utils'
 import { toAndroidLaunchUri } from '@/lib/deeplinks'
+import { withForwardedParams } from '@/lib/forwardParams'
+import {
+  destinationDomain,
+  referrerDomain,
+  sendClickToServerContainer,
+} from '@/lib/sgtm'
+import { isAutoTagEnabled, withShortLinkAttribution } from '@/lib/shortLinkAttribution'
 import type { Database } from '@/types/database'
 
 // This route only calls SECURITY DEFINER RPCs (get_link_by_short_code,
@@ -87,6 +94,30 @@ function htmlEscape(value: string): string {
 
 const SHORT_DOMAIN = process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'
 
+/**
+ * Resolve the URL a visitor is actually sent to.
+ *
+ * Two steps, in this order:
+ *  1. Carry through the attribution that arrived with the click, so a paid
+ *     click keeps its `gclid` and its campaign.
+ *  2. Only if the click brought none, stamp the link's own campaign, so a bare
+ *     share still lands in GA4 as a named link instead of an anonymous
+ *     `tws.bio / referral`.
+ *
+ * Both steps append query parameters only, so a destination that passed
+ * `isSafeUrl` before this call still passes it. Validation therefore stays
+ * where it is, ahead of the rewrite.
+ */
+function resolveDestination(
+  destination: string,
+  incoming: URLSearchParams,
+  shortCode: string,
+): string {
+  const forwarded = withForwardedParams(destination, incoming)
+  if (!isAutoTagEnabled()) return forwarded
+  return withShortLinkAttribution(forwarded, incoming, shortCode, SHORT_DOMAIN)
+}
+
 // Branded dark shell shared by the deep-link interstitial and dead-link pages.
 // The CSP (default-src 'none') blocks every external asset, so everything is
 // inline: system font stacks, pure-CSS spinner, no images or webfonts.
@@ -167,6 +198,11 @@ export async function GET(
 
   const userAgent = request.headers.get('user-agent') || ''
   const referer = request.headers.get('referer') || null
+  const acceptLanguage = request.headers.get('accept-language')
+  // Snapshot the inbound URL now. It becomes the `page_location` of the server
+  // tagging hit, query string included, so GA4 reads campaign attribution
+  // straight off the link the visitor actually clicked.
+  const clickUrl = request.nextUrl.href
 
   // Parse UTM parameters from the incoming request URL
   const utmSource = request.nextUrl.searchParams.get('utm_source') || undefined
@@ -209,19 +245,28 @@ export async function GET(
     return deadLinkResponse(410, '410 — CLICK LIMIT REACHED', 'This link has reached its maximum number of clicks.', homeUrl)
   }
 
-  // Track analytics asynchronously via after()
+  // Track analytics asynchronously via after(). Two independent sinks, fired
+  // together rather than in sequence so one slow hop cannot double the time
+  // this invocation stays alive:
+  //   1. Supabase, which powers the per-link dashboard.
+  //   2. The GTM server container, which puts the click in the same GA4
+  //      property as the rest of the business, so a short-link click sits
+  //      beside the sessions and conversions it produced.
+  // Neither may take the redirect down with it, so each settles on its own.
   after(async () => {
-    try {
-      // Atomic increment + click insert. The RPC masks the IP and derives the
-      // referrer domain server-side (replaces increment_link_clicks + record_click).
-      await supabase.rpc('record_click_and_increment', {
+    const deviceType = getDevice(userAgent)
+    const browserName = getBrowser(userAgent)
+    const osName = getOS(userAgent)
+
+    const recordClick = supabase
+      .rpc('record_click_and_increment', {
         p_link_id: link.id,
         p_ip_address: ip ?? undefined,
         p_user_agent: userAgent || undefined,
         p_referrer_url: referer ?? undefined,
-        p_browser_name: getBrowser(userAgent),
-        p_os_name: getOS(userAgent),
-        p_device_type: getDevice(userAgent),
+        p_browser_name: browserName,
+        p_os_name: osName,
+        p_device_type: deviceType,
         p_utm_source: utmSource,
         p_utm_medium: utmMedium,
         p_utm_campaign: utmCampaign,
@@ -229,8 +274,48 @@ export async function GET(
         p_utm_content: utmContent,
         p_country: country,
       })
-    } catch (err) {
-      console.error('Error tracking analytics:', err)
+      .then(({ error: rpcError }) => {
+        if (rpcError) console.error('Error tracking analytics:', rpcError)
+      })
+
+    const sendToServerContainer = sendClickToServerContainer({
+      pageLocation: clickUrl,
+      referrer: referer,
+      userAgent,
+      ip,
+      // Only the primary tag. The full Accept-Language header is a fingerprinting
+      // surface and GA4 stores one language per event anyway.
+      language: acceptLanguage?.split(',')[0]?.trim() || null,
+      params: {
+        short_code: link.short_code,
+        link_type: link.link_type ?? 'url',
+        destination_domain: destinationDomain(link.original_url),
+        referrer_domain: referrerDomain(referer),
+        device_category: deviceType,
+        browser: browserName,
+        operating_system: osName,
+        country,
+        campaign_id: link.campaign_id ?? undefined,
+      },
+    })
+
+    const [click, tagging] = await Promise.allSettled([recordClick, sendToServerContainer])
+
+    // allSettled swallows rejections, so anything that threw has to be read back
+    // out and logged. A transport-level Supabase failure surfaces here rather
+    // than in the .then() above, which only sees a returned error.
+    if (click.status === 'rejected') {
+      console.error('Error tracking analytics:', click.reason)
+    }
+
+    // A misconfigured tag server would otherwise go unnoticed for weeks: the
+    // redirect keeps working and the dashboard keeps filling from Supabase,
+    // while GA4 quietly receives nothing. `skipped` is not logged, because that
+    // is the intended state whenever the endpoint is unset (local dev, previews).
+    if (tagging.status === 'rejected') {
+      console.error('Server-side tagging threw:', tagging.reason)
+    } else if (tagging.value === 'failed') {
+      console.error(`Server-side tagging failed for ${link.short_code}`)
     }
   })
 
@@ -242,11 +327,18 @@ export async function GET(
       ? link.android_deep_link
       : null
 
-    const fallbackUrl = link.fallback_url && isSafeUrl(link.fallback_url)
+    const rawFallbackUrl = link.fallback_url && isSafeUrl(link.fallback_url)
       ? link.fallback_url
       : isSafeUrl(link.original_url)
         ? link.original_url
         : null
+
+    // The web fallback is a normal page load, so it must carry the tracking
+    // params. The deep link itself is left alone: app schemes are not URLs in
+    // the sense URLSearchParams expects.
+    const fallbackUrl = rawFallbackUrl
+      ? resolveDestination(rawFallbackUrl, request.nextUrl.searchParams, link.short_code)
+      : null
 
     if (deepLink && isSafeUrl(deepLink) && fallbackUrl) {
       if (isAndroid(userAgent) && supportsIntentRedirect(userAgent)) {
@@ -262,8 +354,14 @@ export async function GET(
 
       const safeDeepLink = jsonEscapeForHtml(deepLink)
       const safeFallbackUrl = jsonEscapeForHtml(fallbackUrl)
-      const fallbackUrlAttr = encodeURI(fallbackUrl)
-      const deepLinkAttr = encodeURI(deepLink)
+      // These land in an href="..." attribute, so they need HTML escaping, not
+      // URI escaping. encodeURI() would re-encode the percent signs already in
+      // a valid URL, so a stored `?next=https%3A%2F%2F...` reached the
+      // destination as the literal string `https%3A%2F%2F...` and any checkout
+      // hand-off behind it died. Only the "tap to continue" anchor was
+      // affected, never the scripted redirect, which made it near invisible.
+      const fallbackUrlAttr = htmlEscape(fallbackUrl)
+      const deepLinkAttr = htmlEscape(deepLink)
 
       const html = brandPageHtml({
         title: 'Redirecting...',
@@ -336,9 +434,10 @@ window.addEventListener('pagehide', function () {
   if (!isSafeUrl(link.original_url)) {
     return deadLinkResponse(403, '403 — FLAGGED AS UNSAFE', 'This destination has been flagged as unsafe and cannot be opened.', homeUrl)
   }
-  return NextResponse.redirect(link.original_url, {
-    headers: { 'Cache-Control': 'no-store' },
-  })
+  return NextResponse.redirect(
+    resolveDestination(link.original_url, request.nextUrl.searchParams, link.short_code),
+    { headers: { 'Cache-Control': 'no-store' } },
+  )
 }
 
 // Browser detection - order matters: check specific browsers before generic ones

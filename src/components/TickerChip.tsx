@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { cn, getShortUrl } from '@/lib/utils'
+import { gtmEvent, TWS_EVENTS } from '@/lib/gtm'
 
 const SHORT_DOMAIN = process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'
 
@@ -56,6 +57,7 @@ export function TickerChip({
     }
     setCopied(true)
     setFlashing(true)
+    gtmEvent(TWS_EVENTS.linkCopied, { short_code: code })
     if (revertTimer.current) clearTimeout(revertTimer.current)
     revertTimer.current = setTimeout(() => setCopied(false), 1200)
     onCopied?.()

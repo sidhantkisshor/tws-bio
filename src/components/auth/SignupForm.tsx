@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton'
+import { gtmEvent, TWS_EVENTS } from '@/lib/gtm'
 
 interface SignupFormProps {
   /** Called after signUp succeeds — the page swaps to the check-your-email state. */
@@ -46,6 +47,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
 
       if (error) throw error
 
+      gtmEvent(TWS_EVENTS.signUp, { method: 'password' })
       onSuccess()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to sign up')
@@ -113,6 +115,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
       </Button>
 
       <GoogleAuthButton
+        intent="signup"
         disabled={loading}
         errorMessage="Failed to sign up with Google"
         onPendingChange={setGooglePending}

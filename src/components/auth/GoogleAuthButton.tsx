@@ -5,8 +5,11 @@ import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { gtmEvent, TWS_EVENTS } from '@/lib/gtm'
 
 interface GoogleAuthButtonProps {
+  /** Which flow this button is rendered in, so the right GTM event fires. */
+  intent: 'login' | 'signup'
   /** Toast text when the OAuth call itself fails (before navigation). */
   errorMessage: string
   /** Disable while another auth action on the page is pending. */
@@ -20,7 +23,7 @@ interface GoogleAuthButtonProps {
  * signInWithOAuth navigates the whole page on success, so pending state is
  * only reset on failure — otherwise the button flickers before the redirect.
  */
-export function GoogleAuthButton({ errorMessage, disabled, onPendingChange }: GoogleAuthButtonProps) {
+export function GoogleAuthButton({ intent, errorMessage, disabled, onPendingChange }: GoogleAuthButtonProps) {
   const [pending, setPending] = useState(false)
 
   const handleClick = async () => {
@@ -31,6 +34,9 @@ export function GoogleAuthButton({ errorMessage, disabled, onPendingChange }: Go
       // Lazy import keeps @supabase/* out of the static auth pages' first-load JS.
       const { createClient } = await import('@/lib/supabase/client')
       const supabase = createClient()
+      // Fired before the call, not after: signInWithOAuth redirects the whole
+      // page on success, so anything queued after it may never flush. Best-effort.
+      gtmEvent(intent === 'signup' ? TWS_EVENTS.signUp : TWS_EVENTS.login, { method: 'google' })
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
