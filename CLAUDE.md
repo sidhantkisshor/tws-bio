@@ -22,8 +22,11 @@ Testing uses **Vitest** (`vitest.config.ts`, `environment: node`). Specs live in
 `sgtm`, `forwardParams`, `shortLinkAttribution`). Add tests for pure/logic functions; there is
 no component/E2E harness.
 
-**Runtime:** Node 22 is pinned via `engines.node` (`>=22.13.0 <23.0.0`) and `.nvmrc`. This floor is
-required by ESLint 10; Vercel and local dev should run Node 22.x.
+**Runtime:** Node 24 is pinned via `engines.node` (`^24.0.0`) and `.nvmrc`. Vercel reads
+`engines.node` and builds with it, which is what actually decides the production runtime: the
+project's dashboard "Node.js Version" setting still reads 22.x and is overridden. Keep the two
+files in step, and check the build log after changing them, because a range Vercel cannot resolve
+to a supported major (20.x, 22.x, 24.x) fails the build rather than falling back.
 
 ## Environment Variables
 
