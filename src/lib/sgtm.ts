@@ -68,6 +68,24 @@ export function taggingConfigProblem(
   return null
 }
 
+/**
+ * Opt-in switch for sending clicks to GA4. Off unless `SGTM_CLICKS=on`.
+ *
+ * Off by default because a cookieless server hit cannot join the visitor's
+ * browser session. In the central property every click became a new user with
+ * an unattributed session: in the 28 days to 17 Sep 2026 they were 54% of all
+ * sessions ("Unassigned / (not set)", 0% engaged) and about half of all users,
+ * which buried the real website numbers. Clicks are still recorded in our own
+ * `clicks` table, and the destination visit still carries the link's `utm_*`
+ * tags, so attribution in GA4 is kept. Point `GA4_MEASUREMENT_ID` at a
+ * separate property before turning this back on.
+ */
+export function isClickTaggingEnabled(
+  flag: string | undefined = process.env.SGTM_CLICKS,
+): boolean {
+  return flag?.trim().toLowerCase() === 'on'
+}
+
 const CONFIG_PROBLEM = taggingConfigProblem(SGTM_ENDPOINT, GA4_MEASUREMENT_ID)
 if (CONFIG_PROBLEM) console.warn(`[sgtm] ${CONFIG_PROBLEM}`)
 /**
@@ -218,6 +236,7 @@ export type SendClickOptions = {
 export async function sendClickToServerContainer(
   options: SendClickOptions,
 ): Promise<'sent' | 'skipped' | 'failed'> {
+  if (!isClickTaggingEnabled()) return 'skipped'
   if (!SGTM_ENDPOINT || !GA4_MEASUREMENT_ID || CONFIG_PROBLEM) return 'skipped'
   if (isLikelyBot(options.userAgent)) return 'skipped'
 
