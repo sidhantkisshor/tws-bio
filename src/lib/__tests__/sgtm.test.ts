@@ -8,6 +8,7 @@ import {
   referrerDomain,
   destinationDomain,
   sendClickToServerContainer,
+  isClickTaggingEnabled,
   type ClickEventInput,
 } from '../sgtm'
 
@@ -329,5 +330,22 @@ describe('sendClickToServerContainer', () => {
       language: 'en-US',
     })
     expect(result).toBe('skipped')
+  })
+})
+
+describe('isClickTaggingEnabled', () => {
+  it('is off when the flag is unset, so production sends nothing to GA4 unless someone opts in', () => {
+    expect(isClickTaggingEnabled(undefined)).toBe(false)
+  })
+
+  it('is on only for "on", ignoring case and surrounding whitespace', () => {
+    expect(isClickTaggingEnabled('on')).toBe(true)
+    expect(isClickTaggingEnabled(' ON ')).toBe(true)
+  })
+
+  it('stays off for any other value, so a typo cannot silently re-enable it', () => {
+    for (const flag of ['', 'off', 'true', '1', 'yes', 'onn']) {
+      expect(isClickTaggingEnabled(flag)).toBe(false)
+    }
   })
 })
