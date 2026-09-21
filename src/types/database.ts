@@ -364,6 +364,10 @@ export type Database = {
         Args: { p_ids: string[] }
         Returns: Database['public']['Tables']['links']['Row'][]
       }
+      resource_drop_link_id: {
+        Args: { p_slug: string }
+        Returns: string | null
+      }
       record_click_and_increment: {
         Args: {
           p_link_id: string

@@ -70,7 +70,7 @@ The session-refresh middleware lives in `src/proxy.ts` (exports `proxy` function
 | `/signup` | Client Component | Registration |
 | `/dashboard` | Server Component | Auth-guarded, fetches user's links server-side via `redirect('/login')` |
 | `/[shortCode]` | Route Handler (GET) | Core redirect logic + deep link handling + analytics tracking |
-| `/r/[slug]` | Route Handler (GET) | TWS Resource Drop short links: 302 to `twsgurukulx.com/r/{slug}`, no DB call, no row in `links` (see `src/lib/resourceDrop.ts`). The Resource Drop Desk writes to the TWS CRM and cannot reach this project's database, so a pattern replaces per-video rows. Clicks are not in the `clicks` table; they land on twsgurukulx.com as `utm_medium=tws_bio`. |
+| `/r/[slug]` | Route Handler (GET) | TWS Resource Drop short links: 302 to `twsgurukulx.com/r/{slug}` without waiting on the DB (see `src/lib/resourceDrop.ts`). The Resource Drop Desk writes to the TWS CRM and cannot reach this database, so there is no link created up front. In `after()`, `resource_drop_link_id` (migration 021, definer, anon-callable) finds or creates a `links` row `short_code = 'r/{slug}'` tagged `resource-drop`, then `record_click_and_increment` logs the click. Bots skipped; creation capped at 20 new rows an hour. |
 | `/auth/callback` | Route Handler (GET) | PKCE OAuth code exchange |
 | `/auth/signout` | Route Handler | Signs out user, clears session |
 
