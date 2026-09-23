@@ -18,7 +18,7 @@ npm run typecheck # tsc --noEmit
 ```
 
 Testing uses **Vitest** (`vitest.config.ts`, `environment: node`). Specs live in `src/**/__tests__/`
-(currently 9 files, covering `utils`, `deeplinks`, the `anonLinks` hook, and the measurement layer:
+(covering `utils`, `deeplinks`, `resourceDrop`, the `anonLinks` hook, and the measurement layer:
 `sgtm`, `forwardParams`, `shortLinkAttribution`). Add tests for pure/logic functions; there is
 no component/E2E harness.
 
@@ -42,6 +42,7 @@ Optional, for server-side click measurement (see "Measurement and Tagging" below
 these degrades to "measurement disabled" when unset, nothing errors. There is no client-side
 container ID here on purpose:
 ```
+SGTM_CLICKS=                      # server-only, must be `on` to send clicks at all (off by default, see below)
 SGTM_ENDPOINT=                    # server-only, GTM server container base URL
 GA4_MEASUREMENT_ID=               # server-only, GA4 property the server container forwards to
 SGTM_CID_SALT=                    # server-only, salt for the derived cookieless client ID
@@ -50,9 +51,9 @@ SHORTLINK_AUTOTAG=                # optional, `off` disables default utm auto-ta
 
 ## Architecture
 
-### Supabase Client Pattern (critical)
+### Supabase Client Pattern
 
-Three distinct Supabase clients exist — never mix them:
+Three Supabase clients exist, one per runtime. Each reads the auth session from a different place (browser cookies, `next/headers` cookies, the `NextRequest`), so use the one that matches where the code runs:
 - `src/lib/supabase/client.ts` — Browser client (`createBrowserClient`), for Client Components and hooks
 - `src/lib/supabase/server.ts` — Server client (async, uses `cookies()` from `next/headers`), for Server Components and Route Handlers
 - `src/lib/supabase/middleware.ts` — Middleware client (operates on `NextRequest`), only used by `src/proxy.ts`
@@ -82,7 +83,7 @@ The home page demonstrates the app's core split: `page.tsx` is a Server Componen
 
 1. **Link creation**: Requires authentication. Client calls `create_link` or `create_deep_link` Supabase RPC (SECURITY DEFINER); since migration 019 both reject callers with no session (`auth.uid() IS NULL` → "You must be signed in to create links") and always own the row to the caller via `COALESCE(p_user_id, auth.uid())`. These RPCs are the only write path to `links` (direct INSERT is blocked by RLS), so this holds for raw REST calls too. `CreateLinkForm` shows a sign-in/create-account gate to anonymous visitors instead of the form. The `anon_links` localStorage system + `get_links_by_ids` RPC now only surface links created anonymously *before* migration 019 — no new anonymous links can be created.
 2. **Redirect**: `GET /[shortCode]` looks up active link → for deep links, returns HTML page with JS redirect + fallback timeout; for standard links, `NextResponse.redirect()`
-3. **Analytics**: Tracked asynchronously via `after()` callback during redirect — calls `record_click` RPC (inserts into `clicks`) + `increment_link_clicks` RPC
+3. **Analytics**: Tracked asynchronously via `after()` callback during redirect — calls the `record_click_and_increment` RPC (inserts into `clicks` and bumps `links.total_clicks` in one call)
 4. **Auth**: Email/password or Google OAuth → PKCE exchange at `/auth/callback` → session refreshed by middleware on every request. Sign-out uses `<form action="/auth/signout" method="post">` for progressive enhancement. Auth redirect routes resolve origin from `NEXT_PUBLIC_APP_URL` with fallback to `requestUrl.origin`.
 5. **Dashboard**: Server-side paginated (PAGE_SIZE 20) using async `searchParams` — fully server-rendered, no client JS
 
@@ -102,7 +103,7 @@ What tws.bio measures is the **click**, not the app. That path is server-side an
 
 **Server-side click path**: a short link is a 302, so there is no page to run the web container's tag on. `src/lib/sgtm.ts` posts a GA4 Measurement Protocol v2 hit straight from the `[shortCode]` redirect's `after()` block to the server container (`sendClickToServerContainer`, event `short_link_click`). The client ID is derived from IP + user agent + `SGTM_CID_SALT` (`deriveClientId`), since a server hit has no cookie to read; the session ID buckets by a 30-minute window (`deriveSessionId`). `isLikelyBot()` drops crawler and uptime-monitor traffic before it reaches GA4.
 
-**This path is OFF by default (Sep 2026).** It only sends when `SGTM_CLICKS=on` (`isClickTaggingEnabled`). A cookieless server hit cannot join the visitor's browser session, so in the central property G-L7PYFJM9QB every click became a new user with an "Unassigned / (not set)" session: 54% of all sessions and about half of all users in the 28 days to 17 Sep 2026, which hid the real website numbers. Clicks are still stored in the `clicks` table, and the destination visit keeps the link's `utm_*` tags. Before you turn this back on, point `GA4_MEASUREMENT_ID` at a separate GA4 property.
+**This path is off by default.** It only sends when `SGTM_CLICKS=on` (`isClickTaggingEnabled`). A cookieless server hit cannot join the visitor's browser session, so in the shared property G-L7PYFJM9QB each click shows up as a new user with an "Unassigned / (not set)" session and drowns the real website numbers. Clicks are still stored in the `clicks` table, and the destination visit keeps the link's `utm_*` tags. Before you turn this back on, point `GA4_MEASUREMENT_ID` at a separate GA4 property.
 
 **Naming constraint (important)**: the server container forwards a whitelist of standard GA4/Meta event names on to the Meta Conversions API (pixel `1139413964970750`) as business conversions. The whitelist includes `page_view`, `sign_up` and `purchase`. tws.bio is an internal link tool, not a storefront, so its server click event is named `short_link_click`, deliberately off that whitelist. Any new event sent from here must stay off it, or tool activity gets counted as a business conversion and corrupts Meta's ad optimisation.
 
@@ -122,7 +123,7 @@ Ghost tables (exist in schema but not wired into the app): `custom_domains`, `ap
 
 RLS is enabled on all tables. `SECURITY DEFINER` RPCs (`create_link`, `create_deep_link`, `get_link_by_short_code`, `record_click_and_increment`) bypass RLS intentionally — all have `SET search_path = 'public'` to prevent search path injection. The analytics aggregation RPCs (`get_clicks_over_time`, `get_*_breakdown`, `get_total_clicks`) are SECURITY INVOKER on purpose so clicks RLS applies. Anonymous SELECT on `links` is disabled (owner-only policy); the redirect path uses `get_link_by_short_code`.
 
-Migrations are in `supabase/migrations/` (001–020 + a timestamped drop). The remote DB is managed via the Supabase MCP `apply_migration` tool (tracked migration history); local files are the canonical intent but the remote drifted historically — always preflight actual remote state (`pg_proc`, `pg_indexes`, `pg_policies`) before applying. All migrations through 020 were applied to production (020 on 2026-07-18: ownership consolidation to the active user account, `youtube:///` URI repair, `total_clicks` reconciliation, unconditional counter increment in `record_click_and_increment`; pre-repair state snapshotted in `_repair_backup_20260718`).
+Migrations are in `supabase/migrations/` (001–021 + a timestamped drop). The remote DB is managed via the Supabase MCP `apply_migration` tool (tracked migration history); local files are the canonical intent but the remote drifted historically — always preflight actual remote state (`pg_proc`, `pg_indexes`, `pg_policies`) before applying. Check `supabase_migrations.schema_migrations` for what production has applied. `_repair_backup_20260718` holds the pre-repair state from migration 020 (link ownership, deep-link URIs, `total_clicks`); keep it until nobody needs a rollback.
 
 ## Conventions
 
