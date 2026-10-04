@@ -104,152 +104,162 @@ export function toAndroidLaunchUri(androidDeepLink: string, fallbackUrl: string)
   return guard(`intent://${rest}#Intent;scheme=${scheme};${pkgParam}${fallbackParam};end`)
 }
 
+/**
+ * True when `hostname` is `domain` or a subdomain of it. A substring check
+ * would match look-alikes: twsgurukulx.com contains "x.com" and was treated
+ * as a Twitter/X link.
+ */
+export function hostMatches(hostname: string, domain: string): boolean {
+  const host = hostname.toLowerCase()
+  return host === domain || host.endsWith(`.${domain}`)
+}
+
 export function detectDeepLinks(url: string): DeepLinkConfig | null {
   try {
     const urlObj = new URL(url)
     
     // YouTube
-    if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
+    if (hostMatches(urlObj.hostname, 'youtube.com') || hostMatches(urlObj.hostname, 'youtu.be')) {
       return generateYouTubeDeepLinks(urlObj)
     }
     
     // Instagram
-    if (urlObj.hostname.includes('instagram.com')) {
+    if (hostMatches(urlObj.hostname, 'instagram.com')) {
       return generateInstagramDeepLinks(urlObj)
     }
     
     // Twitter/X
-    if (urlObj.hostname.includes('twitter.com') || urlObj.hostname.includes('x.com')) {
+    if (hostMatches(urlObj.hostname, 'twitter.com') || hostMatches(urlObj.hostname, 'x.com')) {
       return generateTwitterDeepLinks(urlObj)
     }
     
     // TikTok
-    if (urlObj.hostname.includes('tiktok.com')) {
+    if (hostMatches(urlObj.hostname, 'tiktok.com')) {
       return generateTikTokDeepLinks(urlObj)
     }
     
     // Spotify
-    if (urlObj.hostname.includes('spotify.com')) {
+    if (hostMatches(urlObj.hostname, 'spotify.com')) {
       return generateSpotifyDeepLinks(urlObj)
     }
     
     // LinkedIn
-    if (urlObj.hostname.includes('linkedin.com')) {
+    if (hostMatches(urlObj.hostname, 'linkedin.com')) {
       return generateLinkedInDeepLinks(urlObj)
     }
     
     // Facebook
-    if (urlObj.hostname.includes('facebook.com') || urlObj.hostname.includes('fb.com')) {
+    if (hostMatches(urlObj.hostname, 'facebook.com') || hostMatches(urlObj.hostname, 'fb.com')) {
       return generateFacebookDeepLinks(urlObj)
     }
     
     // Reddit
-    if (urlObj.hostname.includes('reddit.com')) {
+    if (hostMatches(urlObj.hostname, 'reddit.com')) {
       return generateRedditDeepLinks(urlObj)
     }
     
     // WhatsApp
-    if (urlObj.hostname.includes('wa.me') || urlObj.hostname.includes('whatsapp.com')) {
+    if (hostMatches(urlObj.hostname, 'wa.me') || hostMatches(urlObj.hostname, 'whatsapp.com')) {
       return generateWhatsAppDeepLinks(urlObj)
     }
     
     // Telegram
-    if (urlObj.hostname.includes('t.me') || urlObj.hostname.includes('telegram.me')) {
+    if (hostMatches(urlObj.hostname, 't.me') || hostMatches(urlObj.hostname, 'telegram.me')) {
       return generateTelegramDeepLinks(urlObj)
     }
     
     // Pinterest
-    if (urlObj.hostname.includes('pinterest.com') || urlObj.hostname.includes('pin.it')) {
+    if (hostMatches(urlObj.hostname, 'pinterest.com') || hostMatches(urlObj.hostname, 'pin.it')) {
       return generatePinterestDeepLinks(urlObj)
     }
     
     // Snapchat
-    if (urlObj.hostname.includes('snapchat.com')) {
+    if (hostMatches(urlObj.hostname, 'snapchat.com')) {
       return generateSnapchatDeepLinks(urlObj)
     }
     
     // Twitch
-    if (urlObj.hostname.includes('twitch.tv')) {
+    if (hostMatches(urlObj.hostname, 'twitch.tv')) {
       return generateTwitchDeepLinks(urlObj)
     }
     
     // Discord
-    if (urlObj.hostname.includes('discord.gg') || urlObj.hostname.includes('discord.com')) {
+    if (hostMatches(urlObj.hostname, 'discord.gg') || hostMatches(urlObj.hostname, 'discord.com')) {
       return generateDiscordDeepLinks(urlObj)
     }
     
     // Zoom
-    if (urlObj.hostname.includes('zoom.us')) {
+    if (hostMatches(urlObj.hostname, 'zoom.us')) {
       return generateZoomDeepLinks(urlObj)
     }
     
     // Google Maps
-    if (urlObj.hostname.includes('maps.google.com') || urlObj.hostname.includes('goo.gl/maps')) {
+    if (hostMatches(urlObj.hostname, 'maps.google.com') || (urlObj.hostname === 'goo.gl' && urlObj.pathname.startsWith('/maps'))) {
       return generateGoogleMapsDeepLinks(urlObj)
     }
     
     // Apple Maps
-    if (urlObj.hostname.includes('maps.apple.com')) {
+    if (hostMatches(urlObj.hostname, 'maps.apple.com')) {
       return generateAppleMapsDeepLinks(urlObj)
     }
     
     // Uber
-    if (urlObj.hostname.includes('uber.com')) {
+    if (hostMatches(urlObj.hostname, 'uber.com')) {
       return generateUberDeepLinks(urlObj)
     }
     
     // Airbnb
-    if (urlObj.hostname.includes('airbnb.com')) {
+    if (hostMatches(urlObj.hostname, 'airbnb.com')) {
       return generateAirbnbDeepLinks(urlObj)
     }
     
     // Amazon
-    if (urlObj.hostname.includes('amazon.com') || urlObj.hostname.includes('amzn.to')) {
+    if (hostMatches(urlObj.hostname, 'amazon.com') || hostMatches(urlObj.hostname, 'amzn.to')) {
       return generateAmazonDeepLinks(urlObj)
     }
     
     // eBay
-    if (urlObj.hostname.includes('ebay.com')) {
+    if (hostMatches(urlObj.hostname, 'ebay.com')) {
       return generateEbayDeepLinks(urlObj)
     }
     
     // Netflix
-    if (urlObj.hostname.includes('netflix.com')) {
+    if (hostMatches(urlObj.hostname, 'netflix.com')) {
       return generateNetflixDeepLinks(urlObj)
     }
     
     // SoundCloud
-    if (urlObj.hostname.includes('soundcloud.com')) {
+    if (hostMatches(urlObj.hostname, 'soundcloud.com')) {
       return generateSoundCloudDeepLinks(urlObj)
     }
     
     // Medium
-    if (urlObj.hostname.includes('medium.com')) {
+    if (hostMatches(urlObj.hostname, 'medium.com')) {
       return generateMediumDeepLinks(urlObj)
     }
     
     // GitHub
-    if (urlObj.hostname.includes('github.com')) {
+    if (hostMatches(urlObj.hostname, 'github.com')) {
       return generateGitHubDeepLinks(urlObj)
     }
     
     // Slack
-    if (urlObj.hostname.includes('slack.com')) {
+    if (hostMatches(urlObj.hostname, 'slack.com')) {
       return generateSlackDeepLinks(urlObj)
     }
     
     // Venmo
-    if (urlObj.hostname.includes('venmo.com')) {
+    if (hostMatches(urlObj.hostname, 'venmo.com')) {
       return generateVenmoDeepLinks(urlObj)
     }
     
     // Cash App
-    if (urlObj.hostname.includes('cash.app')) {
+    if (hostMatches(urlObj.hostname, 'cash.app')) {
       return generateCashAppDeepLinks(urlObj)
     }
     
     // PayPal
-    if (urlObj.hostname.includes('paypal.com') || urlObj.hostname.includes('paypal.me')) {
+    if (hostMatches(urlObj.hostname, 'paypal.com') || hostMatches(urlObj.hostname, 'paypal.me')) {
       return generatePayPalDeepLinks(urlObj)
     }
     
