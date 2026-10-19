@@ -28,6 +28,14 @@ project's dashboard "Node.js Version" setting still reads 22.x and is overridden
 files in step, and check the build log after changing them, because a range Vercel cannot resolve
 to a supported major (20.x, 22.x, 24.x) fails the build rather than falling back.
 
+**Region:** functions are pinned to `bom1` (Mumbai) by `"regions"` in `vercel.json`, because the
+Supabase database is in AWS `ap-south-1` (Mumbai) and most clicks come from India. Every
+redirect waits on one database lookup, so a function in another region pays a cross-continent
+round trip on every click: in `iad1` (the default) a short-link lookup took about 1 second.
+Keep the function region next to the database. Check it on a live response: `X-Vercel-Id`
+reads `<edge>::<function region>::<id>`. Use one region only, a second one would sit far from
+the database.
+
 ## Environment Variables
 
 Required in `.env.local`:
