@@ -4,9 +4,15 @@ import { useState, useEffect, type ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
-import { toDateTimeLocalValue } from '@/lib/datetime'
 import {
+  CLICK_LIMIT_HINT,
+  CLICK_LIMIT_LABEL,
+  CLICK_LIMIT_PLACEHOLDER,
+  EXPIRY_INCOMPLETE_ERROR,
+  EXPIRY_LABEL,
   checkLinkEdit,
+  expiryDayOf,
+  expiryHint,
   type LinkEditErrors,
   type LinkEditField,
   type LinkEditFields,
@@ -22,7 +28,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { TickerChip } from '@/components/TickerChip'
+import { AttributionPreview } from '@/components/dashboard/AttributionPreview'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -32,6 +38,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+
+const SHORT_DOMAIN = process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'
 
 type Link = Database['public']['Tables']['links']['Row']
 type LinkUpdate = Database['public']['Tables']['links']['Update']
@@ -62,7 +70,7 @@ function fieldsFromLink(link: Link): LinkEditFields {
     iosDeepLink: link.ios_deep_link || '',
     androidDeepLink: link.android_deep_link || '',
     fallbackUrl: link.fallback_url || '',
-    expiresAt: toDateTimeLocalValue(link.expires_at),
+    expiresAt: expiryDayOf(link.expires_at),
     maxClicks: link.max_clicks != null ? String(link.max_clicks) : '',
   }
 }
@@ -74,7 +82,7 @@ function errorId(field: LinkEditField) {
 function FieldError({ field, message }: { field: LinkEditField; message?: string }) {
   if (!message) return null
   return (
-    <p id={errorId(field)} role="alert" className="text-xs text-destructive">
+    <p id={errorId(field)} role="alert" className="text-[13px] text-neg">
       {message}
     </p>
   )
@@ -173,11 +181,11 @@ export function EditLinkDialog({
       now: new Date(),
     })
     const nextErrors = { ...check.errors }
-    // A date-time input that is only part filled reports an empty value, which
+    // A date input that is only part filled reports an empty value, which
     // would read as "no expiry". The browser flags it as badInput.
     const expiryInput = document.getElementById(FIELD_IDS.expiresAt) as HTMLInputElement | null
     if (expiryInput?.validity.badInput) {
-      nextErrors.expiresAt = 'Enter a full date and time, or clear it.'
+      nextErrors.expiresAt = EXPIRY_INCOMPLETE_ERROR
     }
 
     // Show what will be saved (https:// added, spaces trimmed), valid or not.
@@ -214,7 +222,7 @@ export function EditLinkDialog({
       onOpenChange(false)
       router.refresh()
     } catch {
-      toast.error('Failed to update link')
+      toast.error('Could not save the link. Try again.')
     } finally {
       setSaving(false)
     }
@@ -242,7 +250,7 @@ export function EditLinkDialog({
   const expiredUntouched =
     link.expires_at !== null &&
     new Date(link.expires_at).getTime() < Date.now() &&
-    fields.expiresAt === toDateTimeLocalValue(link.expires_at)
+    fields.expiresAt === expiryDayOf(link.expires_at)
   const limitReachedUntouched =
     !!link.max_clicks &&
     (link.total_clicks ?? 0) >= link.max_clicks &&
@@ -259,16 +267,21 @@ export function EditLinkDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex flex-col sm:max-w-md">
+      {/* One scroller: the dialog itself. The footer sticks to its bottom
+          edge, so Save stays in reach on a phone and the fields scroll
+          under it. The footer's own padding is the dialog's bottom padding. */}
+      <DialogContent className="pb-0 sm:max-w-lg sm:pb-0">
         <DialogHeader>
-          <DialogTitle>Edit Link</DialogTitle>
-          {/* The code is shown, not offered as a field: a read-only input was
-              the first thing in the dialog, so it took the focus ring and
-              looked like the field to edit. Focus now starts on Original URL. */}
-          <DialogDescription className="sr-only">
-            Update the settings for this short link.
+          <DialogTitle>Edit link</DialogTitle>
+          {/* The code is shown, not offered as a field: it cannot change, and
+              a read-only input first in the dialog took the focus ring and
+              looked like the field to edit. Focus starts on Destination. */}
+          <DialogDescription>
+            <span className="font-mono text-ink [overflow-wrap:anywhere]">
+              {SHORT_DOMAIN}/{link.short_code}
+            </span>
+            <span className="sr-only">. Change where it goes and its limits.</span>
           </DialogDescription>
-          <TickerChip code={link.short_code} copyable={false} className="self-start" />
         </DialogHeader>
 
         <form
@@ -277,14 +290,11 @@ export function EditLinkDialog({
             e.preventDefault()
             void handleSave()
           }}
-          className="flex min-h-0 flex-col gap-4"
+          className="grid gap-4"
         >
-          {/* The fields scroll and the footer does not: a deep link's fields
-              are taller than a phone screen, and Save must stay in reach.
-              The bleed (-mx-4 px-4) keeps focus rings from clipping. */}
-          <div className="-mx-4 grid min-h-0 content-start gap-4 overflow-y-auto px-4 py-2">
+          <div className="grid content-start gap-4 pt-1">
             <div className="grid gap-2">
-              <Label htmlFor={FIELD_IDS.originalUrl}>Original URL</Label>
+              <Label htmlFor={FIELD_IDS.originalUrl}>Destination</Label>
               <Input
                 {...inputProps('originalUrl')}
                 type="url"
@@ -324,7 +334,7 @@ export function EditLinkDialog({
                 </SelectContent>
               </Select>
               {campaigns.status === 'failed' && (
-                <p id="edit-campaign-hint" className="text-xs text-muted-foreground">
+                <p id="edit-campaign-hint" className="text-[13px] text-text-2">
                   Couldn&apos;t load your campaigns. Saving keeps the current one.
                 </p>
               )}
@@ -357,21 +367,36 @@ export function EditLinkDialog({
             )}
 
             <div className="grid gap-2">
-              <Label htmlFor={FIELD_IDS.expiresAt}>Expiration date (optional)</Label>
+              <Label htmlFor={FIELD_IDS.expiresAt}>
+                {EXPIRY_LABEL} <span className="font-normal text-text-3">optional</span>
+              </Label>
+              {/* A day in India time, the same control as Create. An existing
+                  expiry keeps its own time while its day is unchanged. */}
               <Input
-                {...inputProps('expiresAt', expiredUntouched ? 'edit-expires-at-note' : undefined)}
-                type="datetime-local"
+                {...inputProps(
+                  'expiresAt',
+                  expiredUntouched ? 'edit-expires-at-note edit-expires-at-hint' : 'edit-expires-at-hint',
+                )}
+                type="date"
+                className="tabular-nums"
               />
               <FieldError field="expiresAt" message={errors.expiresAt} />
               {expiredUntouched && (
-                <p id="edit-expires-at-note" className="text-xs text-muted-foreground">
-                  This date has passed, so the link is off. It stays off until you pick a later time or clear the date.
+                <p id="edit-expires-at-note" className="text-[13px] text-text-2">
+                  This date has passed, so the link is off. It stays off until you pick a later day or clear the date.
+                </p>
+              )}
+              {!errors.expiresAt && (
+                <p id="edit-expires-at-hint" className="text-[13px] text-text-2">
+                  {expiryHint(fields.expiresAt, link.expires_at)}
                 </p>
               )}
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor={FIELD_IDS.maxClicks}>Max clicks (optional)</Label>
+              <Label htmlFor={FIELD_IDS.maxClicks}>
+                {CLICK_LIMIT_LABEL} <span className="font-normal text-text-3">optional</span>
+              </Label>
               {/* Text with a numeric keypad rather than type="number", so the
                   check sees exactly what was typed (no "1e3" or scroll-wheel
                   changes). */}
@@ -383,23 +408,35 @@ export function EditLinkDialog({
                 type="text"
                 inputMode="numeric"
                 autoComplete="off"
-                placeholder="Unlimited"
+                placeholder={CLICK_LIMIT_PLACEHOLDER}
+                className="tabular-nums sm:max-w-48"
               />
               <FieldError field="maxClicks" message={errors.maxClicks} />
               {limitReachedUntouched && (
-                <p id="edit-max-clicks-note" className="text-xs text-muted-foreground">
+                <p id="edit-max-clicks-note" className="text-[13px] text-text-2">
                   The link has reached this limit, so it is off. It stays off until you raise the limit or clear it.
                 </p>
               )}
               {/* The redirect checks the count it read, and the click is
                   counted afterwards, so clicks in flight together can pass. */}
-              <p id="edit-max-clicks-hint" className="text-xs text-muted-foreground">
-                Approximate: a burst of clicks at the same moment can pass the limit slightly.
+              <p id="edit-max-clicks-hint" className="text-[13px] text-text-2">
+                {CLICK_LIMIT_HINT}
               </p>
             </div>
+
+            {/* What GA4 receives, from the same functions the redirect runs,
+                so a new destination shows its tags before it is saved. Last, so
+                the fields come first. A ruled section like the Create
+                preview, not a box inside the dialog. */}
+            <section aria-labelledby="edit-attribution-title" className="rule-open mt-2 min-w-0 pt-4">
+              <h3 id="edit-attribution-title" className="type-label mb-2">
+                What GA4 receives
+              </h3>
+              <AttributionPreview shortCode={link.short_code} destination={fields.originalUrl} />
+            </section>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 z-10 -mx-5 bg-surface px-5 pb-5 sm:-mx-6 sm:px-6 sm:pb-6">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>

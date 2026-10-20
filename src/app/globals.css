@@ -2,25 +2,56 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/* One switching mechanism: data-theme="light|dark" on <html>, written before
+   first paint by ThemeScript (src/components/theme/ThemeScript.tsx). */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 @theme inline {
-  /* Headings stay in the sans voice; DM Serif is reserved for the single
-     explicit green italic accent on each public page. */
-  --font-heading: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-dm-serif: var(--font-dm-serif);
-  /* Data voice: self-hosted Geist Mono (weight 400 only, about 10 KB, see
-     mono-font.ts) for short codes and mono labels, so the signature element
-     draws the same on every platform. 0/O and l/I/1 stay distinct in it. The
-     system stack is the fallback while it loads. Mono text must never ask for
-     weight 500 or bold: only 400 is loaded. */
-  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  /* Dark elevation system: overlays float, cards stay ring/border-defined. */
-  --shadow-overlay: 0 8px 30px rgb(0 0 0 / 0.55), 0 2px 8px rgb(0 0 0 / 0.35);
-  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.4);
-  /* Fill flash: one-time signal when a link is created/copied (see TickerChip). */
+  /* Faces (src/app/fonts.ts). Satoshi for the interface, Newsreader for
+     titles and KPI figures, JetBrains Mono for codes, URLs and UTM keys.
+     Numbers are never set in mono. */
+  --font-sans: var(--font-satoshi), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  --font-heading: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Depth comes from rules, not shadows. Floating layers (menus, dialogs,
+     toasts) get their edge from a border plus a 1px contact shadow, no blur. */
+  --shadow-overlay: var(--overlay-shadow);
+  --shadow-raised: none;
   --animate-tick-fill: tick-fill 320ms ease-out;
+
+  /* Day Book semantic colors */
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-sunk: var(--sunk);
+  --color-hover: var(--hover);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-edge: var(--edge);
+  --color-accent-fill: var(--accent-fill);
+  --color-accent-fill-hover: var(--accent-fill-hover);
+  --color-on-accent: var(--on-accent);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-bar: var(--bar);
+  --color-bar-mark: var(--bar-mark);
+  --color-prior: var(--prior);
+  --color-hm0: var(--hm0);
+  --color-hm1: var(--hm1);
+  --color-hm2: var(--hm2);
+  --color-hm3: var(--hm3);
+  --color-hm4: var(--hm4);
+  --color-hm5: var(--hm5);
+  --color-focus: var(--focus);
+
+  /* shadcn names the components already use, mapped onto Day Book */
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -53,112 +84,201 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+
+  /* Radius: 3px for controls (rounded-ctl), 6px for the two raised panels and
+     dialogs (rounded-panel). The shadcn scale follows a 6px base. */
+  --radius-ctl: 3px;
+  --radius-panel: 6px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-4xl: var(--radius);
 }
 
 /*
- * TWS Dark Theme
- * Dark-only: these values are set in :root since the html element always has class="dark"
+ * Day Book tokens. Light is the default. Dark applies when ThemeScript writes
+ * data-theme="dark", and, as a no-JavaScript fallback, when the system asks
+ * for dark and no explicit light choice is set. Contrast for every pair is in
+ * the design spec (directions/ledger/spec.md) and was re-measured from this
+ * file.
  */
 :root {
-  /* Dark-only app: make native UI (scrollbars, autofill, date pickers) render dark. */
+  color-scheme: light;
+
+  --page: #F3F0EA;
+  --surface: #FBFAF7;
+  --sunk: #EAE5DC;
+  --hover: #EFEBE3;
+  --ink: #1E2528;
+  --ink-2: #2C3539;
+  --text-2: #454D51;
+  --text-3: #5E6569;
+  --rule: #D9D2C5;
+  --rule-strong: #2C3539;
+  --edge: #8A847A;
+  --accent-fill: #9A5626;
+  --accent-fill-hover: #87491D;
+  --on-accent: #FFFFFF;
+  --accent-text: #8F4F22;
+  --accent-soft: #EDD9C4;
+  --pos: #0A7262;
+  --neg: #B0412E;
+  --bar: #566166;
+  --bar-mark: #C87533;
+  --prior: #8A847A;
+  --hm0: #ECE7DE;
+  --hm1: #D6D3CA;
+  --hm2: #AEB1AD;
+  --hm3: #7F8789;
+  --hm4: #525C60;
+  --hm5: #2C3539;
+  --focus: #9A5626;
+  --overlay-shadow: 0 1px 0 rgb(30 37 40 / 0.08);
+
+  /* shadcn names */
+  --background: var(--page);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--accent-fill);
+  --primary-foreground: var(--on-accent);
+  /* Kept so older usages compile. It is now the amber text color for links. */
+  --primary-text: var(--accent-text);
+  --secondary: var(--sunk);
+  --secondary-foreground: var(--ink);
+  --muted: var(--sunk);
+  --muted-foreground: var(--text-3);
+  --accent: var(--hover);
+  --accent-foreground: var(--ink);
+  --destructive: var(--neg);
+  --border: var(--rule);
+  --input: var(--edge);
+  --ring: var(--focus);
+  --radius: 6px;
+  --chart-1: var(--bar);
+  --chart-2: var(--hm2);
+  --chart-3: var(--hm4);
+  --chart-4: var(--prior);
+  --chart-5: var(--edge);
+  --sidebar: var(--page);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--accent-fill);
+  --sidebar-primary-foreground: var(--on-accent);
+  --sidebar-accent: var(--hover);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--rule);
+  --sidebar-ring: var(--focus);
+
+  /* Fill flash on create and copy: a neutral wash, then nothing (amber is
+     kept for actions). */
+  --tick-flash: var(--hm1);
+}
+
+:root[data-theme="dark"] {
   color-scheme: dark;
-  /* Single source of truth for the bright brand green; --primary-text and --ring
-     both derive from it but can diverge independently later. */
-  --brand: #00B03B;
-  --background: #0a0a0a;
-  --foreground: #FAFAFA;
-  --card: #111111;
-  --card-foreground: #FAFAFA;
-  /* One step lighter than --card so menus, dialogs and toasts lift off the
-     cards they cover. */
-  --popover: #161616;
-  --popover-foreground: #FAFAFA;
-  --primary: #00802B;
-  --primary-foreground: #FFFFFF;
-  /* AA-legible green for TEXT on dark surfaces (#0a0a0a/#111111/#1a1a1a). --primary (#00802B)
-     is reserved for solid fills, where it's paired with --primary-foreground (white). */
-  --primary-text: var(--brand);
-  --secondary: #1a1a1a;
-  --secondary-foreground: #FAFAFA;
-  --muted: #1a1a1a;
-  --muted-foreground: #999999;
-  /* Hover and highlight fill: a clear step above --popover (#161616). */
-  --accent: #262626;
-  --accent-foreground: #FAFAFA;
-  /* Same red, lighter for dark surfaces: error text on #111 is 6.75:1. */
-  --destructive: #FF6B5C;
-  --border: #1f1f1f;
-  /* Field and outline-button edges: 1.5:1 on a #111 card. --border stays
-     #1f1f1f so card and table dividers stay calm. */
-  --input: #2e2e2e;
-  --ring: var(--brand);
-  --radius: 0.625rem;
 
-  /* Fill-flash background, used ONLY by the tick-fill animation, never resting. */
-  --tick-flash: rgb(0 176 59 / 0.16);
-  /* Shared hero/auth glow, all in the brand green family (no foreign hues). */
-  --gradient-hero: radial-gradient(
-    ellipse at center,
-    rgb(0 176 59 / 0.35) 0%,
-    rgb(0 128 43 / 0.18) 40%,
-    transparent 70%
-  );
+  --page: #131819;
+  --surface: #1A2023;
+  --sunk: #232A2E;
+  --hover: #20272A;
+  --ink: #EEE8DC;
+  --ink-2: #E2DBCD;
+  --text-2: #B4AEA3;
+  --text-3: #9A958C;
+  --rule: #2F383C;
+  --rule-strong: #B4AEA3;
+  --edge: #6E7579;
+  --accent-fill: #D98A45;
+  --accent-fill-hover: #E89A55;
+  --on-accent: #131819;
+  --accent-text: #E89A55;
+  --accent-soft: #3A2B1F;
+  --pos: #3FBFA6;
+  --neg: #EE7A64;
+  --bar: #8C9395;
+  --bar-mark: #E0904A;
+  --prior: #7D8285;
+  --hm0: #20272A;
+  --hm1: #2F3A3E;
+  --hm2: #4A5559;
+  --hm3: #78807F;
+  --hm4: #ABA99F;
+  --hm5: #E2DBCD;
+  --focus: #E89A55;
+  --overlay-shadow: 0 1px 0 rgb(0 0 0 / 0.4);
+}
 
-  /* Chart colors: shared token ramp for every chart. Single-series charts use
-     --chart-1 (brand green), always: never pick another step for one series.
-     Multi-series charts draw from the ramp in order, and --chart-5 (neutral
-     gray) is reserved for "Other" and unknown. Measured on #111: 6.5, 15.6,
-     3.8, 10.8 and 4.0:1; neighbors are 2.4 to 4.1:1 apart. */
-  --chart-1: #00B03B;
-  --chart-2: #BBF7D0;
-  --chart-3: #15803D;
-  --chart-4: #4ADE80;
-  --chart-5: #737373;
+/* Same dark values, for a dark system with JavaScript off. Keep in step with
+   the block above. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
 
-  /* Sidebar */
-  --sidebar: #0d0d0d;
-  --sidebar-foreground: #FAFAFA;
-  --sidebar-primary: #00B03B;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1a1a1a;
-  --sidebar-accent-foreground: #FAFAFA;
-  --sidebar-border: #1f1f1f;
-  --sidebar-ring: #00B03B;
+    --page: #131819;
+    --surface: #1A2023;
+    --sunk: #232A2E;
+    --hover: #20272A;
+    --ink: #EEE8DC;
+    --ink-2: #E2DBCD;
+    --text-2: #B4AEA3;
+    --text-3: #9A958C;
+    --rule: #2F383C;
+    --rule-strong: #B4AEA3;
+    --edge: #6E7579;
+    --accent-fill: #D98A45;
+    --accent-fill-hover: #E89A55;
+    --on-accent: #131819;
+    --accent-text: #E89A55;
+    --accent-soft: #3A2B1F;
+    --pos: #3FBFA6;
+    --neg: #EE7A64;
+    --bar: #8C9395;
+    --bar-mark: #E0904A;
+    --prior: #7D8285;
+    --hm0: #20272A;
+    --hm1: #2F3A3E;
+    --hm2: #4A5559;
+    --hm3: #78807F;
+    --hm4: #ABA99F;
+    --hm5: #E2DBCD;
+    --focus: #E89A55;
+    --overlay-shadow: 0 1px 0 rgb(0 0 0 / 0.4);
+  }
 }
 
 @layer base {
   * {
     @apply border-border outline-ring;
     scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
-  body {
-    @apply bg-background text-foreground;
+    scrollbar-color: var(--edge) transparent;
   }
   html {
     @apply font-sans;
+    -webkit-text-size-adjust: 100%;
   }
-  /* Selecting a short URL (the core action) selects in brand green, not UA blue. */
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
   ::selection {
-    background-color: var(--primary);
-    color: var(--primary-foreground);
+    background-color: var(--hm1);
+    color: var(--ink);
   }
-  /* Keep Chrome/Edge autofill from painting light-blue fills inside dark inputs. */
+  /* Keep browser autofill from painting its own fill inside inputs. */
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus {
-    -webkit-box-shadow: 0 0 0 1000px #1a1a1a inset;
-    -webkit-text-fill-color: #fafafa;
-    caret-color: #fafafa;
+    -webkit-box-shadow: 0 0 0 1000px var(--surface) inset;
+    -webkit-text-fill-color: var(--ink);
+    caret-color: var(--ink);
   }
-  /* Motion backstop: every animation/transition collapses to instant. */
+  /* Motion backstop: every animation and transition collapses to instant. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -171,27 +291,164 @@
   }
 }
 
-/* One-time "fill" signal: a green wash pulses and decays. Rendered as an inset
-   box-shadow overlay so it composites over any background utility without
-   fighting it. Applied via the animate-tick-fill utility on link creation and
-   copy confirmation only. */
+/* One-time fill signal when a link is created or copied. */
 @keyframes tick-fill {
   from {
     box-shadow: inset 0 0 0 999px var(--tick-flash);
   }
   to {
-    box-shadow: inset 0 0 0 999px rgb(0 176 59 / 0);
+    box-shadow: inset 0 0 0 999px transparent;
   }
 }
 
-/* Keyboard focus for anything that is not an Input or a SelectTrigger (those
-   keep the full-strength border-ring). A 2px outline in the brand green, 2px
-   outside the element: 6.5:1 on #111, and it stays visible on a green fill,
-   where a border change plus a 50% halo disappeared. Pair it with outline-none:
-   this rule is more specific, so it wins. */
+/* Keyboard focus: a 2px accent outline, 2px outside the element. Pair it with
+   outline-none: this rule is more specific, so it wins. */
 @utility focus-ring {
   &:focus-visible {
-    outline: 2px solid var(--ring);
+    outline: 2px solid var(--focus);
     outline-offset: 2px;
+  }
+}
+
+/* A themed checkbox: put `checkbox` on an <input type="checkbox">. A 16px
+   square with a 3px radius and the edge border on the surface; checked, it
+   draws an ink tick (a clip-path shape, so it follows the theme), and
+   indeterminate draws an ink dash. Keyboard focus is the 2px accent ring.
+   Give it a 44px hit area on phones from the wrapping label. */
+@utility checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  background-color: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 150ms ease-out, background-color 150ms ease-out;
+  &::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    background-color: var(--ink);
+    clip-path: polygon(14% 44%, 0 58%, 38% 96%, 100% 22%, 86% 8%, 38% 68%);
+    transform: scale(0);
+    transition: transform 120ms ease-out;
+  }
+  &:hover {
+    border-color: var(--ink-2);
+  }
+  &:checked,
+  &:indeterminate {
+    border-color: var(--ink-2);
+  }
+  &:checked::before {
+    transform: scale(1);
+  }
+  &:indeterminate::before {
+    clip-path: inset(40% 10% 40% 10%);
+    transform: scale(1);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  &:disabled {
+    cursor: not-allowed;
+    border-color: var(--rule);
+    background-color: var(--sunk);
+  }
+  &:disabled::before {
+    background-color: var(--text-3);
+  }
+}
+
+/* ---- Day Book type scale (spec "Type scale") ---- */
+
+/* Signed-out home headline only. */
+@utility type-display {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 36px;
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  @media (width >= 48rem) {
+    font-size: 52px;
+  }
+}
+/* Page title. */
+@utility type-title {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 30px;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  @media (width >= 48rem) {
+    font-size: 36px;
+  }
+}
+/* KPI figure. */
+@utility type-figure {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 34px;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums lining-nums;
+  @media (width >= 48rem) {
+    font-size: 44px;
+  }
+}
+/* Section title. */
+@utility type-h2 {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+}
+/* Sub-section title (Devices). */
+@utility type-h3 {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 18px;
+  line-height: 1.2;
+}
+/* Column heads, "Needs a look", "Gaining": small caps label. */
+@utility type-label {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1.3;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* ---- Rules: the accounting system ---- */
+
+/* The 2px ink rule that opens every section. */
+@utility rule-open {
+  border-top: 2px solid var(--rule-strong);
+}
+/* The double rule under a total or a headline figure. */
+@utility rule-total {
+  border-bottom: 3px double var(--ink-2);
+}
+/* A single ink rule above a subtotal or under table heads. */
+@utility rule-sub {
+  border-top: 1px solid var(--ink-2);
+}
+
+/* Hide a horizontal scrollbar on rows that scroll sideways by themselves
+   (masthead tabs, filter chips on phones). */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
   }
 }

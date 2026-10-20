@@ -1,93 +1,103 @@
+import Link from 'next/link'
+import type { Metadata } from 'next'
+import { PublicNav } from '@/components/PublicNav'
 import { Navbar } from '@/components/Navbar'
 import { Footer } from '@/components/Footer'
 import { HomeInteractive } from '@/components/HomeInteractive'
-import { cn } from '@/lib/utils'
-import { dmSerif } from '@/app/fonts'
-import type { Metadata } from 'next'
+import { SignInPanel } from '@/components/auth/SignInPanel'
 
 export const metadata: Metadata = {
-  title: 'tws.bio - URL Shortener',
-  description: 'Short links with click analytics and mobile deep linking, for Trading with Sidhant.',
+  // Absolute: the root layout's "%s - tws.bio" template would repeat the name.
+  title: { absolute: 'tws.bio - the link desk for Trading with Sidhant' },
+  description:
+    'Every tws.bio link in a video, a post or a course email starts here. Find the YouTube channel, courses, tools, Telegram and the Hitpoint app.',
   openGraph: {
-    title: 'tws.bio: Short links, big impact',
+    title: 'tws.bio: the link desk for Trading with Sidhant',
     description:
-      'Create short links with analytics and mobile deep linking, by Trading with Sidhant.',
+      'Every tws.bio link in a video, a post or a course email starts here. Find the YouTube channel, courses, tools, Telegram and the Hitpoint app.',
     url: '/',
     siteName: 'tws.bio',
     type: 'website',
   },
 }
 
+// The places a follower usually wants when a short link brought them here
+// and it ended or was typed wrong. Real addresses only; `shown` is what the
+// visitor reads, so it stays short and recognisable.
+const DESTINATIONS: { name: string; href: string; shown: string; internal?: boolean }[] = [
+  { name: 'YouTube channel', href: 'https://www.youtube.com/@tradingwithsidhant', shown: 'youtube.com/@tradingwithsidhant' },
+  { name: 'Courses and cohorts', href: 'https://twsgurukulx.com', shown: 'twsgurukulx.com' },
+  { name: 'Trading tools and resources', href: '/resources', shown: 'tws.bio/resources', internal: true },
+  { name: 'Telegram channel', href: 'https://t.me/tradingwsidhant', shown: 't.me/tradingwsidhant' },
+  { name: 'Hitpoint app', href: 'https://hitpoint.app', shown: 'hitpoint.app' },
+]
+
+// Each row is a link, so it reads as one at rest: the address is set in the
+// accent text color, and the whole row takes the hover tint.
+const ROW_CLASS =
+  'group flex flex-col gap-0.5 border-b border-rule py-3.5 text-ink transition-colors duration-150 hover:bg-hover focus-ring sm:flex-row sm:items-baseline sm:justify-between sm:gap-4'
+
+function DestinationRow({ name, href, shown, internal }: (typeof DESTINATIONS)[number]) {
+  const inner = (
+    <>
+      <span className="text-[15px] font-medium transition-colors duration-150 group-hover:text-accent-text">
+        {name}
+      </span>
+      <span className="font-mono text-[13px] text-accent-text underline decoration-accent-text/40 underline-offset-[3px] [overflow-wrap:anywhere] group-hover:decoration-current sm:text-right">
+        {shown}
+      </span>
+    </>
+  )
+  return (
+    <li>
+      {internal ? (
+        <Link href={href} className={ROW_CLASS}>
+          {inner}
+        </Link>
+      ) : (
+        <a href={href} className={ROW_CLASS}>
+          {inner}
+        </a>
+      )}
+    </li>
+  )
+}
+
+/**
+ * The home page is static. Its server HTML is the signed-out view: the link
+ * desk for a follower whose link ended, and the team sign-in panel. A
+ * signed-in owner gets the create form and recent links instead, swapped in
+ * by HomeInteractive once the session is read in the browser. An anonymous
+ * visitor never downloads supabase-js.
+ */
 export default function HomePage() {
   return (
-    <div className={cn('min-h-screen bg-background flex flex-col overflow-x-clip', dmSerif.variable)}>
-      <Navbar />
+    <div className="flex min-h-dvh flex-col bg-page">
+      <PublicNav>
+        <Navbar />
+      </PublicNav>
 
       <main className="flex-1">
-        {/* Hero Section */}
-        <section className="relative max-w-5xl mx-auto px-4 pt-28 pb-10 md:pb-16 text-center">
-          {/* Gradient glow effect (shared brand token) */}
-          <div
-            className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[400px] opacity-20"
-            style={{ background: 'var(--gradient-hero)' }}
-          />
-          <h1 className="relative mx-auto max-w-3xl text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-[1.08] tracking-tight">
-            Short Links,
-            <br />
-            <span className="font-[family-name:var(--font-dm-serif)] italic tracking-normal text-primary-text">
-              Big Impact
-            </span>
-          </h1>
-          <p className="relative mx-auto max-w-2xl text-muted-foreground text-lg md:text-xl text-balance mt-5">
-            Short links with click analytics and mobile deep linking, for Trading with Sidhant.
-          </p>
-
-          {/* Static demo ticker chip: the product specimen (server HTML, no JS) */}
-          <div className="relative mt-8 flex justify-center">
-            <span className="inline-flex items-center gap-2 rounded-md border border-border border-l-2 border-l-primary-text bg-card px-2.5 py-1 font-mono text-sm tabular-nums">
-              <span className="text-foreground">tws.bio/yt-live</span>
-              <span className="text-muted-foreground">
-                · 1,284 clicks <span aria-hidden className="text-primary-text">▴</span>
-              </span>
-            </span>
+        <HomeInteractive>
+          <div className="grid items-start gap-12 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-16 xl:gap-24">
+            <div className="min-w-0">
+              <h1 className="type-display max-w-[14ch] text-balance text-ink">
+                The link desk for Trading with Sidhant.
+              </h1>
+              <p className="mt-5 mb-7 max-w-[52ch] text-base leading-relaxed text-pretty text-text-2 md:mt-6 md:mb-8 md:text-[17px] md:leading-[1.6]">
+                Every tws.bio link in a video, a post or a course email starts here. If a link brought
+                you to this page, it may have ended or been typed wrong. These are the places people
+                usually want:
+              </p>
+              <ul className="max-w-[560px] rule-open">
+                {DESTINATIONS.map((d) => (
+                  <DestinationRow key={d.href} {...d} />
+                ))}
+              </ul>
+            </div>
+            <SignInPanel className="w-full max-w-[460px] lg:max-w-none" />
           </div>
-        </section>
-
-        {/* Interactive Form + Links List */}
-        <section className="max-w-5xl mx-auto px-4 pb-20">
-          <HomeInteractive />
-        </section>
-
-        {/* What it does: one spec strip in the form column, so the page keeps a
-            single left edge. Plain copy for a private tool, no icon tiles. */}
-        <section aria-labelledby="spec-heading" className="max-w-[44rem] mx-auto px-4 pb-20">
-          <h2
-            id="spec-heading"
-            className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground"
-          >
-            What it does
-          </h2>
-          <dl className="mt-4 grid grid-cols-1 divide-y divide-border border-y border-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            <div className="py-5 sm:px-5 sm:first:pl-0 sm:last:pr-0">
-              <dt className="text-sm font-medium text-foreground">Click analytics</dt>
-              <dd className="mt-1.5 text-sm text-muted-foreground">
-                Referrers, devices, browsers and country for every link.
-              </dd>
-            </div>
-            <div className="py-5 sm:px-5 sm:first:pl-0 sm:last:pr-0">
-              <dt className="text-sm font-medium text-foreground">Mobile deep links</dt>
-              <dd className="mt-1.5 text-sm text-muted-foreground">
-                30+ platforms detected. Links open in the iOS or Android app.
-              </dd>
-            </div>
-            <div className="py-5 sm:px-5 sm:first:pl-0 sm:last:pr-0">
-              <dt className="text-sm font-medium text-foreground">Clean redirects</dt>
-              <dd className="mt-1.5 text-sm text-muted-foreground">
-                No ads and no tracking pixels. UTM tags are kept.
-              </dd>
-            </div>
-          </dl>
-        </section>
+        </HomeInteractive>
       </main>
 
       <Footer />

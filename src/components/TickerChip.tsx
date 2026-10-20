@@ -16,7 +16,7 @@ interface TickerChipProps {
   onCopied?: () => void
   /** Fire the signature fill once when the chip first mounts (creation state). */
   flashOnMount?: boolean
-  /** Start on the green Check state, then revert after 1.2s. */
+  /** Start on the Check state, then revert after 1.6s. */
   copiedOnMount?: boolean
   /**
    * Grow the hit areas to 44px for thumbs, without changing how the chip
@@ -28,10 +28,10 @@ interface TickerChipProps {
 }
 
 /**
- * The product's signature element: a short link rendered as a monospace
- * "ticker" chip with a green tick bar. Copying fires a one-time fill flash
- * (tick-fill keyframe) and morphs the Copy icon into a green Check. Under
- * prefers-reduced-motion the icon swap alone confirms.
+ * A short link as a quiet monospace chip: surface fill, hairline border, 3px
+ * radius, no accent (amber is kept for actions). Copying fires a one-time
+ * fill flash (tick-fill keyframe, a neutral tint) and swaps the Copy icon for
+ * a Check for 1.6s. Under prefers-reduced-motion the icon swap alone confirms.
  */
 export function TickerChip({
   code,
@@ -49,7 +49,7 @@ export function TickerChip({
 
   useEffect(() => {
     if (copiedOnMount) {
-      revertTimer.current = setTimeout(() => setCopied(false), 1200)
+      revertTimer.current = setTimeout(() => setCopied(false), 1600)
     }
     return () => {
       if (revertTimer.current) clearTimeout(revertTimer.current)
@@ -65,14 +65,14 @@ export function TickerChip({
     setCopied(true)
     setFlashing(true)
     if (revertTimer.current) clearTimeout(revertTimer.current)
-    revertTimer.current = setTimeout(() => setCopied(false), 1200)
+    revertTimer.current = setTimeout(() => setCopied(false), 1600)
     onCopied?.()
   }, [code, onCopied])
 
   return (
     <span
       className={cn(
-        'inline-flex max-w-full items-center gap-2 rounded-md border border-border border-l-2 border-l-primary-text bg-card px-2.5 py-1 font-mono text-sm tabular-nums text-foreground',
+        'inline-flex max-w-full items-center gap-2 rounded-ctl border border-rule bg-surface px-2.5 py-1 font-mono text-sm text-ink',
         flashing && 'animate-tick-fill',
         className,
       )}
@@ -84,7 +84,7 @@ export function TickerChip({
           target="_blank"
           rel="noopener noreferrer"
           className={cn(
-            'flex min-w-0 rounded-sm transition-colors hover:text-primary-text focus-ring',
+            'flex min-w-0 rounded-ctl transition-colors duration-150 hover:text-accent-text focus-ring',
             touchTarget && "relative after:absolute after:inset-x-0 after:-inset-y-3 after:content-['']",
           )}
         >
@@ -105,7 +105,7 @@ export function TickerChip({
           onClick={handleCopy}
           aria-label={copied ? 'Short link copied' : 'Copy short link'}
           className={cn(
-            'inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-ring',
+            'inline-flex size-6 shrink-0 items-center justify-center rounded-ctl text-text-3 transition-colors duration-150 hover:text-ink focus-ring',
             touchTarget && "relative after:absolute after:-inset-y-2.5 after:-left-2 after:-right-3 after:content-['']",
           )}
         >
@@ -120,7 +120,7 @@ export function TickerChip({
             <Check
               aria-hidden
               className={cn(
-                'absolute inset-0 size-3.5 text-primary-text transition-opacity duration-150',
+                'absolute inset-0 size-3.5 text-pos transition-opacity duration-150',
                 copied ? 'opacity-100' : 'opacity-0',
               )}
             />

@@ -1,6 +1,7 @@
-import { Card, CardContent } from '@/components/ui/card'
-import { ArrowUp, ArrowDown, Minus } from 'lucide-react'
+import { LossCue } from '@/components/dashboard/LossCue'
 import type { ReactNode } from 'react'
+import { cn } from '@/lib/utils'
+import { formatNumber, formatSignedCount, formatSignedPercent } from '@/lib/ledgerFormat'
 
 export interface StatTrend {
   /** Percent change vs. the immediately-preceding period of equal length (rounded). */
@@ -12,19 +13,9 @@ export interface StatTrend {
   /**
    * True for ratio/average metrics (e.g. "Avg Clicks/Link") where a decrease
    * isn't inherently bad: new links dilute the average even when clicks are
-   * healthy. Renders the chip in a neutral tone instead of red/green.
+   * healthy. Renders in a neutral tone instead of teal/red.
    */
   isRatio?: boolean
-}
-
-interface StatCardProps {
-  title: string
-  value: string | number
-  icon?: ReactNode
-  /** Trend vs. the prior period: pass the result of `computeTrend`. Omit or pass `null` to hide. */
-  trend?: StatTrend | null
-  /** Short context shown after the trend chip, e.g. "vs prior 30 days". */
-  trendLabel?: string
 }
 
 /**
@@ -33,8 +24,8 @@ interface StatCardProps {
  * nothing meaningful to show (both periods are zero).
  *
  * Pass `isRatio: true` for average/ratio metrics (clicks-per-link and the
- * like) so `TrendChip` renders a neutral tone instead of alarm red/green:
- * a drop in an average is often benign (e.g. new links diluting it).
+ * like) so the delta renders in a neutral tone: a drop in an average is often
+ * benign (e.g. new links diluting it).
  */
 export function computeTrend(
   current: number,
@@ -53,106 +44,209 @@ export function computeTrend(
   }
 }
 
-/** Formats an absolute delta with an explicit sign, e.g. "+7" or "-1.2". */
-function formatDelta(delta: number, isRatio?: boolean): string {
-  const rounded = isRatio ? Math.round(delta * 10) / 10 : Math.round(delta)
-  const sign = rounded > 0 ? '+' : ''
-  // Pinned to en-US so '+1,538' reads the same on the server and in every
-  // browser, and matches the grouped totals beside it.
-  return `${sign}${rounded.toLocaleString('en-US', { maximumFractionDigits: isRatio ? 1 : 0 })}`
+function toneClass(trend: StatTrend, value: number): string {
+  if (trend.isRatio || value === 0) return 'text-text-2'
+  return value > 0 ? 'text-pos' : 'text-neg'
 }
 
 /**
- * Small delta chip: shows both the relative percent and the absolute change
- * (e.g. "↑500% (+7)") so a swing at a small denominator doesn't read as
- * alarmist with no sense of scale. Colored green for a favorable move, red
- * for an unfavorable one, and muted for flat/new, except ratio/average
- * metrics (`isRatio`), which always render in a neutral tone since their
- * direction isn't inherently good or bad.
+ * The change against the prior period, statement style: "+12%" or "(20%)"
+ * in teal or red, then the absolute change in tertiary text ("+7", "(486)").
+ * A first period with no baseline reads "New". Color is never the only
+ * signal: the sign or the parentheses carry the direction.
  */
 export function TrendChip({ trend }: { trend: StatTrend | null | undefined }) {
   if (!trend) return null
 
-  const deltaText = formatDelta(trend.delta, trend.isRatio)
+  const abs = formatSignedCount(trend.delta, trend.isRatio ? 1 : 0)
 
   if (trend.isNew) {
     return (
-      <span className="inline-flex items-center gap-0.5 rounded-full bg-primary-text/10 px-1.5 py-0.5 font-mono text-xs tabular-nums text-primary-text">
-        New {deltaText}
+      <span className="inline-flex items-baseline gap-1.5 text-[13px] tabular-nums">
+        <span className="font-medium text-text-2">New</span>
+        <span className="text-text-3">{abs}</span>
       </span>
     )
   }
 
-  const isFlat = trend.percent === 0
-  const isUp = trend.percent > 0
-  const Icon = isFlat ? Minus : isUp ? ArrowUp : ArrowDown
-  const colorClass =
-    isFlat || trend.isRatio
-      ? 'text-muted-foreground'
-      : isUp
-        ? 'text-primary-text'
-        : 'text-destructive'
-
   return (
-    <span className={`inline-flex items-center gap-1 text-xs ${colorClass}`}>
-      <span className="inline-flex items-center gap-0.5 font-mono tabular-nums">
-        <Icon className="h-3 w-3" />
-        {Math.abs(trend.percent).toLocaleString('en-US')}%
+    <span className="inline-flex items-baseline gap-1.5 text-[13px] tabular-nums">
+      <span className={cn('font-bold', toneClass(trend, trend.percent))}>
+        <LossCue value={formatSignedPercent(trend.percent / 100, 0)} />
+        {formatSignedPercent(trend.percent / 100, 0)}
       </span>
-      <span className="font-mono tabular-nums text-muted-foreground">({deltaText})</span>
+      <span className="text-text-3">{abs}</span>
     </span>
   )
 }
 
 /**
- * One cell of the Overview's joined stat strip: label, number, trend. The
- * strip draws the dividers (1px gaps over a tinted background), so a cell is
- * only a flat panel. No icon: the label already names the number.
+ * The KPI delta line: one signed figure in teal or red, then "vs N" in
+ * tertiary text. With a numeric `prior` and value the percent has one
+ * decimal ("+12.4%"); `deltaFormat="count"` shows the absolute change
+ * ("+416") instead.
+ */
+function KpiDelta({
+  trend,
+  value,
+  prior,
+  deltaFormat,
+}: {
+  trend: StatTrend | null | undefined
+  value: string | number
+  prior?: number | string | null
+  deltaFormat: 'percent' | 'count'
+}) {
+  const priorText =
+    prior === null || prior === undefined
+      ? null
+      : `vs ${typeof prior === 'number' ? formatNumber(prior) : prior}`
+  if (!trend && !priorText) return null
+
+  let figure: ReactNode = null
+  if (trend) {
+    if (trend.isNew) {
+      figure = <span className="font-medium text-text-2">New</span>
+    } else if (deltaFormat === 'count') {
+      figure = (
+        <span className={cn('font-bold', toneClass(trend, trend.delta))}>
+          <LossCue value={formatSignedCount(trend.delta, trend.isRatio ? 1 : 0)} />
+          {formatSignedCount(trend.delta, trend.isRatio ? 1 : 0)}
+        </span>
+      )
+    } else {
+      const exact =
+        typeof prior === 'number' && prior > 0 && typeof value === 'number'
+          ? formatSignedPercent((value - prior) / prior)
+          : formatSignedPercent(trend.percent / 100, 0)
+      figure = (
+        <span className={cn('font-bold', toneClass(trend, trend.percent))}>
+          <LossCue value={exact} />
+          {exact}
+        </span>
+      )
+    }
+  }
+
+  return (
+    <div className="mt-2.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1 text-[13px] tabular-nums">
+      {figure}
+      {priorText && <span className="text-text-3">{priorText}</span>}
+    </div>
+  )
+}
+
+/**
+ * One KPI cell: a label, the figure in the serif with the double "totals
+ * rule" under it, and the change against the prior period. Put four of them
+ * in a `KpiRow`, which draws the 2px rule above and the hairlines between.
  */
 export function StatCell({
   title,
   value,
   trend,
+  prior,
+  unit,
+  deltaFormat = 'percent',
+  className,
 }: {
+  /** The label, e.g. "Clicks" or "Busiest day, 2 Oct". */
   title: string
+  /** The figure. A number is grouped with en-US separators. */
   value: string | number
+  /** From `computeTrend(current, prior)`. */
   trend?: StatTrend | null
+  /** The prior period's figure, shown as "vs 13,512". */
+  prior?: number | string | null
+  /** Small text after the figure, e.g. "of 116". */
+  unit?: ReactNode
+  /** "percent" (default) shows "+12.4%", "count" shows "+416". */
+  deltaFormat?: 'percent' | 'count'
+  className?: string
 }) {
   return (
-    <div className="bg-card p-4 sm:p-5">
-      <p className="text-xs font-medium text-muted-foreground">{title}</p>
-      <p className="mt-2 font-mono text-2xl tabular-nums tracking-tight text-foreground sm:text-3xl">
-        {value}
+    <div className={cn('min-w-0 py-4 pr-2', className)}>
+      <p className="text-[13px] font-medium text-text-2">{title}</p>
+      {/* The double totals rule sits under the figure only, never the unit. */}
+      <p className="type-figure mt-2.5 text-ink">
+        <span className="rule-total inline-block pb-1.5">
+          {typeof value === 'number' ? formatNumber(value) : value}
+        </span>
+        {unit && (
+          <span className="ml-2 font-sans text-[15px] font-normal tracking-normal text-text-2">
+            {unit}
+          </span>
+        )}
       </p>
-      {trend && (
-        <div className="mt-1.5">
-          <TrendChip trend={trend} />
-        </div>
-      )}
+      <KpiDelta trend={trend} value={value} prior={prior} deltaFormat={deltaFormat} />
     </div>
   )
 }
 
-export function StatCard({ title, value, icon, trend, trendLabel }: StatCardProps) {
+/**
+ * The KPI row: a 2px ink rule above, four cells with hairlines between, two
+ * by two on phones. Pass `StatCell`s as children.
+ */
+export function KpiRow({
+  children,
+  label,
+  className,
+}: {
+  children: ReactNode
+  /** Accessible name, e.g. "Last 30 days". */
+  label?: string
+  className?: string
+}) {
   return (
-    <Card className="bg-card border-border">
-      <CardContent>
-        {/* The icon sits in the title row, small and muted: it labels the card,
-            it is not a green accent. */}
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm text-muted-foreground">{title}</p>
-          {icon && <span className="text-muted-foreground [&_svg]:size-4">{icon}</span>}
+    <section
+      aria-label={label}
+      className={cn(
+        'rule-open grid grid-cols-2 lg:grid-cols-4 [&>*]:border-rule',
+        // Phones, two by two: a hairline left of the second column and above the second row.
+        '[&>*:nth-child(even)]:border-l [&>*:nth-child(even)]:pl-4 [&>*:nth-child(n+3)]:border-t',
+        // Desktop, one row: a hairline left of every cell after the first.
+        'lg:[&>*:nth-child(n+2)]:border-l lg:[&>*:nth-child(n+2)]:pl-6 lg:[&>*:nth-child(n+3)]:border-t-0',
+        className,
+      )}
+    >
+      {children}
+    </section>
+  )
+}
+
+/** A labelled figure with an optional icon. Kept for older callers; new pages use StatCell in a KpiRow. */
+export function StatCard({
+  title,
+  value,
+  icon,
+  trend,
+  trendLabel,
+}: {
+  title: string
+  value: string | number
+  icon?: ReactNode
+  /** Trend vs. the prior period: pass the result of `computeTrend`. Omit or pass `null` to hide. */
+  trend?: StatTrend | null
+  /** Short context shown after the trend, e.g. "vs prior 30 days". */
+  trendLabel?: string
+}) {
+  return (
+    <div className="rule-open min-w-0 pt-3.5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[13px] font-medium text-text-2">{title}</p>
+        {icon && <span className="text-text-3 [&_svg]:size-4">{icon}</span>}
+      </div>
+      <p className="type-figure mt-2.5 text-ink">
+        <span className="rule-total inline-block pb-1.5">
+          {typeof value === 'number' ? formatNumber(value) : value}
+        </span>
+      </p>
+      {trend && (
+        <div className="mt-2.5 flex items-baseline gap-2">
+          <TrendChip trend={trend} />
+          {trendLabel && <span className="text-[13px] text-text-3">{trendLabel}</span>}
         </div>
-        <p className="mt-1 font-mono text-3xl tabular-nums text-foreground">{value}</p>
-        {trend && (
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <TrendChip trend={trend} />
-            {trendLabel && (
-              <span className="text-xs text-muted-foreground">{trendLabel}</span>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    </div>
   )
 }

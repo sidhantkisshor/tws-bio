@@ -2,7 +2,19 @@ import { describe, expect, it } from 'vitest'
 import {
   applyLinkFilters,
   applyLinkSort,
+  chipCounts,
+  chipLinkIds,
+  chunkIds,
   fillDailyClicks,
+  isExpiringSoon,
+  kindSlug,
+  matchesListFilters,
+  matchesSearch,
+  matchingCampaignIds,
+  parseKind,
+  parseShow,
+  sortLinks,
+  type IndexedLink,
   type LinkFilters,
   type SortOption,
 } from '@/lib/linkFilters'
@@ -20,6 +32,11 @@ class StubQuery {
 
   eq(column: string, value: string | boolean) {
     this.calls.push(['eq', column, value])
+    return this
+  }
+
+  in(column: string, values: readonly string[]) {
+    this.calls.push(['in', column, [...values]])
     return this
   }
 
@@ -164,5 +181,207 @@ describe('fillDailyClicks', () => {
 
   it('gives all zeros for a link with no clicks', () => {
     expect(fillDailyClicks(keys, [])).toStrictEqual([0, 0, 0])
+  })
+})
+
+describe('applyLinkFilters: chips and campaign search', () => {
+  const campaign = 'c0000000-0000-4000-8000-000000000001'
+
+  it('adds the matching campaigns to the one search .or()', () => {
+    expect(filterCalls({ q: 'launch', campaignIds: [campaign] })).toStrictEqual([
+      ['or', `short_code.ilike.%launch%,original_url.ilike.%launch%,campaign_id.in.(${campaign})`],
+    ])
+  })
+
+  it('leaves the search unchanged when no campaign matches', () => {
+    expect(filterCalls({ q: 'promo', campaignIds: [] })).toStrictEqual([
+      ['or', 'short_code.ilike.%promo%,original_url.ilike.%promo%'],
+    ])
+  })
+
+  it('drops a campaign id that is not a uuid instead of putting it in the filter', () => {
+    expect(filterCalls({ q: 'x', campaignIds: ['a),id.eq.(b'] })).toStrictEqual([
+      ['or', 'short_code.ilike.%x%,original_url.ilike.%x%'],
+    ])
+  })
+
+  it('restricts to the chip ids last, after the column filters', () => {
+    expect(filterCalls({ status: 'active', ids: ['a', 'b'] })).toStrictEqual([
+      ['eq', 'is_active', true],
+      ['in', 'id', ['a', 'b']],
+    ])
+  })
+
+  it('adds no id filter for null ids', () => {
+    expect(filterCalls({ ids: null })).toStrictEqual([])
+  })
+})
+
+describe('chip params', () => {
+  it('reads only the known show values', () => {
+    expect(parseShow('drops')).toBe('drops')
+    expect(parseShow('expiring')).toBe('expiring')
+    expect(parseShow('attention')).toBe('attention')
+    expect(parseShow('everything')).toBe('all')
+    expect(parseShow(undefined)).toBe('all')
+  })
+
+  it('round-trips every destination kind through its slug', () => {
+    expect(kindSlug('Broker partner')).toBe('broker-partner')
+    expect(parseKind('broker-partner')).toBe('Broker partner')
+    expect(parseKind('course')).toBe('Course')
+    expect(parseKind('Course')).toBeNull()
+    expect(parseKind('nope')).toBeNull()
+    expect(parseKind(null)).toBeNull()
+  })
+})
+
+describe('isExpiringSoon', () => {
+  const now = new Date('2026-10-20T12:00:00Z')
+
+  it('is true within the next 7 days only', () => {
+    expect(isExpiringSoon('2026-10-21T12:00:00Z', now)).toBe(true)
+    expect(isExpiringSoon('2026-10-27T12:00:00Z', now)).toBe(true)
+    expect(isExpiringSoon('2026-10-27T12:00:01Z', now)).toBe(false)
+  })
+
+  it('is false for an expired link, no expiry or a bad date', () => {
+    expect(isExpiringSoon('2026-10-20T11:59:59Z', now)).toBe(false)
+    expect(isExpiringSoon(null, now)).toBe(false)
+    expect(isExpiringSoon('soon', now)).toBe(false)
+  })
+})
+
+describe('search mirror, chip counts and chip ids', () => {
+  const now = new Date('2026-10-20T12:00:00Z')
+  const base: IndexedLink = {
+    id: '',
+    short_code: '',
+    original_url: 'https://example.org/',
+    link_type: 'url',
+    is_active: true,
+    expires_at: null,
+    campaign_id: null,
+    kind: null,
+    needsLook: false,
+  }
+  const links: IndexedLink[] = [
+    { ...base, id: 'a', short_code: 'ai-trade', original_url: 'https://twsgurukulx.com/ai', kind: 'Course', campaign_id: 'camp-1' },
+    { ...base, id: 'b', short_code: 'tg', original_url: 'https://t.me/tws', kind: 'Community', link_type: 'deep_link' },
+    { ...base, id: 'c', short_code: 'r/10k', original_url: 'https://twsgurukulx.com/r/10k', kind: 'Course' },
+    { ...base, id: 'd', short_code: 'kit', original_url: 'https://rzp.io/l/kit', kind: 'Payment', needsLook: true, is_active: false },
+    { ...base, id: 'e', short_code: 'webinar', expires_at: '2026-10-22T00:00:00Z', is_active: null },
+  ]
+
+  it('matches the code, the destination or a matching campaign, ignoring case', () => {
+    const none = new Set<string>()
+    expect(matchesSearch(links[0], 'AI', none)).toBe(true)
+    expect(matchesSearch(links[1], 't.me', none)).toBe(true)
+    expect(matchesSearch(links[0], 'launch', none)).toBe(false)
+    expect(matchesSearch(links[0], 'launch', new Set(['camp-1']))).toBe(true)
+    expect(matchesSearch(links[1], '(),%', none)).toBe(true)
+  })
+
+  it('finds campaigns by name', () => {
+    const campaigns = [
+      { id: 'camp-1', name: 'AI trade launch' },
+      { id: 'camp-2', name: 'HLC cohort' },
+    ]
+    expect(matchingCampaignIds(campaigns, 'launch')).toEqual(['camp-1'])
+    expect(matchingCampaignIds(campaigns, '')).toEqual([])
+  })
+
+  it('counts every chip', () => {
+    expect(chipCounts(links, now)).toEqual({
+      all: 5,
+      live: 3,
+      paused: 2,
+      app: 1,
+      drops: 1,
+      expiring: 1,
+      attention: 1,
+      kinds: [
+        { kind: 'Course', slug: 'course', count: 2 },
+        { kind: 'Community', slug: 'community', count: 1 },
+        { kind: 'Payment', slug: 'payment', count: 1 },
+      ],
+    })
+  })
+
+  it('gives the ids a chip stands for, and null when none is set', () => {
+    expect(chipLinkIds(links, 'all', null, now)).toBeNull()
+    expect(chipLinkIds(links, 'drops', null, now)).toEqual(['c'])
+    expect(chipLinkIds(links, 'expiring', null, now)).toEqual(['e'])
+    expect(chipLinkIds(links, 'attention', null, now)).toEqual(['d'])
+    expect(chipLinkIds(links, 'all', 'Course', now)).toEqual(['a', 'c'])
+    expect(chipLinkIds(links, 'drops', 'Course', now)).toEqual(['c'])
+    expect(chipLinkIds(links, 'attention', 'Video', now)).toEqual([])
+  })
+})
+
+describe('matchesListFilters', () => {
+  const now = new Date('2026-10-20T12:00:00Z')
+  const base: IndexedLink = {
+    id: '',
+    short_code: '',
+    original_url: 'https://example.org/',
+    link_type: 'url',
+    is_active: true,
+    expires_at: null,
+    campaign_id: null,
+    kind: null,
+    needsLook: false,
+  }
+  const none = new Set<string>()
+  const all = { q: '', type: 'all', status: 'all', show: 'all', kind: null, campaignIds: none } as const
+  const legacy = { ...base, id: 'a', link_type: null, is_active: null }
+  const app = { ...base, id: 'b', link_type: 'deep_link', short_code: 'tg', kind: 'Community' as const }
+
+  it('treats a null link_type as a URL and a null is_active as paused, as the query does', () => {
+    expect(matchesListFilters(legacy, { ...all, type: 'url' }, now)).toBe(true)
+    expect(matchesListFilters(legacy, { ...all, type: 'deep_link' }, now)).toBe(false)
+    expect(matchesListFilters(legacy, { ...all, status: 'inactive' }, now)).toBe(true)
+    expect(matchesListFilters(legacy, { ...all, status: 'active' }, now)).toBe(false)
+  })
+
+  it('combines kind, chip and search', () => {
+    expect(matchesListFilters(app, { ...all, kind: 'Community' }, now)).toBe(true)
+    expect(matchesListFilters(app, { ...all, kind: 'Course' }, now)).toBe(false)
+    expect(matchesListFilters(app, { ...all, show: 'attention' }, now)).toBe(false)
+    expect(matchesListFilters(app, { ...all, q: 'TG' }, now)).toBe(true)
+    expect(matchesListFilters(app, { ...all, q: 'zzz' }, now)).toBe(false)
+  })
+})
+
+describe('sortLinks', () => {
+  const rows = [
+    { id: 'b', created_at: '2026-10-02T00:00:00Z', total_clicks: 5 },
+    { id: 'a', created_at: '2026-10-02T00:00:00Z', total_clicks: null },
+    { id: 'c', created_at: null, total_clicks: 9 },
+    { id: 'd', created_at: '2026-10-05T00:00:00Z', total_clicks: 5 },
+  ]
+  const ids = (sort: Parameters<typeof sortLinks>[1]) => sortLinks(rows, sort).map((r) => r.id)
+
+  it('puts null dates first when newest first and last when oldest first, like Postgres', () => {
+    expect(ids('created_desc')).toEqual(['c', 'd', 'a', 'b'])
+    expect(ids('created_asc')).toEqual(['a', 'b', 'd', 'c'])
+  })
+
+  it('places null clicks the way applyLinkSort asks and breaks ties by id', () => {
+    expect(ids('clicks_desc')).toEqual(['c', 'b', 'd', 'a'])
+    expect(ids('clicks_asc')).toEqual(['a', 'b', 'd', 'c'])
+  })
+
+  it('does not change its input', () => {
+    sortLinks(rows, 'clicks_desc')
+    expect(rows.map((r) => r.id)).toEqual(['b', 'a', 'c', 'd'])
+  })
+})
+
+describe('chunkIds', () => {
+  it('splits into chunks of the given size and keeps the order', () => {
+    expect(chunkIds(['a', 'b', 'c', 'd', 'e'], 2)).toEqual([['a', 'b'], ['c', 'd'], ['e']])
+    expect(chunkIds([], 2)).toEqual([])
+    expect(chunkIds(Array.from({ length: 301 }, (_, i) => String(i))).map((c) => c.length)).toEqual([150, 150, 1])
   })
 })

@@ -1,4 +1,3 @@
-import { fromDateTimeLocalValue, toDateTimeLocalValue } from './datetime'
 import { isSafeUrl } from './redirectSafety'
 import { isValidUrl, normalizeUrl } from './utils'
 
@@ -10,6 +9,64 @@ import { isValidUrl, normalizeUrl } from './utils'
 // as stored is written back as it is, even when it has already turned the link
 // off: saving it changes nothing the redirect does, and refusing it would
 // block every other edit, such as fixing the destination.
+
+// The words for the two limit fields, shared by Create and Edit Link so the
+// same field reads the same in both.
+export const EXPIRY_LABEL = 'Stops working on'
+export const EXPIRY_HINT_EMPTY = 'Empty: it never stops.'
+export const EXPIRY_HINT_DAY = 'It stops at the end of that day, India time.'
+export const CLICK_LIMIT_LABEL = 'Click limit'
+export const CLICK_LIMIT_PLACEHOLDER = 'No limit'
+export const CLICK_LIMIT_HINT =
+  'The link stops after this many clicks. Approximate: clicks at the same moment can pass it by a few.'
+export const EXPIRY_INCOMPLETE_ERROR = 'Enter a full date, or clear it.'
+export const EXPIRY_PAST_ERROR = 'Pick today or a later day, or clear the date.'
+
+// "Stops working on" is a day in India time, the zone the dashboard files
+// days in. IST has no daylight saving, so a fixed offset is exact.
+const DAY_MS = 86_400_000
+const IST_DATE = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+const IST_TIME = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Asia/Kolkata',
+  hour: 'numeric',
+  minute: '2-digit',
+})
+
+/** The instant a link set to stop on `day` (YYYY-MM-DD) stops: midnight IST after it. NaN for a bad day. */
+export function endOfIstDay(day: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return Number.NaN
+  return Date.parse(`${day}T00:00:00+05:30`) + DAY_MS
+}
+
+/**
+ * The IST day (YYYY-MM-DD) a stored expiry falls on, as "Stops working on"
+ * shows it: the last day the link still works at some point. An expiry at
+ * midnight IST (what Create saves) is the end of the day before. '' for none.
+ */
+export function expiryDayOf(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return ''
+  return IST_DATE.format(new Date(t - 1))
+}
+
+/**
+ * The hint under "Stops working on". A stored expiry that is not at midnight
+ * IST keeps its own time while its day is unchanged, so the hint names it.
+ */
+export function expiryHint(day: string, storedExpiresAt: string | null = null): string {
+  if (!day) return EXPIRY_HINT_EMPTY
+  if (storedExpiresAt && day === expiryDayOf(storedExpiresAt)) {
+    const t = new Date(storedExpiresAt).getTime()
+    if (t !== endOfIstDay(day)) return `It stops at ${IST_TIME.format(new Date(t))} that day, India time.`
+  }
+  return EXPIRY_HINT_DAY
+}
 
 /** `links.max_clicks` is a Postgres INTEGER. */
 const MAX_INTEGER = 2_147_483_647
@@ -26,7 +83,7 @@ export interface LinkEditFields {
   iosDeepLink: string
   androidDeepLink: string
   fallbackUrl: string
-  /** A datetime-local value in the viewer's zone, or '' for no expiry. */
+  /** The IST day the link stops working on (YYYY-MM-DD, a date input), or '' for no expiry. */
   expiresAt: string
   /** What was typed in Max Clicks, or '' for no limit. */
   maxClicks: string
@@ -112,18 +169,19 @@ export function checkLinkEdit(input: LinkEditFields, context: LinkEditContext): 
   let expiresAt: string | null = null
   if (fields.expiresAt) {
     const stored = context.storedExpiresAt
-    if (stored !== null && fields.expiresAt === toDateTimeLocalValue(stored)) {
-      // Untouched: the stored instant, seconds included, even if it has passed.
+    if (stored !== null && fields.expiresAt === expiryDayOf(stored)) {
+      // Same day as stored: the stored instant, time and seconds included,
+      // even if it has passed.
       expiresAt = stored
     } else {
-      const iso = fromDateTimeLocalValue(fields.expiresAt)
-      if (!iso) {
-        errors.expiresAt = 'Enter a full date and time, or clear it.'
-      } else if (new Date(iso).getTime() <= context.now.getTime()) {
-        // A new past expiry would turn the link off the moment it is saved.
-        errors.expiresAt = 'Pick a time in the future, or clear the date.'
+      const end = endOfIstDay(fields.expiresAt)
+      if (Number.isNaN(end)) {
+        errors.expiresAt = EXPIRY_INCOMPLETE_ERROR
+      } else if (end <= context.now.getTime()) {
+        // A new past day would turn the link off the moment it is saved.
+        errors.expiresAt = EXPIRY_PAST_ERROR
       } else {
-        expiresAt = iso
+        expiresAt = new Date(end).toISOString()
       }
     }
   }

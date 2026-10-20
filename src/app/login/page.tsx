@@ -1,18 +1,18 @@
 import type { Metadata } from 'next'
 import { AuthShell } from '@/components/auth/AuthShell'
-import { LoginForm } from '@/components/auth/LoginForm'
+import { SignInPanel } from '@/components/auth/SignInPanel'
 import { Toaster } from '@/components/ui/sonner'
 
 export const metadata: Metadata = {
-  title: 'Sign in - tws.bio',
-  description: 'Sign in to manage your short links and analytics.',
+  title: 'Sign in',
+  description: 'Sign in to tws.bio, the link tool of the Trading with Sidhant team.',
 }
 
 export default function LoginPage() {
   return (
     <>
-      <AuthShell title="Sign in" description="Welcome back. Manage your links and analytics.">
-        <LoginForm />
+      <AuthShell>
+        <SignInPanel headingLevel={1} />
       </AuthShell>
       {/* LoginForm and its Google button toast. The Toaster lives on this page,
           not in AuthShell, because /signup (the other AuthShell page) never

@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { isResourceDropRow } from '@/lib/linkRows'
 import type { Database } from '@/types/database'
-import { getShortUrl } from '@/lib/utils'
+import { formatCount } from '@/lib/utils'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -20,6 +20,8 @@ import {
 
 type Link = Database['public']['Tables']['links']['Row']
 
+const SHORT_DOMAIN = process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'
+
 export function DeleteLinkDialog({
   link,
   open,
@@ -32,9 +34,9 @@ export function DeleteLinkDialog({
   const router = useRouter()
   const [deleting, setDeleting] = useState(false)
 
-  const shortUrl = getShortUrl(link.short_code)
-  // Extract just the domain/path portion for display
-  const displayUrl = shortUrl.replace(/^https?:\/\//, '')
+  // The short domain, as the rest of the dashboard names a link (getShortUrl
+  // gives the app URL, which reads localhost:3000 in development).
+  const displayUrl = `${SHORT_DOMAIN}/${link.short_code}`
 
   async function handleDelete() {
     // LinkActions offers no Delete for these rows. This stops any other way in:
@@ -62,7 +64,7 @@ export function DeleteLinkDialog({
       onOpenChange(false)
       router.refresh()
     } catch {
-      toast.error('Failed to delete link')
+      toast.error('Could not delete the link. Try again.')
     } finally {
       setDeleting(false)
     }
@@ -70,15 +72,17 @@ export function DeleteLinkDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
+      {/* Left aligned and as wide as Edit and QR on a phone. The footer
+          order is theirs: the action on top on a phone, Cancel then the
+          action from sm up. */}
+      <AlertDialogContent className="data-[size=default]:max-w-[calc(100%-2rem)] data-[size=default]:sm:max-w-sm">
+        <AlertDialogHeader className="place-items-start text-left">
           <AlertDialogTitle>Delete this link?</AlertDialogTitle>
-          <AlertDialogDescription>
+          <AlertDialogDescription className="text-pretty">
             This deletes{' '}
-            <span className="font-mono wrap-break-word text-foreground">
-              {displayUrl}
-            </span>{' '}
-            and its click history. This cannot be undone.
+            <span className="font-mono [overflow-wrap:anywhere] text-ink">{displayUrl}</span>{' '}
+            and its click history ({formatCount(link.total_clicks ?? 0, 'click')}). Anyone who
+            opens it after this gets a not found page. This cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

@@ -2,15 +2,16 @@
 
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
-import Link from 'next/link'
+import NextLink from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Menu } from '@base-ui/react/menu'
 import { toast } from 'sonner'
-import { ChartColumn, Pencil, QrCode, Power, Trash2 } from 'lucide-react'
 import { isResourceDropRow } from '@/lib/linkRows'
 import { cn } from '@/lib/utils'
 import type { Database } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
+import { CopyShortLinkButton } from '@/components/dashboard/CopyShortLinkButton'
 
 // The dialogs only matter after a click, yet they were statically imported and
 // mounted for every row: react-qr-code alone is ~51KB of table bundle. Loading
@@ -31,13 +32,30 @@ const QRCodeDialog = dynamic(
 
 type LinkRow = Database['public']['Tables']['links']['Row']
 
+const MENU_ITEM =
+  'flex min-h-11 w-full cursor-default items-center rounded-[2px] px-3 text-left text-sm text-ink outline-none select-none data-highlighted:bg-hover sm:min-h-9'
+
+/** Only a web address can be opened in a new tab from here. */
+function isWebUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url)
+}
+
+/**
+ * The row actions of the Links ledger: Copy, QR, Edit as quiet text buttons,
+ * then More (View stats, Duplicate, Open destination, Pause or Activate,
+ * Delete). A Resource Drop row is managed by the Resource Drop Desk, so it
+ * gets no Edit, Duplicate or Delete, and Pause only shows to undo an
+ * inactive row. `hideViewStats` drops View stats where the page already is
+ * the stats page (link detail).
+ */
 export function LinkActions({
   link,
-  touch = false,
+  className,
+  hideViewStats = false,
 }: {
   link: LinkRow
-  /** Phone cards: 44px buttons a thumb can hit. Table rows keep 24px ones. */
-  touch?: boolean
+  className?: string
+  hideViewStats?: boolean
 }) {
   const router = useRouter()
   const [editOpen, setEditOpen] = useState(false)
@@ -51,14 +69,16 @@ export function LinkActions({
   const [toggling, setToggling] = useState(false)
 
   // The Resource Drop route redirects without reading its row, so Edit,
-  // Deactivate and Delete would change nothing a visitor sees, and Delete
-  // would erase the click history. Activate stays for a row that is already
+  // Pause and Delete would change nothing a visitor sees, and Delete would
+  // erase the click history. Activate stays for a row that is already
   // inactive, because an inactive row drops every click it gets.
   const managed = isResourceDropRow(link.short_code)
   const showToggle = !managed || !link.is_active
-
-  const buttonClass = touch ? 'size-11' : undefined
-  const iconClass = touch ? 'size-4' : 'size-3.5'
+  const webDestination = isWebUrl(link.original_url)
+  // The separator splits the links above from the changes below, so it needs
+  // something on both sides.
+  const hasLinkItems = !hideViewStats || !managed || webDestination
+  const hasChangeItems = showToggle || !managed
 
   async function setActive(nextActive: boolean) {
     // Loaded on first use: the table is mostly read, and supabase-js is about
@@ -86,26 +106,25 @@ export function LinkActions({
       router.refresh()
 
       if (wasActive) {
-        // Deactivating a live link is easy to trigger by accident (small icon,
-        // no confirm step), so give it a lightweight undo instead of a
-        // blocking dialog.
-        toast.success('Link deactivated', {
+        // Pausing a live link has no confirm step, so give it a lightweight
+        // undo instead of a blocking dialog.
+        toast.success('Link paused. Visitors now get a not found page.', {
           action: {
             label: 'Undo',
-            onClick: () => void handleUndoDeactivate(),
+            onClick: () => void handleUndoPause(),
           },
         })
       } else {
-        toast.success('Link activated')
+        toast.success('Link is live again')
       }
     } catch {
-      toast.error('Failed to toggle link status')
+      toast.error('Could not change the link. Try again.')
     } finally {
       setToggling(false)
     }
   }
 
-  async function handleUndoDeactivate() {
+  async function handleUndoPause() {
     setToggling(true)
     try {
       const error = await setActive(true)
@@ -115,10 +134,10 @@ export function LinkActions({
         return
       }
 
-      toast.success('Link reactivated')
+      toast.success('Link is live again')
       router.refresh()
     } catch {
-      toast.error('Failed to reactivate link')
+      toast.error('Could not turn the link back on. Try again.')
     } finally {
       setToggling(false)
     }
@@ -126,74 +145,105 @@ export function LinkActions({
 
   return (
     <>
-      {/* No Copy button here: the row's TickerChip (LinksTable short-code cell)
-          is the single copy affordance, with the fill flash + Check morph. */}
-      <div className="flex items-center gap-1">
-        {/* A real link rather than a Button, so it can open in a new tab. No
-            prefetch: twenty rows would each fetch a dynamic page that the
-            owner opens for one link at most. */}
-        <Link
-          href={`/dashboard/links/${link.id}`}
-          prefetch={false}
-          aria-label="View stats"
-          className={cn(buttonVariants({ variant: 'ghost', size: 'icon-xs' }), 'text-muted-foreground hover:text-foreground', buttonClass)}
-        >
-          <ChartColumn className={iconClass} />
-        </Link>
-        {!managed && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => {
-              setEditMounted(true)
-              setEditOpen(true)
-            }}
-            aria-label="Edit link"
-            className={cn('text-muted-foreground hover:text-foreground', buttonClass)}
-          >
-            <Pencil className={iconClass} />
-          </Button>
-        )}
+      <div className={cn('flex items-center gap-0.5', className)}>
+        <CopyShortLinkButton shortCode={link.short_code} />
         <Button
           variant="ghost"
-          size="icon-xs"
+          size="sm"
           onClick={() => {
             setQrMounted(true)
             setQrOpen(true)
           }}
-          aria-label="Show QR code"
-          className={cn('text-muted-foreground hover:text-foreground', buttonClass)}
         >
-          <QrCode className={iconClass} />
+          QR
+          <span className="sr-only"> code for {link.short_code}</span>
         </Button>
-        {showToggle && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={handleToggleActive}
-            disabled={toggling}
-            aria-label={link.is_active ? 'Deactivate link' : 'Activate link'}
-            // Same neutral tone in both states: the Status column already says
-            // which one it is, and a green icon per row was noise.
-            className={cn('text-muted-foreground hover:text-foreground', buttonClass)}
+        {managed ? (
+          // Keeps More in line with the table rows above and below. The
+          // stacked phone entries start at the left, so they need no gap.
+          <span
+            aria-hidden
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'invisible max-lg:hidden')}
           >
-            <Power className={iconClass} />
-          </Button>
-        )}
-        {!managed && (
+            Edit
+          </span>
+        ) : (
           <Button
             variant="ghost"
-            size="icon-xs"
+            size="sm"
             onClick={() => {
-              setDeleteMounted(true)
-              setDeleteOpen(true)
+              setEditMounted(true)
+              setEditOpen(true)
             }}
-            aria-label="Delete link"
-            className={cn('text-muted-foreground hover:text-destructive', buttonClass)}
           >
-            <Trash2 className={iconClass} />
+            Edit
+            <span className="sr-only"> {link.short_code}</span>
           </Button>
         )}
+
+        <Menu.Root>
+          <Menu.Trigger
+            className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+            aria-label={`More actions for ${link.short_code}`}
+          >
+            More
+          </Menu.Trigger>
+          <Menu.Portal>
+            <Menu.Positioner side="bottom" align="end" sideOffset={4} className="z-50">
+              <Menu.Popup className="min-w-48 origin-(--transform-origin) rounded-panel border border-edge bg-surface p-1 text-ink shadow-overlay outline-none transition-[opacity,scale] duration-150 ease-out data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0">
+                {/* No prefetch: twenty rows would each fetch a dynamic page
+                    that the owner opens for one link at most. */}
+                {!hideViewStats && (
+                  <Menu.LinkItem
+                    className={MENU_ITEM}
+                    closeOnClick
+                    render={<NextLink href={`/dashboard/links/${link.id}`} prefetch={false} />}
+                  >
+                    View stats
+                  </Menu.LinkItem>
+                )}
+                {!managed && (
+                  <Menu.LinkItem
+                    className={MENU_ITEM}
+                    closeOnClick
+                    render={<NextLink href={`/dashboard/create?from=${link.id}`} prefetch={false} />}
+                  >
+                    Duplicate
+                  </Menu.LinkItem>
+                )}
+                {webDestination && (
+                  <Menu.LinkItem
+                    className={MENU_ITEM}
+                    closeOnClick
+                    href={link.original_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open destination
+                    <span className="sr-only"> (opens in a new tab)</span>
+                  </Menu.LinkItem>
+                )}
+                {hasLinkItems && hasChangeItems && <div role="separator" className="my-1 h-px bg-rule" />}
+                {showToggle && (
+                  <Menu.Item className={MENU_ITEM} disabled={toggling} onClick={handleToggleActive}>
+                    {link.is_active ? 'Pause' : 'Activate'}
+                  </Menu.Item>
+                )}
+                {!managed && (
+                  <Menu.Item
+                    className={cn(MENU_ITEM, 'text-neg')}
+                    onClick={() => {
+                      setDeleteMounted(true)
+                      setDeleteOpen(true)
+                    }}
+                  >
+                    Delete
+                  </Menu.Item>
+                )}
+              </Menu.Popup>
+            </Menu.Positioner>
+          </Menu.Portal>
+        </Menu.Root>
       </div>
 
       {editMounted && (

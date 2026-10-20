@@ -48,7 +48,7 @@ const SHORT_LINK_MEDIUM = 'short_link'
  * campaign: the visitor's session already has its real source, and a stamped
  * one would credit our own site instead (see the module comment).
  */
-const BUSINESS_DOMAINS: readonly string[] = [
+export const BUSINESS_DOMAINS: readonly string[] = [
   'tradingwithsidhant.com',
   'twsgurukulx.com',
   'hitpoint.app',

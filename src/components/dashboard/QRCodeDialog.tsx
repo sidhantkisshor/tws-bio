@@ -3,10 +3,8 @@
 import { useRef } from 'react'
 import QRCode from 'react-qr-code'
 import { toast } from 'sonner'
-import { Download } from 'lucide-react'
 import { getShortUrl } from '@/lib/utils'
 import { qrExportSize, qrFileName, standardQrSvg } from '@/lib/qrExport'
-import { TickerChip } from '@/components/TickerChip'
 import {
   Dialog,
   DialogContent,
@@ -17,12 +15,13 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 
-// The preview is dark modules on a light plate, like the printed file: a
-// light-on-dark code is an optional feature in QR decoders, and some scanners
-// cannot read it. The SVG needs literal colors; these are the --foreground and
-// --background values from globals.css.
-const PREVIEW_LIGHT = '#FAFAFA'
-const PREVIEW_DARK = '#0A0A0A'
+// The preview is dark modules on a white plate in both themes, like the
+// printed file: a light-on-dark code is an optional feature in QR decoders,
+// and some scanners cannot read it. The SVG needs literal colors.
+const PREVIEW_LIGHT = '#FFFFFF'
+const PREVIEW_DARK = '#1E2528'
+
+const SHORT_DOMAIN = process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'
 
 // The downloads are built from a hidden second render in print colors. Its
 // dark modules are the path with this fill.
@@ -120,21 +119,25 @@ export function QRCodeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>QR Code</DialogTitle>
+          <DialogTitle>QR code</DialogTitle>
           <DialogDescription>
-            Scan this QR code to open the short link.
+            Scan it to open{' '}
+            <span className="font-mono text-ink [overflow-wrap:anywhere]">
+              {SHORT_DOMAIN}/{shortCode}
+            </span>
+            . Put it on slides and printouts for live sessions.
           </DialogDescription>
-          <TickerChip code={shortCode} className="self-start" touchTarget />
         </DialogHeader>
 
-        <div className="flex flex-col items-center gap-3 py-4">
-          {/* Shrinks below 304px so a 360px phone does not scroll the dialog
+        <div className="flex flex-col items-center gap-3">
+          {/* Shrinks below 288px so a 360px phone does not scroll the dialog
               sideways. */}
-          <div className="w-full max-w-[304px] rounded-lg bg-foreground p-6">
+          <div className="w-full max-w-[288px] rounded-panel border border-rule bg-white p-5">
             {/* Level M here too, so the screen and the printed file carry
                 the same code. */}
             <QRCode
               value={url}
+              title={`QR code for ${url}`}
               size={256}
               level="M"
               bgColor={PREVIEW_LIGHT}
@@ -142,8 +145,8 @@ export function QRCodeDialog({
               style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
             />
           </div>
-          <p className="text-xs text-muted-foreground">
-            Same code as the download, ready to print.
+          <p className="text-[13px] text-text-3">
+            The download is the same code in black on white, ready to print.
           </p>
           <div ref={printRef} hidden>
             <QRCode value={url} level="M" bgColor={PRINT_LIGHT} fgColor={PRINT_DARK} />
@@ -152,13 +155,9 @@ export function QRCodeDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={handleDownloadSvg}>
-            <Download className="size-4" />
             Download SVG
           </Button>
-          <Button onClick={handleDownloadPng}>
-            <Download className="size-4" />
-            Download PNG
-          </Button>
+          <Button onClick={handleDownloadPng}>Download PNG</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

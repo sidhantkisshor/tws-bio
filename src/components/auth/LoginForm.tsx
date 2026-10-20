@@ -2,11 +2,13 @@
 
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CircleAlert, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton'
+
+const ALERT_CLASS = 'rounded-ctl border border-neg px-3 py-2.5 text-[13px] leading-normal text-neg'
 
 /**
  * Surfaces ?error=auth_failed set by src/app/auth/callback/route.ts when the
@@ -24,19 +26,18 @@ function CallbackErrorAlert() {
   if (searchParams.get('error') !== 'auth_failed') return null
 
   return (
-    <div
-      role="alert"
-      className="mb-4 flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
-    >
-      <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
-      <span>
-        Google sign-in didn&apos;t complete. Accounts are invite-only, so if you have not
-        been given one, ask the owner.
-      </span>
+    <div role="alert" className={ALERT_CLASS}>
+      Google sign-in did not complete. Sidhant creates each account, so if you do not have one
+      yet, ask him for it.
     </div>
   )
 }
 
+/**
+ * The sign-in form: Google first, then email and password, then the one amber
+ * Sign in. Each pending action disables the other, so a visitor cannot start
+ * both at once.
+ */
 export function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -73,19 +74,30 @@ export function LoginForm() {
   }
 
   return (
-    <>
+    <div className="grid gap-4">
       <Suspense fallback={null}>
         <CallbackErrorAlert />
       </Suspense>
 
-      <form onSubmit={handleLogin} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="email">Email address</Label>
+      <GoogleAuthButton
+        disabled={loading}
+        errorMessage="Failed to log in with Google"
+        onPendingChange={setGooglePending}
+      />
+
+      <div className="flex items-center gap-3 text-xs text-text-3 before:flex-1 before:border-t before:border-rule before:content-[''] after:flex-1 after:border-t after:border-rule after:content-['']">
+        or with email
+      </div>
+
+      <form onSubmit={handleLogin} className="grid gap-4">
+        <div className="grid gap-1.5">
+          <Label htmlFor="email">Email</Label>
           <Input
             id="email"
             name="email"
             type="email"
             autoComplete="email"
+            placeholder="you@tradingwithsidhant.com"
             required
             value={email}
             onChange={(e) => {
@@ -93,10 +105,11 @@ export function LoginForm() {
               setError(null)
             }}
             aria-invalid={!!error}
+            aria-describedby={error ? 'login-error' : undefined}
           />
         </div>
 
-        <div className="space-y-2">
+        <div className="grid gap-1.5">
           <Label htmlFor="password">Password</Label>
           <Input
             id="password"
@@ -110,21 +123,19 @@ export function LoginForm() {
               setError(null)
             }}
             aria-invalid={!!error}
+            aria-describedby={error ? 'login-error' : undefined}
           />
         </div>
 
         {error && (
-          <div
-            role="alert"
-            className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
-          >
-            <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
-            <span>{error}</span>
+          <div id="login-error" role="alert" className={ALERT_CLASS}>
+            {error}
           </div>
         )}
 
         <Button
           type="submit"
+          size="lg"
           disabled={loading || googlePending}
           aria-busy={loading}
           className="w-full"
@@ -132,15 +143,7 @@ export function LoginForm() {
           {loading && <Loader2 aria-hidden className="size-4 animate-spin" />}
           {loading ? 'Signing in...' : 'Sign in'}
         </Button>
-
-        <GoogleAuthButton
-          disabled={loading}
-          errorMessage="Failed to log in with Google"
-          onPendingChange={setGooglePending}
-        />
-
-        <p className="text-center text-sm text-muted-foreground">Accounts are invite-only.</p>
       </form>
-    </>
+    </div>
   )
 }

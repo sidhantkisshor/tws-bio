@@ -1,387 +1,400 @@
+import type { Metadata } from 'next'
+import Link from 'next/link'
 import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
 import {
+  dayKey,
   getClicksOverTimeResult,
-  getTotalClicksResult,
+  getDeviceBreakdownResult,
+  parseTimeRange,
   rangeWindow,
   zeroFillDays,
 } from '@/lib/analytics'
-import { StatCell, computeTrend } from '@/components/dashboard/StatCard'
-import { displayUrl } from '@/components/dashboard/displayUrl'
-import { LazyClickChart } from '@/components/charts/lazy'
-import { TypeBadge } from '@/components/dashboard/TypeBadge'
-import { AlertTriangle } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { buttonVariants } from '@/components/ui/button-variants'
-import { PageHeader } from '@/components/dashboard/PageHeader'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
+  getClickHeatmapResult,
+  getLinkClickWindowsResult,
+  getReferrerRowsResult,
+} from '@/lib/insights'
+import { computeMovers, topDecliners, topGainers } from '@/lib/movers'
+import { groupByPlatform } from '@/lib/sources'
+import { formatNumber, formatShare, sharesToHundred } from '@/lib/ledgerFormat'
+import { SHORT_MONTHS, cn } from '@/lib/utils'
+import { PageHeader, Section } from '@/components/dashboard/PageHeader'
+import { KpiRow, StatCell, computeTrend } from '@/components/dashboard/StatCard'
+import { TimeRangePicker } from '@/components/TimeRangePicker'
+import { BarChart, ChartLegend, shortDay, type BarChartMark } from '@/components/charts/BarChart'
+import { Heatmap } from '@/components/charts/Heatmap'
+import { SourcesPanel } from '@/components/dashboard/SourcesPanel'
+import { NeedsALook } from '@/components/dashboard/NeedsALook'
+import { TopMovers, type MoverRow } from '@/components/dashboard/TopMovers'
+import { TopLinksTable, type TopLinkRow } from '@/components/dashboard/TopLinksTable'
+import { ExportLinksButton } from '@/components/dashboard/ExportLinksButton'
+import { buttonVariants } from '@/components/ui/button-variants'
+import { loadOwnerLinks, rankLinkHealth } from '@/app/dashboard/health/data'
+import { fixLinkClass } from '@/app/dashboard/health/styles'
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
-  const user = await getAuthenticatedUser()
+// The root layout's template adds " - tws.bio".
+export const metadata: Metadata = { title: 'Overview' }
 
-  if (!user) {
-    return null
+// The owner-links read selects every column the CSV holds (ExportRow).
+// Rows handed to the export button. More links than this and a click
+// re-reads every link in the browser, the same path the Links page uses.
+const EXPORT_INLINE_ROWS = 20
+const EXPORT_FILTERS = { q: '', type: 'all', status: 'all', sort: 'created_desc' } as const
+
+/** '2026-09-21' gives { d: 21, m: 'Sep', y: 2026 }. */
+function dayParts(key: string) {
+  const [y, m, d] = key.split('-').map(Number)
+  return { d, m: SHORT_MONTHS[m - 1], y }
+}
+
+/** "21 Sep to 20 Oct 2026", with the year on both ends when they differ. */
+function windowText(startKey: string, endKey: string): string {
+  const a = dayParts(startKey)
+  const b = dayParts(endKey)
+  const start = a.y === b.y ? `${a.d} ${a.m}` : `${a.d} ${a.m} ${a.y}`
+  return `${start} to ${b.d} ${b.m} ${b.y}`
+}
+
+const DEVICE_LABELS: Record<string, string> = {
+  mobile: 'Mobile',
+  desktop: 'Desktop',
+  tablet: 'Tablet',
+  unknown: 'Unknown',
+}
+const DEVICE_FILLS = ['bg-hm5', 'bg-hm3', 'bg-hm2', 'bg-hm1']
+
+function DevicesSplit({ rows, error }: { rows: { name: string; value: number }[]; error: boolean }) {
+  if (error) {
+    return (
+      <p role="status" className="py-2 text-sm text-text-2">
+        Devices could not load. Reload the page to try again.
+      </p>
+    )
+  }
+  const list = rows.filter((r) => r.value > 0)
+  const total = list.reduce((s, r) => s + r.value, 0)
+  if (total === 0) return <p className="py-2 text-sm text-text-2">No clicks in the last 90 days.</p>
+
+  const shares = sharesToHundred(list.map((r) => r.value))
+  const items = list.map((r, i) => ({
+    key: r.name,
+    label: DEVICE_LABELS[r.name.toLowerCase()] ?? r.name.charAt(0).toUpperCase() + r.name.slice(1),
+    value: r.value,
+    share: shares[i],
+    fill: DEVICE_FILLS[Math.min(i, DEVICE_FILLS.length - 1)],
+  }))
+  const desktop = items.find((r) => r.key.toLowerCase() === 'desktop')?.share ?? 0
+  const mobile = items.find((r) => r.key.toLowerCase() === 'mobile')?.share ?? 0
+  let note: string | null = null
+  if (desktop >= 0.2) {
+    note = `${Math.round(desktop * 100)}% of clicks come from a computer, so check every destination on desktop too.`
+  } else if (mobile >= 0.7) {
+    note = `${Math.round(mobile * 100)}% of clicks come from phones, so check every destination on a phone first.`
   }
 
-  // The current 30-day window and the immediately-preceding 30-day window
-  // (used for prior-period trend deltas below). These are the same whole IST
-  // days Analytics and the detail pages use for "30d", so the chart buckets
-  // line up with the RPC's IST day labels whatever the server time zone.
-  const { since: windowStart, priorSince: prevWindowStart, days } = rangeWindow('30d')
-
-  // Fetch stats in parallel
-  const [totalLinksResult, activeLinksResult, clicksDataResult, recentLinksResult, trendLinksResult] =
-    await Promise.all([
-      supabase
-        .from('links')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id),
-      supabase
-        .from('links')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('is_active', true),
-      // `id` rides along so linkIds for the clicks queries below come out of
-      // this same wave instead of a separate round trip.
-      supabase
-        .from('links')
-        .select('id, total_clicks')
-        .eq('user_id', user.id)
-        .order('id', { ascending: true }),
-      supabase
-        .from('links')
-        .select('id, short_code, original_url, link_type, total_clicks, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(5),
-      // Links created in the current or prior 30-day window, used to
-      // derive "new links" / "new active links" trend deltas below.
-      supabase
-        .from('links')
-        .select('id, created_at, is_active', { count: 'exact' })
-        .eq('user_id', user.id)
-        .gte('created_at', prevWindowStart.toISOString())
-        .order('id', { ascending: true }),
-    ])
-
-  // Any of these failing silently degrades a stat to 0, so surface it instead
-  // of letting a genuine query error render identically to "no data yet".
-  let statsError = Boolean(
-    totalLinksResult.error ||
-      activeLinksResult.error ||
-      clicksDataResult.error ||
-      recentLinksResult.error ||
-      trendLinksResult.error
+  return (
+    <>
+      <div
+        role="img"
+        aria-label={items.map((r) => `${r.label} ${formatShare(r.share)}`).join(', ')}
+        className="flex h-2.5 gap-0.5"
+      >
+        {items.map((r) => (
+          <i key={r.key} className={cn('block', r.fill)} style={{ width: `${r.share * 100}%` }} />
+        ))}
+      </div>
+      <ul className="mt-3">
+        {items.map((r) => (
+          <li
+            key={r.key}
+            className="grid grid-cols-[12px_minmax(0,1fr)_72px_60px] items-center gap-2.5 border-b border-rule py-[7px] text-sm"
+          >
+            <i aria-hidden className={cn('block size-2.5', r.fill)} />
+            <span className="text-ink">{r.label}</span>
+            <span className="text-right tabular-nums text-ink">{formatNumber(r.value)}</span>
+            <span className="text-right tabular-nums text-text-2">{formatShare(r.share)}</span>
+          </li>
+        ))}
+      </ul>
+      {note && <p className="mt-3 text-[13px] text-text-3">{note}</p>}
+    </>
   )
-  if (statsError) {
-    console.error('[dashboard] stats query error:', {
-      totalLinksError: totalLinksResult.error,
-      activeLinksError: activeLinksResult.error,
-      clicksDataError: clicksDataResult.error,
-      recentLinksError: recentLinksResult.error,
-      trendLinksError: trendLinksResult.error,
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string | string[] }>
+}) {
+  const user = await getAuthenticatedUser()
+  if (!user) return null
+
+  const params = await searchParams
+  const parsed = parseTimeRange(typeof params.range === 'string' ? params.range : undefined)
+  // Overview compares a window with the one before it, so "All time" (no
+  // bounds, nothing before it) shows the default 30 days instead.
+  const range = parsed === 'all' ? '30d' : parsed
+
+  const now = new Date()
+  const { since, priorSince, days } = rangeWindow(range, now)
+  const last30 = rangeWindow('30d', now)
+  const last90 = rangeWindow('90d', now)
+
+  const supabase = await createClient()
+  const linksResult = await loadOwnerLinks(supabase, user.id)
+  const links = linksResult.data
+  const linksError = linksResult.error
+  const linkIds = links.map((l) => l.id)
+
+  const startKey = dayKey(since)
+  const endKey = dayKey(now)
+  const description = `${windowText(startKey, endKey)}, India time. Changes compare with the ${days} days before.`
+  const header = (
+    <PageHeader
+      title="Overview"
+      description={description}
+      actions={
+        <>
+          {!linksError && links.length > 0 && (
+            <div className="hidden md:block">
+              <ExportLinksButton
+                links={links.slice(0, EXPORT_INLINE_ROWS)}
+                totalCount={links.length}
+                filters={EXPORT_FILTERS}
+              />
+            </div>
+          )}
+          <TimeRangePicker current={range} basePath="/dashboard" showAllTime={false} />
+        </>
+      }
+    />
+  )
+
+  if (!linksError && links.length === 0) {
+    return (
+      <div>
+        {header}
+        <section className="rule-open flex flex-col items-start gap-4 pt-6">
+          <p className="text-sm text-text-2">
+            No links yet. Create your first link and its clicks show here within a minute.
+          </p>
+          <Link href="/dashboard/create" className={buttonVariants({ variant: 'outline' })}>
+            Create a link
+          </Link>
+        </section>
+      </div>
+    )
+  }
+
+  // Everything below needs the link ids, and nothing needs anything else, so
+  // it all runs together.
+  const [series, windows, windows30, referrers, heatmap, devices] = await Promise.all([
+    // One series from the start of the prior window gives both periods: the
+    // chart bars, the dotted prior line, both totals and both busiest days.
+    getClicksOverTimeResult({ timeRange: range, linkIds, since: priorSince.toISOString() }),
+    getLinkClickWindowsResult({ linkIds, priorSince, since }),
+    // linkHealth's "quiet" rule is about the last 30 days whatever the range.
+    range === '30d'
+      ? null
+      : getLinkClickWindowsResult({ linkIds, priorSince: last30.priorSince, since: last30.since }),
+    getReferrerRowsResult({ linkIds, since }),
+    getClickHeatmapResult({ linkIds, since: last90.since }),
+    getDeviceBreakdownResult({ timeRange: '90d', linkIds, since: last90.since.toISOString() }),
+  ])
+
+  // A failed links read leaves every panel without its ids: say so per panel.
+  const seriesError = linksError || series.error
+  const windowsError = linksError || windows.error
+  const w30 = windows30 ?? windows
+  const clicks30 = linksError || w30.error ? null : w30.data.current
+
+  // Needs a look: one row per link, the top three whose worst issue is high
+  // or medium; quieter ones (turned off, no recent clicks) wait on the
+  // Health page.
+  const ranked = linksError ? [] : rankLinkHealth(links, clicks30, now)
+  const urgent = ranked.filter((r) => r.issues[0].severity !== 'low').slice(0, 3)
+
+  // Clicks per day, this window and the one before.
+  const currentDays = zeroFillDays(series.data, since, days)
+  const priorDays = zeroFillDays(series.data, priorSince, days)
+  const clicksNow = currentDays.reduce((s, d) => s + d.clicks, 0)
+  const clicksBefore = priorDays.reduce((s, d) => s + d.clicks, 0)
+  const busiest = currentDays.reduce((best, d) => (d.clicks > best.clicks ? d : best), currentDays[0])
+  const busiestBefore = priorDays.reduce((m, d) => Math.max(m, d.clicks), 0)
+
+  // Links created in each window.
+  const sinceMs = since.getTime()
+  const priorMs = priorSince.getTime()
+  let createdNow = 0
+  let createdBefore = 0
+  for (const l of links) {
+    const t = Date.parse(l.created_at ?? '')
+    if (!Number.isFinite(t)) continue
+    if (t >= sinceMs) createdNow++
+    else if (t >= priorMs) createdBefore++
+  }
+
+  // Per-link clicks in the window and the one before.
+  const cur = windows.data.current
+  const pri = windows.data.prior
+  const clickedNow = Object.values(cur).filter((n) => n > 0).length
+  const clickedBefore = Object.values(pri).filter((n) => n > 0).length
+  const windowTotal = Object.values(cur).reduce((s, n) => s + n, 0)
+
+  const byId = new Map(links.map((l) => [l.id, l]))
+  const movers = computeMovers(cur, pri)
+  const toRow = (m: (typeof movers)[number]): MoverRow | null => {
+    const link = byId.get(m.linkId)
+    return link
+      ? { id: m.linkId, shortCode: link.short_code, current: m.current, prior: m.prior, delta: m.delta }
+      : null
+  }
+  const gaining = topGainers(movers, 4).map(toRow).filter((r): r is MoverRow => r !== null)
+  const losing = topDecliners(movers, 4).map(toRow).filter((r): r is MoverRow => r !== null)
+
+  // Chart marks: the day a top-gaining link went live, when that day is in
+  // the window. At most two, on different days.
+  const marks: BarChartMark[] = []
+  for (const m of topGainers(movers, 10)) {
+    if (marks.length >= 2) break
+    const link = byId.get(m.linkId)
+    const t = Date.parse(link?.created_at ?? '')
+    if (!link || !Number.isFinite(t) || t < sinceMs) continue
+    const key = dayKey(new Date(t))
+    if (marks.some((x) => x.date === key)) continue
+    const code = link.short_code
+    const short = code.length > 14 ? `${code.slice(0, 13)}...` : code
+    marks.push({
+      date: key,
+      label: `${code} went live, ${shortDay(key)}`,
+      shortLabel: `${short}, ${shortDay(key)}`,
     })
   }
 
-  const totalLinks = totalLinksResult.count || 0
-  const activeLinks = activeLinksResult.count || 0
-  let linkRows = clicksDataResult.data || []
-  if (!clicksDataResult.error && totalLinks > linkRows.length && linkRows.length > 0) {
-    const pageSize = linkRows.length
-    const extraPages = await Promise.all(
-      Array.from(
-        { length: Math.ceil((totalLinks - pageSize) / pageSize) },
-        (_, index) => {
-          const from = pageSize * (index + 1)
-          return supabase
-            .from('links')
-            .select('id, total_clicks')
-            .eq('user_id', user.id)
-            .order('id', { ascending: true })
-            .range(from, Math.min(from + pageSize - 1, totalLinks - 1))
-        },
-      ),
-    )
-    const failedPage = extraPages.find((page) => page.error)
-    if (failedPage?.error) {
-      console.error('[dashboard] paginated links query:', failedPage.error)
-      statsError = true
-    } else {
-      linkRows = linkRows.concat(extraPages.flatMap((page) => page.data || []))
-    }
-  }
+  const topLinks: TopLinkRow[] = links
+    .map((link) => ({ link, current: cur[link.id] ?? 0, prior: pri[link.id] ?? 0 }))
+    .filter((r) => r.current > 0)
+    .sort((a, b) => b.current - a.current || a.link.short_code.localeCompare(b.link.short_code))
+    .slice(0, 10)
 
-  const totalClicks = linkRows.reduce(
-    (sum, link) => sum + (link.total_clicks || 0),
-    0
-  )
-  const avgClicksPerLink =
-    totalLinks > 0 ? Math.round((totalClicks / totalLinks) * 10) / 10 : 0
-
-  // Bucket links-created-in-window data into current vs. prior period counts.
-  let trendLinks = trendLinksResult.data || []
-  const totalTrendLinks = trendLinksResult.count || 0
-  if (!trendLinksResult.error && totalTrendLinks > trendLinks.length && trendLinks.length > 0) {
-    const pageSize = trendLinks.length
-    const extraPages = await Promise.all(
-      Array.from(
-        { length: Math.ceil((totalTrendLinks - pageSize) / pageSize) },
-        (_, index) => {
-          const from = pageSize * (index + 1)
-          return supabase
-            .from('links')
-            .select('id, created_at, is_active')
-            .eq('user_id', user.id)
-            .gte('created_at', prevWindowStart.toISOString())
-            .order('id', { ascending: true })
-            .range(from, Math.min(from + pageSize - 1, totalTrendLinks - 1))
-        },
-      ),
-    )
-    const failedPage = extraPages.find((page) => page.error)
-    if (failedPage?.error) {
-      console.error('[dashboard] paginated trend-links query:', failedPage.error)
-      statsError = true
-    } else {
-      trendLinks = trendLinks.concat(extraPages.flatMap((page) => page.data || []))
-    }
-  }
-  let linksCurrentCount = 0
-  let linksPrevCount = 0
-  let activeLinksCurrentCount = 0
-  let activeLinksPrevCount = 0
-  for (const l of trendLinks) {
-    if (!l.created_at) continue
-    const createdMs = new Date(l.created_at).getTime()
-    if (createdMs >= windowStart.getTime()) {
-      linksCurrentCount++
-      if (l.is_active) activeLinksCurrentCount++
-    } else {
-      linksPrevCount++
-      if (l.is_active) activeLinksPrevCount++
-    }
-  }
-
-  const linkIds = linkRows.map((l) => l.id)
-
-  let clickChartData: { date: string; clicks: number }[] = []
-  let clicksCurrentWindow = 0
-  let clicksPrevWindow = 0
-  let clickTrendAvailable = false
-  // Distinguishes "the click query failed" from "this link genuinely has no
-  // clicks yet": ClickChart renders a different message for each so a
-  // swallowed error doesn't masquerade as a brand-new-user empty state.
-  let chartError = Boolean(clicksDataResult.error)
-
-  if (linkIds.length > 0) {
-    const [clicksSeriesResult, combinedClicksResult] = await Promise.all([
-      // Day buckets aggregated DB-side via the SECURITY INVOKER RPC (clicks
-      // RLS applies, since it runs as the logged-in user) instead of one raw
-      // row per click, which silently undercounted past PostgREST's 1000-row
-      // response cap. `since` pins the RPC to the same IST-midnight window
-      // boundary used by the prior-period count below.
-      getClicksOverTimeResult({
-        timeRange: '30d',
-        linkIds,
-        since: windowStart.toISOString(),
-      }),
-      // Combined current + prior span. Subtract the current series below to
-      // derive the prior window without putting every UUID in a GET query.
-      getTotalClicksResult({
-        timeRange: 'all',
-        linkIds,
-        since: prevWindowStart.toISOString(),
-      }),
-    ])
-
-    if (clicksSeriesResult.error) {
-      chartError = true
-      statsError = true
-    }
-    if (combinedClicksResult.error) {
-      console.error('[dashboard] prior clicks query failed')
-      statsError = true
-    }
-
-    // Zero-fill every day in the window so the chart always renders a
-    // continuous 30-day line instead of only the (possibly sparse) days
-    // that happened to have a click.
-    clickChartData = zeroFillDays(clicksSeriesResult.data, windowStart, days)
-
-    if (!clicksSeriesResult.error) {
-      clicksCurrentWindow = clicksSeriesResult.data.reduce((sum, row) => sum + row.clicks, 0)
-    }
-    if (!combinedClicksResult.error) {
-      clicksPrevWindow = Math.max(combinedClicksResult.data - clicksCurrentWindow, 0)
-    }
-    clickTrendAvailable = !clicksSeriesResult.error && !combinedClicksResult.error
-  }
-
-  const recentLinks = recentLinksResult.data || []
-  const recentLinksError = Boolean(recentLinksResult.error)
-
-  // Prior-period trend deltas for the stat cards, "vs prior 30 days":
-  // Total Links / Active Links compare new links added in each window;
-  // Total Clicks compares raw click volume; Avg Clicks/Link compares the
-  // click-volume-to-link-count ratio at the end of each window.
-  const totalLinksAtCurrentStart = Math.max(totalLinks - linksCurrentCount, 0)
-  const avgClicksCurrentWindow =
-    totalLinks > 0 ? clicksCurrentWindow / totalLinks : 0
-  const avgClicksPrevWindow =
-    totalLinksAtCurrentStart > 0 ? clicksPrevWindow / totalLinksAtCurrentStart : 0
-
-  const totalLinksTrend = computeTrend(linksCurrentCount, linksPrevCount)
-  const totalClicksTrend = clickTrendAvailable
-    ? computeTrend(clicksCurrentWindow, clicksPrevWindow)
-    : null
-  const avgClicksTrend = clickTrendAvailable
-    ? computeTrend(avgClicksCurrentWindow, avgClicksPrevWindow, { isRatio: true })
-    : null
-  const activeLinksTrend = computeTrend(activeLinksCurrentCount, activeLinksPrevCount)
+  const everClicked = links.some((l) => (l.total_clicks ?? 0) > 0)
+  const windowLabel = `Last ${days} days`
+  const before = `${days} days before`
 
   return (
     <div>
-      {/* No Create Link here: the sidebar button (and the + in the phone top
-          bar) is always on screen, so a second one only competed with it. */}
-      <PageHeader title="Overview" />
+      {header}
 
-      {statsError && (
-        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 mb-6 text-sm">
-          <AlertTriangle className="size-4 shrink-0 text-destructive" />
-          <span className="text-foreground">
-            Some stats couldn&apos;t load.
-          </span>
-          <Link
-            href="/dashboard"
-            className="text-primary-text hover:text-primary-text/80 underline underline-offset-4"
-          >
+      {linksError && (
+        <p role="status" className="mb-4 border-t border-rule pt-4 text-sm text-text-2">
+          Your links could not load, so the figures below are incomplete.{' '}
+          <Link href={`/dashboard?range=${range}`} className={fixLinkClass}>
             Try again
           </Link>
-        </div>
+        </p>
       )}
 
-      {/* Stats: one joined strip (two rows on a phone) instead of four cards.
-          The 1px gaps over a tinted background draw the dividers. */}
-      <section aria-label="Summary" className="mb-8">
-        <p className="mb-3 text-xs text-muted-foreground">
-          Changes compare the last 30 days with the 30 days before.
+      <NeedsALook rows={urgent} total={ranked.length} />
+
+      <KpiRow label={windowLabel} className="mb-2">
+        <StatCell
+          title="Clicks"
+          value={seriesError ? '---' : clicksNow}
+          prior={seriesError ? null : clicksBefore}
+          trend={seriesError ? null : computeTrend(clicksNow, clicksBefore)}
+        />
+        <StatCell
+          title={!seriesError && busiest && busiest.clicks > 0 ? `Busiest day, ${shortDay(busiest.date)}` : 'Busiest day'}
+          value={seriesError ? '---' : (busiest?.clicks ?? 0)}
+          prior={seriesError ? null : busiestBefore}
+          trend={seriesError ? null : computeTrend(busiest?.clicks ?? 0, busiestBefore)}
+          deltaFormat="count"
+        />
+        <StatCell
+          title="Links created"
+          value={linksError ? '---' : createdNow}
+          prior={linksError ? null : createdBefore}
+          trend={linksError ? null : computeTrend(createdNow, createdBefore)}
+          deltaFormat="count"
+        />
+        <StatCell
+          title="Links that got clicks"
+          value={windowsError ? '---' : clickedNow}
+          unit={windowsError ? undefined : `of ${formatNumber(links.length)}`}
+          prior={windowsError ? null : clickedBefore}
+          trend={windowsError ? null : computeTrend(clickedNow, clickedBefore)}
+          deltaFormat="count"
+        />
+      </KpiRow>
+      {(seriesError || windowsError) && !linksError && (
+        <p role="status" className="text-[13px] text-text-2">
+          Some figures could not load. Reload the page to try again.
         </p>
-        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-foreground/10 ring-1 ring-foreground/10 lg:grid-cols-4">
-          <StatCell title="Total Links" value={totalLinks.toLocaleString('en-US')} trend={totalLinksTrend} />
-          <StatCell title="Total Clicks" value={totalClicks.toLocaleString('en-US')} trend={totalClicksTrend} />
-          <StatCell title="Avg Clicks/Link" value={avgClicksPerLink.toLocaleString('en-US')} trend={avgClicksTrend} />
-          <StatCell title="Active Links" value={activeLinks.toLocaleString('en-US')} trend={activeLinksTrend} />
-        </div>
-      </section>
+      )}
 
-      {/* Clicks Over Time Chart */}
-      <Card className="bg-card border-border mb-8">
-        <CardHeader>
-          <CardTitle>Clicks Over Time (Last 30 Days)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <LazyClickChart data={clickChartData} error={chartError} />
-        </CardContent>
-      </Card>
+      <div className="mt-8 mb-9 grid grid-cols-1 gap-9 md:mt-10 lg:mb-12 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-12">
+        <Section title="Clicks per day" actions={<ChartLegend priorLabel={before} />}>
+          <BarChart
+            data={currentDays}
+            prior={priorDays}
+            marks={marks}
+            error={seriesError}
+            label="Clicks per day"
+            priorLabel={before}
+            emptyText={
+              everClicked
+                ? `No clicks in the last ${days} days.`
+                : 'No clicks yet. Share your first link and its clicks show here within a minute.'
+            }
+          />
+        </Section>
+        <TopMovers
+          gaining={gaining}
+          losing={losing}
+          caption={`Clicks vs the ${before}`}
+          error={windowsError}
+        />
+      </div>
 
-      {/* Recent Links */}
-      <Card className="bg-card border-border">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Recent Links</CardTitle>
-          <Link
-            href="/dashboard/links"
-            className="focus-ring relative rounded-sm text-sm text-primary-text hover:text-primary-text/80 after:absolute after:-inset-x-2 after:-inset-y-3 after:content-['']"
-          >
-            View all
+      <div className="mb-9 grid grid-cols-1 gap-9 lg:mb-12 lg:grid-cols-2 lg:gap-12">
+        <SourcesPanel
+          groups={groupByPlatform(referrers.data)}
+          windowLabel={windowLabel}
+          recordedSince={referrers.recordedSince}
+          error={linksError || referrers.error}
+          emptyText={`No clicks in the last ${days} days.`}
+        />
+        <Section title="Best time to post" caption="Clicks by hour, India time, last 90 days">
+          <Heatmap
+            data={heatmap.data}
+            error={linksError || heatmap.error}
+            emptyText="No clicks in the last 90 days."
+          />
+          <Section title="Devices" caption="Last 90 days" level={3} className="mt-9">
+            <DevicesSplit rows={devices.data} error={linksError || devices.error} />
+          </Section>
+        </Section>
+      </div>
+
+      <Section
+        title="Top links"
+        caption={windowLabel}
+        actions={
+          <Link href="/dashboard/links" className={fixLinkClass}>
+            All {formatNumber(links.length)} links
           </Link>
-        </CardHeader>
-
-        {recentLinksError ? (
-          <CardContent>
-            <div className="flex flex-col items-center text-center py-12 gap-3">
-              <div className="rounded-full bg-destructive/10 p-3">
-                <AlertTriangle className="size-6 text-destructive" />
-              </div>
-              <div>
-                <p className="text-foreground font-medium">Couldn&apos;t load your links</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Something went wrong.{' '}
-                  <Link
-                    href="/dashboard"
-                    className="text-primary-text hover:text-primary-text/80 underline underline-offset-4"
-                  >
-                    Try again
-                  </Link>
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        ) : recentLinks.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="px-4 lg:px-6">Short Link</TableHead>
-                <TableHead className="hidden px-4 md:table-cell lg:px-6">Original URL</TableHead>
-                <TableHead className="px-4 text-right lg:px-6">Clicks</TableHead>
-                <TableHead className="hidden px-4 lg:table-cell lg:px-6">Created</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {recentLinks.map((link) => (
-                <TableRow key={link.id}>
-                  {/* On a phone the cell is also the URL column: code on top,
-                      destination under it, clicks at the right. */}
-                  <TableCell className="w-full max-w-0 px-4 py-3 md:w-auto md:max-w-none lg:px-6">
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href={`/dashboard/links/${link.id}`}
-                        className="focus-ring -my-3 truncate rounded-sm py-3 font-mono text-sm text-foreground transition-colors hover:text-primary-text md:my-0 md:py-0"
-                      >
-                        tws.bio/{link.short_code}
-                      </Link>
-                      {link.link_type === 'deep_link' && <TypeBadge type={link.link_type} />}
-                    </div>
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground md:hidden">
-                      {displayUrl(link.original_url)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="hidden w-full max-w-0 px-4 py-3 md:table-cell lg:px-6">
-                    <span className="block truncate text-muted-foreground" title={link.original_url}>
-                      {displayUrl(link.original_url)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="px-4 py-3 text-right font-mono tabular-nums text-foreground lg:px-6">
-                    {(link.total_clicks || 0).toLocaleString('en-US')}
-                  </TableCell>
-                  <TableCell className="hidden px-4 py-3 text-muted-foreground lg:table-cell lg:px-6">
-                    {link.created_at
-                      ? formatDate(link.created_at)
-                      : '---'}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        }
+      >
+        {windowsError ? (
+          <p role="status" className="py-4 text-sm text-text-2">
+            Top links could not load. Reload the page to try again.
+          </p>
+        ) : topLinks.length === 0 ? (
+          <p className="py-4 text-sm text-text-2">No clicks in the last {days} days.</p>
         ) : (
-          <CardContent>
-            <div className="flex flex-col items-center text-center py-12 gap-4">
-              <p className="text-muted-foreground">No links created yet.</p>
-              <Link href="/dashboard/create" className={buttonVariants()}>
-                Create Link
-              </Link>
-            </div>
-          </CardContent>
+          <TopLinksTable rows={topLinks} total={windowTotal} linkCount={links.length} />
         )}
-      </Card>
+      </Section>
     </div>
   )
 }
