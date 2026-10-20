@@ -13,14 +13,16 @@ npm run dev       # Start dev server (Next.js)
 npm run build     # Production build
 npm run start     # Start production server
 npm run lint      # ESLint 10 (flat config, eslint.config.mjs)
-npm run test      # Vitest (run mode) — unit tests for pure functions
+npm run test      # Vitest (run mode), unit tests for pure functions and the redirect routes
 npm run typecheck # tsc --noEmit
 ```
 
-Testing uses **Vitest** (`vitest.config.ts`, `environment: node`). Specs live in `src/**/__tests__/`
-(covering `utils`, `deeplinks`, `resourceDrop`, the `anonLinks` hook, and the measurement layer:
-`sgtm`, `forwardParams`, `shortLinkAttribution`). Add tests for pure/logic functions; there is
-no component/E2E harness.
+Testing uses **Vitest** (`vitest.config.ts`, `environment: node`). Specs live in `src/**/__tests__/`.
+They cover the two redirect route handlers (`[shortCode]` and `r/[slug]`, run with Supabase and
+`after()` mocked), URL safety (`redirectSafety`, `utils`), short codes (including a check that every
+top-level route is reserved), the measurement layer (`sgtm`, `forwardParams`,
+`shortLinkAttribution`, `clickContext`), `deeplinks`, `resourceDrop`, `userAgent` and the
+`anonLinks` hook. Add tests for pure/logic functions; there is no component/E2E harness.
 
 **Runtime:** Node 24 is pinned via `engines.node` (`^24.0.0`) and `.nvmrc`. Vercel reads
 `engines.node` and builds with it, which is what actually decides the production runtime: the
@@ -66,6 +68,12 @@ Three Supabase clients exist, one per runtime. Each reads the auth session from 
 - `src/lib/supabase/server.ts` — Server client (async, uses `cookies()` from `next/headers`), for Server Components and Route Handlers
 - `src/lib/supabase/middleware.ts` — Middleware client (operates on `NextRequest`), only used by `src/proxy.ts`
 
+The two redirect route handlers (`[shortCode]` and `r/[slug]`) use a fourth kind: a module-level
+anon `supabase-js` client with no session. They only call SECURITY DEFINER RPCs that anon may
+execute, so they skip the cookie work on the hottest path. Every call they make has a timeout
+(`.abortSignal(AbortSignal.timeout(...))`): 2.5 s for the link lookup, 5 s for the click write
+(`CLICK_RPC_TIMEOUT_MS` in `src/lib/clickContext.ts`).
+
 ### Middleware
 
 The session-refresh middleware lives in `src/proxy.ts` (exports `proxy` function + route matcher config). Next.js 16 picks this up as a "Proxy (Middleware)" — visible in the build output. This is a Next.js 16 convention; if downgrading, rename to `src/middleware.ts`.
@@ -78,7 +86,7 @@ The session-refresh middleware lives in `src/proxy.ts` (exports `proxy` function
 | `/login` | Client Component | Email/password + Google OAuth login |
 | `/signup` | Client Component | Registration |
 | `/dashboard` | Server Component | Auth-guarded, fetches user's links server-side via `redirect('/login')` |
-| `/[shortCode]` | Route Handler (GET) | Core redirect logic + deep link handling + analytics tracking |
+| `/[shortCode]` | Route Handler (GET) | Core redirect logic + deep link handling + analytics tracking. Next.js also runs it for HEAD |
 | `/r/[slug]` | Route Handler (GET) | TWS Resource Drop short links: 302 to `twsgurukulx.com/r/{slug}` without waiting on the DB (see `src/lib/resourceDrop.ts`). The Resource Drop Desk writes to the TWS CRM and cannot reach this database, so there is no link created up front. In `after()`, `resource_drop_link_id` (migration 021, definer, anon-callable) finds or creates a `links` row `short_code = 'r/{slug}'` tagged `resource-drop`, then `record_click_and_increment` logs the click. Bots skipped; creation capped at 20 new rows an hour. |
 | `/auth/callback` | Route Handler (GET) | PKCE OAuth code exchange |
 | `/auth/signout` | Route Handler | Signs out user, clears session |
@@ -90,8 +98,8 @@ The home page demonstrates the app's core split: `page.tsx` is a Server Componen
 ### Key Data Flow
 
 1. **Link creation**: Requires authentication. Client calls `create_link` or `create_deep_link` Supabase RPC (SECURITY DEFINER); since migration 019 both reject callers with no session (`auth.uid() IS NULL` → "You must be signed in to create links") and always own the row to the caller via `COALESCE(p_user_id, auth.uid())`. These RPCs are the only write path to `links` (direct INSERT is blocked by RLS), so this holds for raw REST calls too. `CreateLinkForm` shows a sign-in/create-account gate to anonymous visitors instead of the form. The `anon_links` localStorage system + `get_links_by_ids` RPC now only surface links created anonymously *before* migration 019 — no new anonymous links can be created.
-2. **Redirect**: `GET /[shortCode]` looks up active link → for deep links, returns HTML page with JS redirect + fallback timeout; for standard links, `NextResponse.redirect()`
-3. **Analytics**: Tracked asynchronously via `after()` callback during redirect — calls the `record_click_and_increment` RPC (inserts into `clicks` and bumps `links.total_clicks` in one call)
+2. **Redirect**: `GET /[shortCode]` first checks that the path has the shape of a stored code (`hasShortCodeShape`), so `/favicon.ico`, `/robots.txt` and scanner probes get the branded 404 with no database call. Then it looks up the active link. A failed or timed-out lookup returns a logged 503 page with `Retry-After`, never "not found". An expired link, a link at its click limit, and a link whose destination or web fallback is the same short link (a loop) get a 410 page. Deep links get an Android intent redirect or the HTML page with a JS redirect and fallback timeout; standard links get a `no-store` 307. The status pages are in `src/lib/linkPages.ts`.
+3. **Analytics**: Tracked asynchronously via `after()` callback during redirect. Calls the `record_click_and_increment` RPC (inserts into `clicks` and bumps `links.total_clicks` in one call). Only the three responses that send the visitor on record a click (307, Android intent, deep-link page), and only for a GET from a user agent that is not a bot or link preview (`shouldRecordClick` in `src/lib/clickContext.ts`). Click totals from before this filter shipped (October 2026) still include some bot and HEAD requests: they were left in on purpose.
 4. **Auth**: Email/password or Google OAuth → PKCE exchange at `/auth/callback` → session refreshed by middleware on every request. Sign-out uses `<form action="/auth/signout" method="post">` for progressive enhancement. Auth redirect routes resolve origin from `NEXT_PUBLIC_APP_URL` with fallback to `requestUrl.origin`.
 5. **Dashboard**: Server-side paginated (PAGE_SIZE 20) using async `searchParams` — fully server-rendered, no client JS
 
@@ -109,17 +117,17 @@ tws.bio reports into the business's shared measurement stack. It uses exactly on
 
 What tws.bio measures is the **click**, not the app. That path is server-side and runs whether or not anyone has the dashboard open.
 
-**Server-side click path**: a short link is a 302, so there is no page to run the web container's tag on. `src/lib/sgtm.ts` posts a GA4 Measurement Protocol v2 hit straight from the `[shortCode]` redirect's `after()` block to the server container (`sendClickToServerContainer`, event `short_link_click`). The client ID is derived from IP + user agent + `SGTM_CID_SALT` (`deriveClientId`), since a server hit has no cookie to read; the session ID buckets by a 30-minute window (`deriveSessionId`). `isLikelyBot()` drops crawler and uptime-monitor traffic before it reaches GA4.
+**Server-side click path**: a short link is a redirect, so there is no page to run the web container's tag on. `src/lib/sgtm.ts` posts a GA4 Measurement Protocol v2 hit straight from the `[shortCode]` redirect's `after()` block to the server container (`sendClickToServerContainer`, event `short_link_click`). The client ID is derived from IP + user agent + `SGTM_CID_SALT` (`deriveClientId`), since a server hit has no cookie to read; the session ID buckets by a 30-minute window (`deriveSessionId`). `isLikelyBot()` drops crawler and uptime-monitor traffic before it reaches GA4, and `shouldRecordClick()` uses it to keep the same traffic out of the `clicks` table.
 
 **This path is off by default.** It only sends when `SGTM_CLICKS=on` (`isClickTaggingEnabled`). A cookieless server hit cannot join the visitor's browser session, so in the shared property G-L7PYFJM9QB each click shows up as a new user with an "Unassigned / (not set)" session and drowns the real website numbers. Clicks are still stored in the `clicks` table, and the destination visit keeps the link's `utm_*` tags. Before you turn this back on, point `GA4_MEASUREMENT_ID` at a separate GA4 property.
 
 **Naming constraint (important)**: the server container forwards a whitelist of standard GA4/Meta event names on to the Meta Conversions API (pixel `1139413964970750`) as business conversions. The whitelist includes `page_view`, `sign_up` and `purchase`. tws.bio is an internal link tool, not a storefront, so its server click event is named `short_link_click`, deliberately off that whitelist. Any new event sent from here must stay off it, or tool activity gets counted as a business conversion and corrupts Meta's ad optimisation.
 
-**Attribution forwarding and auto-tagging**: `src/lib/forwardParams.ts` forwards an explicit allowlist of inbound `utm_*` params and vendor click IDs (`gclid`, `fbclid`, `ttclid`, ...) through to the destination, so a paid click keeps its attribution. `src/lib/shortLinkAttribution.ts` stamps default `utm_source`/`utm_medium`/`utm_campaign` on links that arrive with none, naming the individual short link instead of letting GA4 file the visit as `tws.bio / referral`. `resolveDestination()` in `route.ts` runs both, in order: forward the click's own params first, then stamp defaults only if neither the destination nor the click already carries a `utm_source`/`medium`/`campaign`. Kill switch: `SHORTLINK_AUTOTAG=off`, takes effect on the next request, no deploy.
+**Attribution forwarding and auto-tagging**: `src/lib/forwardParams.ts` forwards an explicit allowlist of inbound `utm_*` params and vendor click IDs (`gclid`, `fbclid`, `ttclid`, ...) through to the destination, so a paid click keeps its attribution. `src/lib/shortLinkAttribution.ts` stamps default `utm_source`/`utm_medium`/`utm_campaign` on clicks that arrive with none: `utm_medium=short_link` and `utm_campaign=<short code>`, so GA4 can name the individual link. `utm_source` is the site the link was clicked on, from the click's `Referer` (`attributionSource`): the host without `www.`, or the app's package name for an `android-app://` referrer. The standard redirect is a 307, and a browser keeps the original page as the referrer across it, so a fixed `tws.bio` here would erase the real platform (YouTube, Instagram) in GA4. With no referrer, or a referrer on tws.bio itself, `utm_source` is `tws.bio`. A click from one of the business's own sites (`BUSINESS_DOMAINS`: tradingwithsidhant.com, twsgurukulx.com, hitpoint.app and their subdomains, all in one GA4 property) gets nothing stamped, so the session keeps the source that brought the visitor there. `resolveDestination()` in `src/lib/redirectSafety.ts` runs both, in order: forward the click's own params first, then stamp defaults only if neither the destination nor the click already carries a `utm_source`/`medium`/`campaign`. Kill switch: `SHORTLINK_AUTOTAG=off`, takes effect on the next request, no deploy. Because the `Location` header now depends on the `Referer`, every redirect must stay `no-store`; a cacheable redirect would also need `Vary: Referer`. `utm_medium=short_link` matches no GA4 default channel rule, so a click from a site GA4 does not already classify (a known social, video or search site) lands in "Unassigned" unless the property gets a custom channel group for it.
 
 ### Security in Redirect Handler
 
-The `[shortCode]/route.ts` handler validates URLs against a `SAFE_DEEP_LINK_SCHEMES` allowlist and `BLOCKED_HOSTNAMES` regex, rejects `javascript:`, `data:`, and `vbscript:` schemes, and sets `Content-Security-Policy` and `X-Frame-Options: DENY` headers on deep link HTML responses.
+`src/lib/redirectSafety.ts` (used by `[shortCode]/route.ts`) validates URLs against a `SAFE_DEEP_LINK_SCHEMES` allowlist and the `BLOCKED_HOSTNAMES` regex, and rejects `javascript:`, `data:`, and `vbscript:` schemes. The route sets `Content-Security-Policy` and `X-Frame-Options: DENY` headers on deep link HTML responses.
 
 ### Database Tables
 
@@ -139,8 +147,8 @@ Migrations are in `supabase/migrations/` (001–021 + a timestamped drop). The r
 - **Components**: Named exports (not default), props typed with inline interfaces. Exception: `page.tsx` files use `export default` (Next.js requirement)
 - **DB types**: Derived from `Database` type in `src/types/database.ts` — e.g. `Database['public']['Tables']['links']['Row']`
 - **Styling**: Inline Tailwind utility classes only, blue-600 as primary action color
-- **Short codes**: 6-char alphanumeric random string; custom codes are lowercase alphanumeric + hyphens
-- **Utility functions**: `cn()`, `generateShortCode()`, `getShortUrl()`, `isValidUrl()` in `src/lib/utils.ts`
+- **Short codes**: 6-char alphanumeric random string; custom codes are lowercase alphanumeric + hyphens. A path that does not match `SHORT_CODE_PATTERN` (`src/lib/shortCodes.ts`) never reaches the database
+- **Utility functions**: `cn()`, `generateShortCode()`, `getShortUrl()`, `isValidUrl()` (also refuses a destination that is another tws.bio short link), `normalizeUrl()` in `src/lib/utils.ts`
 
 ## Known Issues
 
@@ -151,3 +159,4 @@ Migrations are in `supabase/migrations/` (001–021 + a timestamped drop). The r
 - `clicks` rows recorded before 2026-07-15 have raw IPs, NULL `referrer_domain`, and NULL `country`; newer rows get masked IPs, derived referrer domains, and country from Vercel's `x-vercel-ip-country` header (migration 017 — country stays NULL in local dev where the header is absent)
 - Anonymous users' home-page link list goes through the `get_links_by_ids(uuid[])` definer RPC (migration 018) since direct `links` reads are owner-only under RLS — possession of a link UUID is treated as proof of creation
 - A tag-server outage surfaces only as a `console.error` from `route.ts` (`'failed'` is logged, `'skipped'` deliberately is not). There is no alert on it, so a sustained GA4 gap is found by reading logs, not by being told
+- Safari on an iPad (iPadOS 13 and later) sends the same user agent as Safari on a Mac, so those clicks are stored as macOS desktop and get the desktop redirect, not the app deep link (see `src/lib/userAgent.ts`)

@@ -78,6 +78,29 @@ export function shouldForwardParam(key: string): boolean {
   return canonicalParam(key) !== null
 }
 
+/** The campaign fields a click row stores. */
+const UTM_FIELDS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'] as const
+
+export type UtmFields = Partial<Record<(typeof UTM_FIELDS)[number], string>>
+
+/**
+ * Read the campaign fields off a query string the way `withForwardedParams`
+ * reads them: keys in any casing, empty values skipped, the first remaining
+ * value per key. A click row read with exact-case `get('utm_source')` would
+ * record nothing for `?UTM_SOURCE=newsletter` while the destination, and GA4,
+ * receive `utm_source=newsletter`.
+ */
+export function readUtm(params: URLSearchParams): UtmFields {
+  const fields: UtmFields = {}
+  for (const [rawKey, value] of params) {
+    if (!value) continue
+    const key = canonicalParam(rawKey)
+    const field = UTM_FIELDS.find((name) => name === key)
+    if (field && fields[field] === undefined) fields[field] = value
+  }
+  return fields
+}
+
 /**
  * Merge incoming tracking parameters onto a destination URL.
  *
@@ -118,7 +141,10 @@ export function withForwardedParams(
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return destination
 
   // Read the destination's existing keys without mutating them, so the original
-  // query string survives byte for byte.
+  // query string survives byte for byte. Keys are compared lowercased on both
+  // sides: a vendor key like `ScCid` is mixed case, and comparing its canonical
+  // spelling against lowercased keys let a stranger's `ScCid` sit beside the
+  // author's.
   const claimed = new Set<string>()
   for (const key of url.searchParams.keys()) claimed.add(key.toLowerCase())
 
@@ -130,13 +156,13 @@ export function withForwardedParams(
     if (!value) continue
 
     const key = canonicalParam(rawKey)
-    if (!key || claimed.has(key)) continue
+    if (!key || claimed.has(key.toLowerCase())) continue
 
     const pair = `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
     if (pair.length + 1 > remaining) continue
 
     remaining -= pair.length + 1
-    claimed.add(key)
+    claimed.add(key.toLowerCase())
     additions.push(pair)
   }
 

@@ -121,6 +121,71 @@ describe('isLikelyBot', () => {
     expect(isLikelyBot('GOOGLEBOT/2.1')).toBe(true)
     expect(isLikelyBot('CURL/8.4.0')).toBe(true)
   })
+
+  // The link previews and crawlers that fetch a short link the moment it is
+  // shared or indexed. Each one would otherwise land in the clicks table as a
+  // visit.
+  const CRAWLERS: Record<string, string> = {
+    WhatsApp: 'WhatsApp/2.23.20.0 A',
+    Telegram: 'TelegramBot (like TwitterBot)',
+    Slack: 'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)',
+    facebookexternalhit: 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+    Twitterbot: 'Twitterbot/1.0',
+    Discordbot: 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+    LinkedInBot: 'LinkedInBot/1.0 (compatible; Mozilla/5.0; Apache-HttpClient +http://www.linkedin.com)',
+    Googlebot: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+    'Googlebot smartphone':
+      'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.175 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+    Applebot:
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.1 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)',
+  }
+
+  for (const [name, userAgent] of Object.entries(CRAWLERS)) {
+    it(`flags the ${name} link preview or crawler`, () => {
+      expect(isLikelyBot(userAgent)).toBe(true)
+    })
+  }
+
+  // Real visitors, including the in-app browsers most short-link clicks come
+  // from. None may be dropped as a bot.
+  const PEOPLE: Record<string, string> = {
+    'Chrome on Android':
+      'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36',
+    'Chrome on Windows': CHROME_WINDOWS,
+    'Safari on iPhone': IPHONE_SAFARI,
+    'Safari on Mac': SAFARI_MAC,
+    'Instagram in-app on Android':
+      'Mozilla/5.0 (Linux; Android 13; SM-S918B Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.6367.82 Mobile Safari/537.36 Instagram 330.0.0.40.92 Android (33/13; 450dpi; 1080x2340; samsung; SM-S918B; dm3q; qcom; en_US; 596227443)',
+    'Instagram in-app on iPhone':
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 330.0.2.29.103 (iPhone14,5; iOS 17_4; en_US; en; scale=3.00; 1170x2532; 600469519)',
+    'Facebook in-app on Android':
+      'Mozilla/5.0 (Linux; Android 13; SM-A536B Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.6367.82 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/460.0.0.48.109;]',
+    'Facebook in-app on iPhone':
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/459.0.0.40.112;FBBV/584613475;FBDV/iPhone14,5;FBMD/iPhone;FBSN/iOS;FBSV/17.4;FBSS/3;FBID/phone;FBLC/en_US;FBOP/5;FBRV/586015094]',
+  }
+
+  for (const [name, userAgent] of Object.entries(PEOPLE)) {
+    it(`does not flag ${name}`, () => {
+      expect(isLikelyBot(userAgent)).toBe(false)
+    })
+  }
+
+  it('does not flag a CUBOT phone, whose brand name contains "bot", in any casing', () => {
+    expect(
+      isLikelyBot(
+        'Mozilla/5.0 (Linux; Android 11; CUBOT KINGKONG 5 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36',
+      ),
+    ).toBe(false)
+    expect(
+      isLikelyBot(
+        'Mozilla/5.0 (Linux; Android 10; Cubot X30) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
+      ),
+    ).toBe(false)
+  })
+
+  it('still flags a crawler with "cubot" in its name, through its other markers', () => {
+    expect(isLikelyBot('CubotCrawler/1.0')).toBe(true)
+  })
 })
 
 describe('deriveClientId', () => {

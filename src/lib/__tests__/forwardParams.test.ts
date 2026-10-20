@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { shouldForwardParam, withForwardedParams, FORWARDED_PARAMS } from '../forwardParams'
+import { shouldForwardParam, withForwardedParams, readUtm, FORWARDED_PARAMS } from '../forwardParams'
 
 const qs = (s: string) => new URLSearchParams(s)
 
@@ -240,5 +240,59 @@ describe('withForwardedParams regressions', () => {
     const out = withForwardedParams('https://ex.com/p?', qs('utm_source=ig'))
     expect(out).not.toContain('?&')
     expect(out).toBe('https://ex.com/p?utm_source=ig')
+  })
+
+  it("does not let a stranger's ScCid sit beside the one the destination already declares", () => {
+    const out = withForwardedParams('https://ex.com/p?ScCid=author', qs('ScCid=stranger'))
+    expect(out).toBe('https://ex.com/p?ScCid=author')
+  })
+
+  it('does not duplicate ScCid when the destination and the click spell it in different cases', () => {
+    const out = withForwardedParams('https://ex.com/p?sccid=author', qs('SCCID=stranger'))
+    expect(out).toBe('https://ex.com/p?sccid=author')
+  })
+
+  it('collapses incoming ScCid keys in different cases to the first one', () => {
+    const out = withForwardedParams('https://ex.com/p', qs('ScCid=first&SCCID=second'))
+    expect(out).toBe('https://ex.com/p?ScCid=first')
+  })
+})
+
+describe('readUtm', () => {
+  it('reads all five campaign fields', () => {
+    expect(
+      readUtm(qs('utm_source=ig&utm_medium=bio&utm_campaign=oct&utm_term=t&utm_content=c')),
+    ).toEqual({
+      utm_source: 'ig',
+      utm_medium: 'bio',
+      utm_campaign: 'oct',
+      utm_term: 't',
+      utm_content: 'c',
+    })
+  })
+
+  it('folds key case the same way the forwarder does, so the click row matches what the destination receives', () => {
+    const incoming = qs('UTM_SOURCE=newsletter&Utm_Medium=email&utm_campaign=oct')
+    expect(readUtm(incoming)).toEqual({
+      utm_source: 'newsletter',
+      utm_medium: 'email',
+      utm_campaign: 'oct',
+    })
+    const forwarded = new URL(withForwardedParams('https://ex.com/c', incoming)).searchParams
+    expect(forwarded.get('utm_source')).toBe('newsletter')
+    expect(forwarded.get('utm_medium')).toBe('email')
+  })
+
+  it('takes the first non-empty value for a key, as the forwarder does', () => {
+    expect(readUtm(qs('utm_source=&utm_source=ig&UTM_SOURCE=later'))).toEqual({ utm_source: 'ig' })
+  })
+
+  it('leaves a field out when it is absent or empty', () => {
+    expect(readUtm(qs('utm_source='))).toEqual({})
+    expect(readUtm(qs(''))).toEqual({})
+  })
+
+  it('ignores other utm_ keys and non-campaign params', () => {
+    expect(readUtm(qs('utm_id=1&utm_anything=x&fbclid=abc&q=search'))).toEqual({})
   })
 })
