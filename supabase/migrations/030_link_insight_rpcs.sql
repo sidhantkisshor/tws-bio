@@ -1,7 +1,7 @@
 -- Migration 030: Link insight RPCs (click heatmap and period-over-period counts)
 --
--- NOT YET APPLIED. Run the preflight below against the remote database first:
--- the remote has drifted from these files before (CLAUDE.md).
+-- APPLIED to production on 2026-10-20 through the Supabase MCP (preflight and verify passed: invoker, search_path=public, anon cannot execute, authenticated can).
+-- Before re-running anywhere else, run the preflight below: the remote has drifted from these files before (CLAUDE.md).
 --
 -- What changes: two new read-only functions. Nothing existing is touched.
 --   1. get_click_heatmap(p_link_ids, p_since): clicks grouped by India weekday
