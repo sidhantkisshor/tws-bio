@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { isReservedShortCode } from "./shortCodes"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -186,6 +187,21 @@ export const BLOCKED_HOSTNAMES = {
   test: (hostname: string): boolean => isBlockedHost(hostname),
 }
 
+// Hosts that serve this app: the short-link domain and the app URL's host.
+function ownHosts(): Set<string> {
+  const hosts = new Set<string>()
+  const add = (host: string | undefined) => {
+    if (host) hosts.add(host.toLowerCase().replace(/^www\./, ''))
+  }
+  add(process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio')
+  try {
+    if (process.env.NEXT_PUBLIC_APP_URL) add(new URL(process.env.NEXT_PUBLIC_APP_URL).hostname)
+  } catch {
+    // An unparseable app URL adds nothing.
+  }
+  return hosts
+}
+
 export function isValidUrl(url: string): boolean {
   try {
     const parsed = new URL(url)
@@ -201,8 +217,33 @@ export function isValidUrl(url: string): boolean {
     if (url.length > 2048) {
       return false
     }
+    // A destination on this app's own host is another short link. Following it
+    // records a second click, and two links that point at each other loop
+    // until the browser gives up, recording a click on every hop. App pages on
+    // the same host (the home page, /resources, /r/{slug}) are fine.
+    if (ownHosts().has(parsed.hostname.toLowerCase().replace(/^www\./, ''))) {
+      const first = parsed.pathname.split('/')[1] ?? ''
+      if (first !== '' && !isReservedShortCode(first)) return false
+    }
     return true
   } catch {
     return false
   }
+}
+
+/**
+ * Turn what people paste into an absolute URL: `example.com/page` and
+ * `www.example.com` gain `https://`, `//example.com` gains `https:`. Anything
+ * that already has a scheme, or does not look like a host, comes back trimmed
+ * and unchanged, so isValidUrl still decides whether it is acceptable.
+ */
+export function normalizeUrl(input: string): string {
+  const value = input.trim()
+  if (!value) return value
+  if (value.startsWith('//')) return `https:${value}`
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) return value
+  // A bare host: letters, digits and hyphens around at least one dot, then an
+  // optional port, path, query or fragment. Never matches `mailto:x` or `a b`.
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(:\d+)?([/?#]\S*)?$/i.test(value)) return `https://${value}`
+  return value
 }

@@ -1,7 +1,113 @@
-import { describe, it, expect } from 'vitest'
-import { isAutoTagEnabled, withShortLinkAttribution } from '../shortLinkAttribution'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+import { attributionSource, isAutoTagEnabled, withShortLinkAttribution } from '../shortLinkAttribution'
 
 const qs = (s: string) => new URLSearchParams(s)
+
+describe('attributionSource', () => {
+  // The app host defaults to NEXT_PUBLIC_APP_URL. Pinned so a value in the
+  // shell running the tests cannot change the results.
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', undefined)
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('falls back to the short domain when the click has no referrer', () => {
+    expect(attributionSource(null, 'tws.bio')).toBe('tws.bio')
+    expect(attributionSource('', 'tws.bio')).toBe('tws.bio')
+  })
+
+  it('names a web referrer by its host, with and without www.', () => {
+    expect(attributionSource('https://www.youtube.com/', 'tws.bio')).toBe('youtube.com')
+    expect(attributionSource('https://youtube.com/watch?v=x', 'tws.bio')).toBe('youtube.com')
+    expect(attributionSource('https://l.instagram.com/', 'tws.bio')).toBe('l.instagram.com')
+    expect(attributionSource('http://example.com/page', 'tws.bio')).toBe('example.com')
+  })
+
+  it('lowercases the host and drops a trailing dot', () => {
+    expect(attributionSource('https://WWW.YouTube.COM/', 'tws.bio')).toBe('youtube.com')
+    expect(attributionSource('https://www.youtube.com./', 'tws.bio')).toBe('youtube.com')
+  })
+
+  it('gives the short domain for a click from a page on the short domain, which is the app itself', () => {
+    expect(attributionSource('https://tws.bio/abc123', 'tws.bio')).toBe('tws.bio')
+    expect(attributionSource('https://www.tws.bio/', 'tws.bio')).toBe('tws.bio')
+    expect(attributionSource('https://TWS.BIO/dashboard', 'tws.bio')).toBe('tws.bio')
+  })
+
+  it('gives the short domain for a click from the app host, read from NEXT_PUBLIC_APP_URL by default', () => {
+    // A host other than the short domain, so this proves the app-host rule.
+    expect(attributionSource('https://links.example.com/dashboard', 'tws.bio', 'https://links.example.com')).toBe(
+      'tws.bio',
+    )
+    expect(attributionSource('http://localhost:3000/dashboard', 'tws.bio', 'http://localhost:3000')).toBe('tws.bio')
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://links.example.com')
+    expect(attributionSource('https://www.links.example.com/dashboard', 'tws.bio')).toBe('tws.bio')
+  })
+
+  it('names the app host like any other site when no app URL is set, or it does not parse', () => {
+    expect(attributionSource('https://links.example.com/', 'tws.bio')).toBe('links.example.com')
+    expect(attributionSource('https://links.example.com/', 'tws.bio', 'not a url')).toBe('links.example.com')
+  })
+
+  it("stamps nothing for the business's own sites and their subdomains", () => {
+    for (const referer of [
+      'https://tradingwithsidhant.com/',
+      'https://www.tradingwithsidhant.com/blog/post',
+      'https://sgtm.tradingwithsidhant.com/',
+      'https://TradingWithSidhant.com./',
+      'https://twsgurukulx.com/course',
+      'https://www.twsgurukulx.com/',
+      'https://hitpoint.app/',
+      'http://www.hitpoint.app/',
+    ]) {
+      expect(attributionSource(referer, 'tws.bio'), referer).toBeNull()
+    }
+  })
+
+  it('names a look-alike host like any other site', () => {
+    expect(attributionSource('https://nottradingwithsidhant.com/', 'tws.bio')).toBe('nottradingwithsidhant.com')
+    expect(attributionSource('https://tradingwithsidhant.com.example.net/', 'tws.bio')).toBe(
+      'tradingwithsidhant.com.example.net',
+    )
+    expect(attributionSource('https://myhitpoint.app/', 'tws.bio')).toBe('myhitpoint.app')
+  })
+
+  it('names an Android app by its package name, case kept', () => {
+    expect(attributionSource('android-app://com.google.android.youtube/', 'tws.bio')).toBe(
+      'com.google.android.youtube',
+    )
+    expect(attributionSource('android-app://com.google.android.gm/http/mail.google.com/', 'tws.bio')).toBe(
+      'com.google.android.gm',
+    )
+    expect(attributionSource('android-app://com.UCMobile.intl/', 'tws.bio')).toBe('com.UCMobile.intl')
+  })
+
+  it('falls back to the short domain for an android-app: referrer with no valid package name', () => {
+    for (const referer of [
+      'android-app://',
+      'android-app:com.example.app',
+      'android-app://singleword/',
+      'android-app://%3Cscript%3E.x/',
+    ]) {
+      expect(attributionSource(referer, 'tws.bio'), referer).toBe('tws.bio')
+    }
+  })
+
+  it('falls back to the short domain for any other scheme, or a referrer that does not parse', () => {
+    for (const referer of [
+      'not a url',
+      'https://',
+      '/relative/path',
+      'ftp://files.example.com/',
+      'ios-app://123456789/',
+      'about:blank',
+    ]) {
+      expect(attributionSource(referer, 'tws.bio'), referer).toBe('tws.bio')
+    }
+  })
+})
 
 describe('isAutoTagEnabled', () => {
   it('defaults to on: undefined, empty string, "on", "true" and any other value all enable it', () => {
@@ -82,7 +188,7 @@ describe('withShortLinkAttribution', () => {
     expect(withShortLinkAttribution(destination, qs(''), '', 'tws.bio')).toBe(destination)
   })
 
-  it('leaves the destination unchanged when sourceDomain is empty', () => {
+  it('leaves the destination unchanged when source is empty', () => {
     const destination = 'https://ex.com/c'
     expect(withShortLinkAttribution(destination, qs(''), 'abc123', '')).toBe(destination)
   })
@@ -126,7 +232,7 @@ describe('withShortLinkAttribution', () => {
     expect(new URL(out).searchParams.get('utm_campaign')).toBe('a b&c')
   })
 
-  it('percent-encodes a sourceDomain that needs escaping, and round-trips back to the raw value', () => {
+  it('percent-encodes a source that needs escaping, and round-trips back to the raw value', () => {
     const out = withShortLinkAttribution('https://ex.com/p', qs(''), 'abc123', 'tws bio&x')
     expect(out).not.toContain('utm_source=tws bio&x')
     expect(new URL(out).searchParams.get('utm_source')).toBe('tws bio&x')
@@ -141,8 +247,8 @@ describe('withShortLinkAttribution', () => {
       ['https://ex.com/p', qs(''), 'a b&c', 'tws bio&x'],
       ['https://ex.com/p', qs('fbclid=xyz&gclid=abc'), 'abc123', 'tws.bio'],
     ]
-    for (const [destination, incoming, shortCode, sourceDomain] of cases) {
-      const out = withShortLinkAttribution(destination, incoming, shortCode, sourceDomain)
+    for (const [destination, incoming, shortCode, source] of cases) {
+      const out = withShortLinkAttribution(destination, incoming, shortCode, source)
       expect(new URL(out).hostname).toBe('ex.com')
     }
   })

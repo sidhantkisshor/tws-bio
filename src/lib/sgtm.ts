@@ -112,13 +112,23 @@ const SEND_TIMEOUT_MS = 2500
 export const SHORT_LINK_CLICK_EVENT = 'short_link_click'
 
 /**
- * Crawlers, previewers and uptime checks fetch short links constantly. They are
- * worth keeping in our own `clicks` table for debugging, but sending them to
- * GA4 would corrupt user and session counts, so they are dropped here only.
+ * Crawlers, link previewers and uptime checks fetch short links constantly.
+ * None of them is a visitor, so both redirect routes keep them out of our own
+ * `clicks` table (`shouldRecordClick` in clickContext.ts) as well as out of
+ * GA4. A WhatsApp or Telegram share alone fetches the link to build its card,
+ * which would inflate `total_clicks` and spend a capped link's `max_clicks`.
+ * In GA4 they would also corrupt user and session counts.
+ *
+ * The bare `bot` alternative does not match right after `cu`, because CUBOT is
+ * a phone brand ("Android 11; CUBOT KINGKONG 5 Pro") and the people using it
+ * are real visitors.
  */
-const BOT_UA = /bot|crawl|spider|slurp|preview|monitor|curl|wget|python-requests|axios|node-fetch|headless|lighthouse|pingdom|uptime|facebookexternalhit|whatsapp|telegrambot|discordbot|slackbot|twitterbot|linkedinbot|embedly|quora link preview|bitlybot|skypeuripreview|vkshare|redditbot|applebot|googleother|gptbot|claudebot|perplexity/i
+const BOT_UA = /(?<!cu)bot|crawl|spider|slurp|preview|monitor|curl|wget|python-requests|axios|node-fetch|headless|lighthouse|pingdom|uptime|facebookexternalhit|whatsapp|telegrambot|discordbot|slackbot|twitterbot|linkedinbot|embedly|quora link preview|bitlybot|skypeuripreview|vkshare|redditbot|applebot|googleother|gptbot|claudebot|perplexity/i
 
-/** True when the user agent looks automated rather than human. */
+/**
+ * True when the user agent looks automated rather than human. An empty one
+ * counts as automated, since no real browser sends one.
+ */
 export function isLikelyBot(userAgent: string): boolean {
   if (!userAgent.trim()) return true
   return BOT_UA.test(userAgent)
