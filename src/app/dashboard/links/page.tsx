@@ -115,6 +115,25 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
   const indexPromise = loadOwnerLinks(supabase, user!.id)
   const campaignsQuery = supabase.from('campaigns').select('id, name')
 
+  // Per-link 14-day click sparkline for a page's rows: one
+  // get_clicks_over_time call per link (at most PAGE_SIZE, all in parallel),
+  // each returning at most 14 daily totals, on the same IST days as every
+  // other chart (sparklineWindow in lib/analytics). The RPC is SECURITY
+  // INVOKER, so clicks RLS still limits it to the owner's links. The 30-day
+  // windows for the Clicks and Change columns go out in the same wave.
+  const { since: windowSince, priorSince } = rangeWindow('30d', now)
+  const sparkWindow = sparklineWindow(now)
+  function pageStats(ids: string[]) {
+    return Promise.all([
+      Promise.allSettled(
+        ids.map((id) =>
+          supabase.rpc('get_clicks_over_time', { p_link_ids: [id], p_since: sparkWindow.since })
+        )
+      ),
+      getLinkClickWindowsResult({ linkIds: ids, priorSince, since: windowSince }),
+    ]).then(([sparkResults, windows]) => ({ ids, sparkResults, windows }))
+  }
+
   // Without a search, chip or kind, the count (head-only) and one data page
   // go through the same filter chain as ExportLinksButton's export-all
   // query, so the page count, the rows and the CSV always agree. Only the
@@ -147,6 +166,9 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
   let countError: unknown = null
   let links: LinkRow[] | null = null
   let linksError: unknown = null
+  // On the search/chip/kind path the page's ids are known before its rows,
+  // so the sparklines and 30-day windows start alongside the row fetch.
+  let earlyStats: ReturnType<typeof pageStats> | null = null
   // Clamp so an over-range ?page=9999 doesn't render the empty state.
   const clampPage = (total: number) => Math.min(requestedPage, Math.max(1, Math.ceil(total / PAGE_SIZE)))
   let page = requestedPage
@@ -195,6 +217,10 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
       if (pageIds.length === 0) {
         links = []
       } else {
+        earlyStats = pageStats(pageIds)
+        // If the row fetch throws first, this keeps a later rejection of the
+        // stats from going unobserved.
+        earlyStats.catch(() => {})
         const res = await supabase
           .from('links')
           .select(LINK_COLUMNS)
@@ -240,26 +266,13 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
   const pageLinks = hasError ? [] : (links ?? [])
   const pageLinkIds = pageLinks.map((l) => l.id)
 
-  // Per-link 14-day click sparkline for the rows on this page: one
-  // get_clicks_over_time call per link (at most PAGE_SIZE, all in parallel),
-  // each returning at most 14 daily totals, on the same IST days as every
-  // other chart (sparklineWindow in lib/analytics). The RPC is SECURITY
-  // INVOKER, so clicks RLS still limits it to the owner's links. The 30-day
-  // windows for the Clicks and Change columns go out in the same wave.
-  const { since: windowSince, priorSince } = rangeWindow('30d', now)
-  const sparkWindow = sparklineWindow(now)
-  const [sparkResults, windows] = await Promise.all([
-    Promise.allSettled(
-      pageLinkIds.map((id) =>
-        supabase.rpc('get_clicks_over_time', { p_link_ids: [id], p_since: sparkWindow.since })
-      )
-    ),
-    getLinkClickWindowsResult({ linkIds: pageLinkIds, priorSince, since: windowSince }),
-  ])
+  // The early wave asked for the ids the rows were fetched by. A row missing
+  // from that fetch only leaves an unused entry.
+  const { ids: statIds, sparkResults, windows } = await (earlyStats ?? pageStats(pageLinkIds))
 
   const sparklines: Record<string, number[]> = {}
   sparkResults.forEach((result, i) => {
-    const linkId = pageLinkIds[i]
+    const linkId = statIds[i]
     if (result.status === 'fulfilled' && !result.value.error && result.value.data) {
       sparklines[linkId] = fillDailyClicks(sparkWindow.keys, result.value.data)
       return

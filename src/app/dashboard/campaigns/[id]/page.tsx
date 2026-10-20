@@ -271,7 +271,7 @@ export default async function CampaignDetailPage({
                 deltaFormat="count"
               />
               <StatCell
-                title={topGroup ? `Top source, ${platformName(topGroup)}` : 'Top source'}
+                title={topGroup ? `Top platform, ${platformName(topGroup)}` : 'Top platform'}
                 value={topGroup ? formatShare(topGroup.share) : '---'}
                 unit={
                   topGroup ? (

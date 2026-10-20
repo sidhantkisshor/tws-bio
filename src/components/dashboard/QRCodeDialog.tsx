@@ -137,6 +137,7 @@ export function QRCodeDialog({
                 the same code. */}
             <QRCode
               value={url}
+              title={`QR code for ${url}`}
               size={256}
               level="M"
               bgColor={PREVIEW_LIGHT}

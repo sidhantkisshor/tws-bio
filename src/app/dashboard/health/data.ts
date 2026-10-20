@@ -36,12 +36,17 @@ export async function loadOwnerLinks(
   userId: string,
   opts: { activeOnly?: boolean } = {},
 ): Promise<{ data: OwnerLink[]; error: boolean }> {
-  const base = () => {
-    const q = supabase.from('links').select(OWNER_LINK_COLUMNS, { count: 'exact' }).eq('user_id', userId)
+  // Only the first request asks for the exact count: the extra pages would
+  // each run a COUNT(*) that is thrown away.
+  const base = (withCount: boolean) => {
+    const q = supabase
+      .from('links')
+      .select(OWNER_LINK_COLUMNS, withCount ? { count: 'exact' } : undefined)
+      .eq('user_id', userId)
     return opts.activeOnly ? q.eq('is_active', true) : q
   }
 
-  const first = await base().order('id', { ascending: true })
+  const first = await base(true).order('id', { ascending: true })
   if (first.error) {
     console.error('[dashboard] links query:', first.error)
     return { data: [], error: true }
@@ -53,7 +58,7 @@ export async function loadOwnerLinks(
     const extraPages = await Promise.all(
       Array.from({ length: Math.ceil((total - pageSize) / pageSize) }, (_, index) => {
         const from = pageSize * (index + 1)
-        return base()
+        return base(false)
           .order('id', { ascending: true })
           .range(from, Math.min(from + pageSize - 1, total - 1))
       }),

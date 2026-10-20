@@ -51,8 +51,12 @@ export function FindLink({ className }: { className?: string }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const requestRef = useRef(0)
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Result[]>([])
+  // The trimmed query `results` answer. While a newer query is still in its
+  // debounce or on the wire, the list on screen belongs to an older one.
+  const [resultsFor, setResultsFor] = useState('')
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
   const [status, setStatus] = useState<'idle' | 'loading' | 'error' | 'done'>('idle')
@@ -77,12 +81,15 @@ export function FindLink({ className }: { className?: string }) {
     if (copyTimer.current) clearTimeout(copyTimer.current)
   }, [])
 
-  const search = useCallback(async (q: string) => {
+  /** Runs a search; returns its rows, or null when it failed or a newer one replaced it. */
+  const search = useCallback(async (q: string): Promise<Result[] | null> => {
     const id = ++requestRef.current
-    if (!q.trim()) {
+    const trimmed = q.trim()
+    if (!trimmed) {
       setResults([])
+      setResultsFor('')
       setStatus('idle')
-      return
+      return []
     }
     setStatus('loading')
     try {
@@ -93,24 +100,35 @@ export function FindLink({ className }: { className?: string }) {
         .select('id, short_code, original_url')
         .order('total_clicks', { ascending: false })
         .limit(MAX_RESULTS)
-      const { data, error } = await applyLinkFilters(base, { q: q.trim().slice(0, 200), type: 'all', status: 'all' })
-      if (id !== requestRef.current) return
+      const { data, error } = await applyLinkFilters(base, { q: trimmed.slice(0, 200), type: 'all', status: 'all' })
+      if (id !== requestRef.current) return null
       if (error) throw error
-      setResults((data ?? []) as Result[])
+      const rows = (data ?? []) as Result[]
+      setResults(rows)
+      setResultsFor(trimmed)
       setActive(0)
       setStatus('done')
+      return rows
     } catch (err) {
-      if (id !== requestRef.current) return
+      if (id !== requestRef.current) return null
       console.error('[FindLink] search failed:', err)
       setResults([])
+      setResultsFor('')
       setStatus('error')
+      return null
     }
   }, [])
 
   // Debounced search as the owner types.
   useEffect(() => {
-    const t = setTimeout(() => void search(query), 150)
-    return () => clearTimeout(t)
+    debounceTimer.current = setTimeout(() => {
+      debounceTimer.current = null
+      void search(query)
+    }, 150)
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current)
+      debounceTimer.current = null
+    }
   }, [query, search])
 
   const openResult = (r: Result) => {
@@ -131,6 +149,13 @@ export function FindLink({ className }: { className?: string }) {
     }
   }
 
+  const act = (r: Result, copy: boolean) => {
+    if (copy) void copyResult(r)
+    else openResult(r)
+  }
+
+  const showList = open && query.trim().length > 0
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
       if (open && query) {
@@ -139,6 +164,27 @@ export function FindLink({ className }: { className?: string }) {
         inputRef.current?.blur()
       }
       setOpen(false)
+      return
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      // Enter acts only on the list on screen, and only on the answer to the
+      // text in the box: never on the hits of an older query.
+      if (!showList) return
+      const copy = e.shiftKey
+      const q = query.trim()
+      if (status === 'done' && resultsFor === q) {
+        const r = results[active]
+        if (r) act(r, copy)
+        return
+      }
+      // Still debouncing or loading: search now and act on the top hit.
+      if (debounceTimer.current) clearTimeout(debounceTimer.current)
+      debounceTimer.current = null
+      void search(query).then((rows) => {
+        // Skip it if the owner typed on while it ran.
+        if (rows?.[0] && inputRef.current?.value.trim() === q) act(rows[0], copy)
+      })
       return
     }
     if (!results.length) return
@@ -150,17 +196,21 @@ export function FindLink({ className }: { className?: string }) {
       e.preventDefault()
       setOpen(true)
       setActive((i) => (i - 1 + results.length) % results.length)
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      const r = results[active]
-      if (!r) return
-      if (e.shiftKey) void copyResult(r)
-      else openResult(r)
     }
   }
-
-  const showList = open && query.trim().length > 0
   const activeId = showList && results[active] ? `${listId}-opt-${active}` : undefined
+  // Announced politely: the result count once a search lands, or the copy.
+  const announcement = copiedId
+    ? 'Short link copied'
+    : !showList
+      ? ''
+      : status === 'error'
+        ? 'Search failed'
+        : status === 'done'
+          ? results.length === 0
+            ? 'No links match'
+            : `${results.length} ${results.length === 1 ? 'result' : 'results'}`
+          : ''
 
   return (
     <div className={cn('relative', className)}>
@@ -171,9 +221,10 @@ export function FindLink({ className }: { className?: string }) {
           type="search"
           role="combobox"
           aria-expanded={showList}
-          aria-controls={listId}
+          aria-controls={showList ? listId : undefined}
           aria-autocomplete="list"
           aria-activedescendant={activeId}
+          aria-describedby={`${listId}-help`}
           autoComplete="off"
           spellCheck={false}
           placeholder="Find a link"
@@ -185,7 +236,7 @@ export function FindLink({ className }: { className?: string }) {
           onFocus={() => setOpen(true)}
           onBlur={() => setOpen(false)}
           onKeyDown={onKeyDown}
-          className="peer h-9 w-[220px] rounded-ctl border border-edge bg-surface pr-8 pl-3 text-sm text-ink transition-[border-color] duration-150 outline-none placeholder:text-text-3 focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus [&::-webkit-search-cancel-button]:hidden"
+          className="peer h-9 w-[220px] rounded-ctl border border-edge bg-surface pr-8 pl-3 text-sm text-ink transition-[border-color] duration-150 outline-none placeholder:text-text-3 focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus [&::-webkit-search-cancel-button]:hidden"
         />
         {/* The "/" hint goes away once the field has focus or text. */}
         <kbd
@@ -195,6 +246,13 @@ export function FindLink({ className }: { className?: string }) {
           /
         </kbd>
       </label>
+      <span id={`${listId}-help`} className="sr-only">
+        Enter opens a link. Shift+Enter copies it.
+      </span>
+      {/* Always mounted, so the first result count is announced too. */}
+      <span className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </span>
 
       {showList && (
         <div
@@ -236,9 +294,12 @@ export function FindLink({ className }: { className?: string }) {
                     {hostAndPath(r.original_url)}
                   </span>
                 </div>
+                {/* A listbox may only hold options, so this mouse shortcut is
+                    hidden from screen readers; Shift+Enter is the keyboard way. */}
                 <button
                   type="button"
                   tabIndex={-1}
+                  aria-hidden
                   onClick={() => void copyResult(r)}
                   className="h-8 shrink-0 rounded-ctl px-2 text-[13px] font-medium text-text-2 transition-colors duration-150 hover:bg-page hover:text-ink"
                 >
@@ -252,9 +313,6 @@ export function FindLink({ className }: { className?: string }) {
               Enter opens. Shift+Enter copies.
             </p>
           )}
-          <span className="sr-only" aria-live="polite">
-            {copiedId ? 'Short link copied' : status === 'done' ? `${results.length} results` : ''}
-          </span>
         </div>
       )}
     </div>

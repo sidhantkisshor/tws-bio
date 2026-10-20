@@ -65,11 +65,13 @@ function Grid({
   block,
   best,
   className,
+  hideFromScreenReaders = false,
 }: {
   data: HeatmapData
   block: 1 | 3
   best: { dow: number; startHour: number } | null
   className?: string
+  hideFromScreenReaders?: boolean
 }) {
   const cols = 24 / block
   // Values per column (sum of the hours in the block), and the scale max.
@@ -89,7 +91,10 @@ function Grid({
   }
 
   return (
-    <table className={cn('w-full table-fixed border-separate border-spacing-[3px]', className)}>
+    <table
+      aria-hidden={hideFromScreenReaders || undefined}
+      className={cn('w-full table-fixed border-separate border-spacing-[3px]', className)}
+    >
       <caption className="sr-only">
         Clicks by weekday and {block === 1 ? 'hour' : 'three-hour block'}, India time
       </caption>
@@ -176,8 +181,10 @@ export function Heatmap({ data, error, emptyText = 'No clicks in this period yet
         <strong className="font-bold text-ink">{lead}</strong>
         {tail}
       </p>
-      <Grid data={data} block={1} best={best} className="hidden md:table" />
-      <Grid data={data} block={3} best={best} className="md:hidden" />
+      {/* Screen readers get the 3-hour table at every width (56 labelled
+          slots, not 168); the hourly grid is visual only. */}
+      <Grid data={data} block={1} best={best} className="hidden md:table" hideFromScreenReaders />
+      <Grid data={data} block={3} best={best} className="md:sr-only" />
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-text-3">
         <span className="inline-flex items-center gap-1">
           <span className="mr-1.5">Fewer</span>

@@ -53,7 +53,7 @@ export function BarList({ items, label, total, mono, emptyMessage, className }: 
         const rowClass = cn(
           'block py-2 pb-2.5 text-sm text-ink',
           item.href &&
-            '-mx-2 min-h-11 rounded-ctl px-2 outline-none transition-colors duration-[120ms] hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-focus',
+            '-mx-2 min-h-11 rounded-ctl px-2 outline-none transition-colors duration-[120ms] hover:bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-0 focus-visible:outline-focus',
         )
         const content = (
           <>

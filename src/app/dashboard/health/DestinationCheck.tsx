@@ -176,7 +176,7 @@ export function DestinationCheck({ activeCount }: { activeCount: number }) {
         >
           {pending ? `Checking ${formatCount(activeCount, 'link')}...` : 'Check destinations now'}
         </button>
-        <p className="text-[13px] text-text-3" aria-live="polite">
+        <p className="text-[13px] text-text-3">
           {pending
             ? 'This can take up to a minute.'
             : activeCount === 0
@@ -185,15 +185,28 @@ export function DestinationCheck({ activeCount }: { activeCount: number }) {
         </p>
       </div>
 
+      {/* Always mounted, so the start and the end of a check are announced. */}
+      <span className="sr-only" role="status">
+        {pending
+          ? 'Checking destinations. This can take up to a minute.'
+          : result && !result.ok
+            ? result.error
+            : result?.ok
+              ? `Check finished. ${formatCount(rows.length - skipped, 'link')} checked${
+                  counts.length > 0 ? `: ${counts.map(([s, n]) => `${n} ${s === 'ok' ? 'OK' : FLAG[s].toLowerCase()}`).join(', ')}` : ''
+                }.`
+              : ''}
+      </span>
+
       {result && !pending && !result.ok && (
-        <p role="status" className="mt-4 text-sm text-neg">
+        <p className="mt-4 text-sm text-neg">
           {result.error}
         </p>
       )}
 
       {result?.ok && !pending && (
         <div className="mt-5">
-          <p role="status" className="text-sm text-text-2">
+          <p className="text-sm text-text-2">
             Checked {formatCount(rows.length - skipped, 'link')} at {TIME.format(new Date(result.checkedAt))}
             {counts.length > 0 && ': '}
             {counts.map(([s, n]) => `${n} ${s === 'ok' ? 'OK' : FLAG[s].toLowerCase()}`).join(', ')}.
@@ -210,7 +223,11 @@ export function DestinationCheck({ activeCount }: { activeCount: number }) {
           {fine.length > 0 && (
             <details className="group mt-3">
               <summary className="focus-ring inline-flex min-h-11 cursor-pointer items-center rounded-[2px] text-sm text-accent-text underline decoration-accent-text/40 decoration-1 underline-offset-[3px] sm:min-h-8">
-                Show the {formatCount(fine.length, 'link')} that answered OK
+                <span>
+                  <span className="group-open:hidden">Show</span>
+                  <span className="hidden group-open:inline">Hide</span> the{' '}
+                  {formatCount(fine.length, 'link')} that answered OK
+                </span>
               </summary>
               <ul className="mt-2 border-t border-rule">
                 {fine.map((r) => (

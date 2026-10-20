@@ -1,3 +1,4 @@
+import { LossCue } from '@/components/dashboard/LossCue'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { formatNumber, formatSignedCount } from '@/lib/ledgerFormat'
@@ -46,6 +47,7 @@ function MoverList({ rows, label }: { rows: MoverRow[]; label: string }) {
                   m.delta > 0 ? 'text-pos' : m.delta < 0 ? 'text-neg' : 'text-text-2',
                 )}
               >
+                <LossCue value={formatSignedCount(m.delta)} />
                 {formatSignedCount(m.delta)}
                 <span className="sr-only"> against {formatNumber(m.prior)} before</span>
               </span>

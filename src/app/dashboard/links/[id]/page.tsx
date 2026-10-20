@@ -357,7 +357,7 @@ export default async function LinkDetailPage({
             deltaFormat="count"
           />
           <StatCell
-            title={topGroup ? `Top source, ${platformName(topGroup)}` : 'Top source'}
+            title={topGroup ? `Top platform, ${platformName(topGroup)}` : 'Top platform'}
             value={topGroup ? formatShare(topGroup.share) : '---'}
             unit={
               topGroup ? (
@@ -519,10 +519,10 @@ export default async function LinkDetailPage({
       </div>
 
       <div className="mt-9 grid gap-9 md:mt-12 md:gap-12 lg:grid-cols-2">
-        {/* Countries and Browsers side by side from xl up, What GA4 receives
-            beside them, so the two columns end close together. */}
+        {/* Countries above Browsers, What GA4 receives beside them. Side by
+            side, two narrow columns cut long country names short. */}
         {!noClicks && (
-          <div className="grid min-w-0 gap-10 xl:grid-cols-2 xl:gap-8">
+          <div className="grid min-w-0 gap-10">
             <Section title="Countries" caption={windowLabel}>
               {countriesResult.error ? (
                 <InlineError retryHref={retryHref}>Countries could not load.</InlineError>

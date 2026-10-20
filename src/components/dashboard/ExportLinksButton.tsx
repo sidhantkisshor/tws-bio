@@ -150,11 +150,6 @@ export function ExportLinksButton({
       variant="outline"
       onClick={handleExport}
       disabled={links.length === 0 || exporting}
-      aria-label={
-        hasMorePages
-          ? `Export all ${totalCount} links matching the current filters as CSV`
-          : 'Export links as CSV'
-      }
       title={
         hasMorePages
           ? `Exports all ${totalCount.toLocaleString('en-US')} matching links, not just this page`
@@ -164,7 +159,13 @@ export function ExportLinksButton({
       {exporting
         ? 'Exporting...'
         : hasMorePages
-          ? `Export all ${totalCount.toLocaleString('en-US')} as CSV`
+          ? (
+            // One span, so the button's flex gap never splits the words.
+            <span>
+              Export all {totalCount.toLocaleString('en-US')}
+              <span className="sr-only"> matching links</span> as CSV
+            </span>
+          )
           : 'Export CSV'}
     </Button>
   )

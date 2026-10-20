@@ -171,6 +171,10 @@ function renderChart(
       className="block h-auto overflow-visible"
       fontFamily="var(--font-sans)"
     >
+      {/* The aria-label above is the text alternative. Hide the parts, so a
+          screen reader does not walk every bar and tick (the <title> tooltips
+          still show on hover). */}
+      <g aria-hidden="true">
       {ticks.map((t) => (
         <g key={t}>
           <line
@@ -272,6 +276,7 @@ function renderChart(
           {xLabel(data[i].date)}
         </text>
       ))}
+      </g>
     </svg>
   )
 }
@@ -312,7 +317,8 @@ export function BarChart(props: BarChartProps) {
   const priorTotal = prior ? prior.reduce((s, v) => s + Math.max(0, v), 0) : null
   const ariaLabel =
     `${label ?? 'Clicks per day'}, ${range}. ${fmt(total)} clicks in all, most on ${fullDay(data[peak].date)} with ${fmt(Number(data[peak].clicks) || 0)}.` +
-    (priorTotal !== null ? ` The period before had ${fmt(priorTotal)}, drawn as a dotted line.` : '')
+    (priorTotal !== null ? ` The period before had ${fmt(priorTotal)}, drawn as a dotted line.` : '') +
+    (props.marks ?? []).slice(0, 2).map((m) => ` Marked: ${m.label}.`).join('')
 
   return (
     <div className={cn('min-w-0', className)}>

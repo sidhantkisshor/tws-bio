@@ -105,6 +105,7 @@ export function LoginForm() {
               setError(null)
             }}
             aria-invalid={!!error}
+            aria-describedby={error ? 'login-error' : undefined}
           />
         </div>
 
@@ -122,11 +123,12 @@ export function LoginForm() {
               setError(null)
             }}
             aria-invalid={!!error}
+            aria-describedby={error ? 'login-error' : undefined}
           />
         </div>
 
         {error && (
-          <div role="alert" className={ALERT_CLASS}>
+          <div id="login-error" role="alert" className={ALERT_CLASS}>
             {error}
           </div>
         )}

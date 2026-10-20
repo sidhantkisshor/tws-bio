@@ -58,7 +58,7 @@ export default function ResourcesPage() {
                           )}
                         </span>
                         {/* The destination host is the trust signal: show it before the tap. */}
-                        <span className="shrink-0 font-mono text-[13px] text-text-2">{hostOf(item.url)}</span>
+                        <span className="shrink-0 font-mono text-[13px] text-accent-text underline decoration-accent-text/40 underline-offset-[3px] transition-colors duration-150 group-hover:decoration-current">{hostOf(item.url)}</span>
                       </a>
                     </li>
                   ))}

@@ -1,5 +1,6 @@
 'use client'
 
+import { LossCue } from '@/components/dashboard/LossCue'
 import { useEffect, useState, type InputHTMLAttributes, type Ref } from 'react'
 import NextLink from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -179,6 +180,7 @@ function Change({ row }: { row: LedgerRow }) {
       )}
       title={`${row.clicks30.toLocaleString('en-US')} clicks in the last 30 days, ${row.prior30.toLocaleString('en-US')} in the 30 before`}
     >
+      <LossCue value={change.text} />
       {change.text}
     </span>
   )
@@ -449,7 +451,12 @@ export function LinksTable({
               )}
             >
               <div className="min-w-0">
-                <ShortCode link={link} />
+                {/* The code is the way into the link's page on a phone: a
+                    44px tap area around the 18px line, as the fix links have. */}
+                <ShortCode
+                  link={link}
+                  className="relative after:absolute after:-inset-x-2 after:-inset-y-3.5 after:content-['']"
+                />
               </div>
               <div className="text-right text-[15px]">
                 <Clicks row={row} />

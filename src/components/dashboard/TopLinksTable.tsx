@@ -1,3 +1,4 @@
+import { LossCue } from '@/components/dashboard/LossCue'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { destinationKind } from '@/lib/destinationKind'
@@ -38,6 +39,7 @@ export function ChangeCount({ current, prior }: { current: number; prior: number
   }
   return (
     <span className={cn('font-bold', tone === 'up' ? 'text-pos' : tone === 'down' ? 'text-neg' : 'text-text-3')}>
+      <LossCue value={text} />
       {text}
     </span>
   )

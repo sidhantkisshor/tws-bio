@@ -1,3 +1,4 @@
+import { LossCue } from '@/components/dashboard/LossCue'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { formatNumber, formatSignedCount, formatSignedPercent } from '@/lib/ledgerFormat'
@@ -71,6 +72,7 @@ export function TrendChip({ trend }: { trend: StatTrend | null | undefined }) {
   return (
     <span className="inline-flex items-baseline gap-1.5 text-[13px] tabular-nums">
       <span className={cn('font-bold', toneClass(trend, trend.percent))}>
+        <LossCue value={formatSignedPercent(trend.percent / 100, 0)} />
         {formatSignedPercent(trend.percent / 100, 0)}
       </span>
       <span className="text-text-3">{abs}</span>
@@ -108,6 +110,7 @@ function KpiDelta({
     } else if (deltaFormat === 'count') {
       figure = (
         <span className={cn('font-bold', toneClass(trend, trend.delta))}>
+          <LossCue value={formatSignedCount(trend.delta, trend.isRatio ? 1 : 0)} />
           {formatSignedCount(trend.delta, trend.isRatio ? 1 : 0)}
         </span>
       )
@@ -116,7 +119,12 @@ function KpiDelta({
         typeof prior === 'number' && prior > 0 && typeof value === 'number'
           ? formatSignedPercent((value - prior) / prior)
           : formatSignedPercent(trend.percent / 100, 0)
-      figure = <span className={cn('font-bold', toneClass(trend, trend.percent))}>{exact}</span>
+      figure = (
+        <span className={cn('font-bold', toneClass(trend, trend.percent))}>
+          <LossCue value={exact} />
+          {exact}
+        </span>
+      )
     }
   }
 

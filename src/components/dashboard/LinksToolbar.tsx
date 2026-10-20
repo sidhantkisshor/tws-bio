@@ -48,6 +48,9 @@ const VIEW_CHIPS: ViewChip[] = [
 
 const VIEW_PARAMS = ['status', 'type', 'show'] as const
 
+const CLEAR_CLASS =
+  'focus-ring h-11 shrink-0 items-center rounded-ctl px-2.5 text-[13px] font-medium text-accent-text underline decoration-accent-text/40 underline-offset-[3px] transition-colors duration-150 hover:decoration-current disabled:pointer-events-none md:h-8'
+
 // Search, filter chips and sort for the Links ledger, driven entirely by URL
 // search params so the server-rendered page.tsx query stays the single source
 // of truth. Counts come from the server (they follow the search, not the
@@ -61,6 +64,7 @@ export function LinksToolbar({ counts }: { counts: ChipCounts }) {
   const urlQuery = searchParams.get('q') || ''
   const [search, setSearch] = useState(urlQuery)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scrollerRef = useRef<HTMLDivElement>(null)
   // The q this toolbar last pushed. The page is not remounted when its search
   // params change, so `search` would keep stale text after Back, the empty
   // state's "Clear the search" link or the masthead's Links tab. A q that
@@ -115,7 +119,9 @@ export function LinksToolbar({ counts }: { counts: ChipCounts }) {
     setSearch(value)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      const params = new URLSearchParams(searchParams.toString())
+      // The URL as it is now, not as it was at the keystroke: a chip or sort
+      // picked during the debounce must survive this push.
+      const params = new URLSearchParams(window.location.search)
       const trimmed = value.trim()
       if (trimmed) {
         params.set('q', trimmed)
@@ -148,6 +154,27 @@ export function LinksToolbar({ counts }: { counts: ChipCounts }) {
       currentKind ||
       currentSort !== 'created_desc'
   )
+
+  // Phones: the chip row scrolls sideways and starts at its left end after
+  // every navigation, which can leave the selected chip off screen, so the
+  // filter looks like links vanished. Bring the selected chip into view (the
+  // kind chip when one is set). Skipped when the row does not overflow (md
+  // and up, where the chips wrap).
+  const paramsKey = searchParams.toString()
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (!scroller || scroller.scrollWidth <= scroller.clientWidth) return
+    const pressed = scroller.querySelectorAll<HTMLElement>('[aria-pressed="true"]')
+    const target = pressed[pressed.length - 1]
+    if (!target) return
+    const gutter = 16
+    const left = target.offsetLeft - gutter
+    const right = target.offsetLeft + target.offsetWidth + gutter
+    if (left < scroller.scrollLeft) scroller.scrollLeft = left
+    else if (right > scroller.scrollLeft + scroller.clientWidth) {
+      scroller.scrollLeft = right - scroller.clientWidth
+    }
+  }, [paramsKey])
 
   const views = VIEW_CHIPS.filter((v) => !v.hideWhenEmpty || v.count(counts) > 0 || isViewOn(v))
   // A selected kind stays on screen at 0 (a search can leave none of it), so
@@ -205,8 +232,9 @@ export function LinksToolbar({ counts }: { counts: ChipCounts }) {
       {/* Phones: one row that scrolls sideways inside itself, bled to the
           screen edge. From md up the chips wrap. */}
       <div
+        ref={scrollerRef}
         className={cn(
-          'scrollbar-none -mx-4 mt-3 flex items-center gap-1 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:overflow-visible md:px-0',
+          'scrollbar-none relative -mx-4 mt-3 flex items-center gap-1 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:overflow-visible md:px-0',
           isPending && 'opacity-60'
         )}
       >
@@ -260,12 +288,25 @@ export function LinksToolbar({ counts }: { counts: ChipCounts }) {
             type="button"
             onClick={clearAll}
             disabled={isPending}
-            className="focus-ring ml-1 inline-flex h-11 shrink-0 items-center rounded-ctl px-2.5 text-[13px] font-medium text-accent-text underline decoration-accent-text/40 underline-offset-[3px] transition-colors duration-150 hover:decoration-current disabled:pointer-events-none sm:h-8"
+            className={cn(CLEAR_CLASS, 'ml-1 hidden md:inline-flex')}
           >
             Clear filters
           </button>
         )}
       </div>
+
+      {/* Phones: on its own line under the chip row, so it is never scrolled
+          out of sight with the chips. */}
+      {hasFilters && (
+        <button
+          type="button"
+          onClick={clearAll}
+          disabled={isPending}
+          className={cn(CLEAR_CLASS, '-ml-2.5 mt-1 inline-flex md:hidden')}
+        >
+          Clear filters
+        </button>
+      )}
     </div>
   )
 }
