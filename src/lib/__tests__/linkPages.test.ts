@@ -30,12 +30,30 @@ describe('deadLinkResponse', () => {
     }
   })
 
-  it('renders the eyebrow as the heading and the page title, with a button home', async () => {
+  it('keeps the full eyebrow as the title, with the code as a label and the reason as the h1', async () => {
     const html = await deadLinkResponse(410, '410: LINK EXPIRED', 'Past its date.', 'https://tws.bio').text()
     expect(html).toContain('<title>410: LINK EXPIRED</title>')
-    expect(html).toContain('<h1 class="eyebrow">410: LINK EXPIRED</h1>')
+    expect(html).toContain('<p class="eyebrow">410</p>')
+    expect(html).toContain('<h1>Link expired</h1>')
     expect(html).toContain('<p>Past its date.</p>')
-    expect(html).toContain('<a class="btn" href="https://tws.bio">Go to tws.bio</a>')
+  })
+
+  it('sends followers to the business site, and keeps the link tool as a quiet second link', async () => {
+    const html = await deadLinkResponse(410, '410: LINK EXPIRED', 'Past its date.', 'https://tws.bio').text()
+    expect(html).toContain('<a class="btn" href="https://tradingwithsidhant.com">Go to Trading with Sidhant</a>')
+    expect(html).toContain('<p class="alt"><a href="https://tws.bio">Open tws.bio</a></p>')
+  })
+
+  it('turns every status label into a sentence-case heading', async () => {
+    const labels: Array<[string, string]> = [
+      ['410: LINK POINTS TO ITSELF', 'Link points to itself'],
+      ['410: CLICK LIMIT REACHED', 'Click limit reached'],
+      ['403: FLAGGED AS UNSAFE', 'Flagged as unsafe'],
+    ]
+    for (const [eyebrow, heading] of labels) {
+      const html = await deadLinkResponse(410, eyebrow, 'Message.', 'https://tws.bio').text()
+      expect(html).toContain(`<h1>${heading}</h1>`)
+    }
   })
 })
 
@@ -45,7 +63,8 @@ describe('notFoundResponse', () => {
     expect(res.status).toBe(404)
     expectSecurityHeaders(res)
     const html = await res.text()
-    expect(html).toContain('404: LINK NOT FOUND')
+    expect(html).toContain('<title>404: LINK NOT FOUND</title>')
+    expect(html).toContain('<h1>Link not found</h1>')
     expect(html).toContain("This short link doesn't exist or is no longer active.")
   })
 
@@ -66,7 +85,8 @@ describe('unavailableResponse', () => {
 
   it('tells the visitor the link is fine, rather than calling it dead', async () => {
     const html = await unavailableResponse().text()
-    expect(html).toContain('503: TEMPORARILY UNAVAILABLE')
+    expect(html).toContain('<title>503: TEMPORARILY UNAVAILABLE</title>')
+    expect(html).toContain('<h1>Temporarily unavailable</h1>')
     expect(html).toContain('This link is fine')
     expect(html).not.toContain('LINK NOT FOUND')
   })

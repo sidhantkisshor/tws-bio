@@ -13,9 +13,11 @@ import { sparklineWindow } from '@/lib/analytics'
 import { ExportLinksButton } from '@/components/dashboard/ExportLinksButton'
 import { LinksToolbar } from '@/components/dashboard/LinksToolbar'
 import { LinksTable } from '@/components/dashboard/LinksTable'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
+import { PageHeader } from '@/components/dashboard/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
-import { LinkIcon, AlertTriangle, X } from 'lucide-react'
+import { LinkIcon, AlertTriangle, SearchX } from 'lucide-react'
+import { formatCount } from '@/lib/utils'
 import type { Database } from '@/types/database'
 
 type LinkRow = Database['public']['Tables']['links']['Row']
@@ -150,18 +152,17 @@ export default async function LinksPage({
   const hasActiveFilters = Boolean(q || type !== 'all' || status !== 'all')
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6 gap-3">
-        <h1 className="font-heading text-2xl text-foreground">Links</h1>
-        <div className="flex items-center gap-2">
-          {!hasError && links && links.length > 0 && (
+    <div className="has-[[data-bulk-bar]]:pb-36 sm:has-[[data-bulk-bar]]:pb-20">
+      {/* No Create Link here: the sidebar button (and the + in the phone top
+          bar) is always on screen. Export is the only action this page owns. */}
+      <PageHeader
+        title="Links"
+        actions={
+          !hasError && links && links.length > 0 ? (
             <ExportLinksButton links={links as LinkRow[]} totalCount={count || 0} filters={filters} />
-          )}
-          <Button render={<Link href="/dashboard/create" />}>
-            Create Link
-          </Button>
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
       {!hasError && <LinksToolbar />}
 
@@ -177,38 +178,36 @@ export default async function LinksPage({
                 Something went wrong. Please try again.
               </p>
             </div>
-            <Button render={<Link href="/dashboard/links" />} variant="outline">
+            <Link href="/dashboard/links" className={buttonVariants({ variant: 'outline' })}>
               Try again
-            </Button>
+            </Link>
           </CardContent>
         </Card>
       ) : links && links.length > 0 ? (
-        <Card className="bg-card border-border overflow-hidden">
+        <Card className="bg-card border-border overflow-hidden py-0">
           <LinksTable links={links as LinkRow[]} sparklines={sparklines} />
 
           {totalPages > 1 && (
             <div className="px-4 py-4 border-t border-border flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
-                Page {page} of {totalPages} ({count} links)
+                Page {page} of {totalPages} ({formatCount(count || 0, 'link')})
               </span>
               <div className="flex gap-2">
                 {page > 1 && (
-                  <Button
-                    render={<Link href={buildPageHref(filters, page - 1)} />}
-                    variant="outline"
-                    size="sm"
+                  <Link
+                    href={buildPageHref(filters, page - 1)}
+                    className={buttonVariants({ variant: 'outline', size: 'sm' })}
                   >
                     Previous
-                  </Button>
+                  </Link>
                 )}
                 {page < totalPages && (
-                  <Button
-                    render={<Link href={buildPageHref(filters, page + 1)} />}
-                    variant="outline"
-                    size="sm"
+                  <Link
+                    href={buildPageHref(filters, page + 1)}
+                    className={buttonVariants({ variant: 'outline', size: 'sm' })}
                   >
                     Next
-                  </Button>
+                  </Link>
                 )}
               </div>
             </div>
@@ -218,17 +217,19 @@ export default async function LinksPage({
         <Card className="bg-card border-border">
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
             <div className="rounded-full bg-muted p-3">
-              <X className="size-6 text-muted-foreground" />
+              <SearchX className="size-6 text-muted-foreground" />
             </div>
             <div className="text-center">
-              <p className="text-foreground font-medium">No links match your filters</p>
+              <p className="text-foreground font-medium">
+                {q ? `No links match “${q}”` : 'No links match these filters'}
+              </p>
               <p className="text-sm text-muted-foreground mt-1">
                 Try a different search term or clear your filters.
               </p>
             </div>
-            <Button render={<Link href="/dashboard/links" />} variant="outline">
+            <Link href="/dashboard/links" className={buttonVariants({ variant: 'outline' })}>
               Clear filters
-            </Button>
+            </Link>
           </CardContent>
         </Card>
       ) : (
@@ -243,9 +244,9 @@ export default async function LinksPage({
                 Create your first link to get started.
               </p>
             </div>
-            <Button render={<Link href="/dashboard/create" />}>
+            <Link href="/dashboard/create" className={buttonVariants()}>
               Create Link
-            </Button>
+            </Link>
           </CardContent>
         </Card>
       )}

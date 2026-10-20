@@ -15,28 +15,21 @@ import {
   type TimeRange,
 } from '@/lib/analytics'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { LazyBarChart, LazyClicksOverTimeChart, LazyPieChart } from '@/components/charts/lazy'
+import { buttonVariants } from '@/components/ui/button-variants'
+import { PageHeader } from '@/components/dashboard/PageHeader'
+import { LazyClicksOverTimeChart } from '@/components/charts/lazy'
+import { BarList, countryItems, namedItems } from '@/components/charts/BarList'
 import { TimeRangePicker } from '@/components/TimeRangePicker'
-import { StatCard, computeTrend } from '@/components/dashboard/StatCard'
+import { TrendChip, computeTrend } from '@/components/dashboard/StatCard'
 import { AlertTriangle } from 'lucide-react'
-
-// Stable per-device colors so a device keeps the same slice color across
-// renders regardless of its rank in the data.
-const DEVICE_COLORS: Record<string, string> = {
-  desktop: 'var(--chart-1)',
-  mobile: 'var(--chart-2)',
-  tablet: 'var(--chart-3)',
-  bot: 'var(--chart-4)',
-  unknown: 'var(--chart-5)',
-}
 
 function AnalyticsHeader({ timeRange }: { timeRange: TimeRange }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-      <h1 className="font-heading text-2xl text-foreground">Analytics</h1>
-      <TimeRangePicker current={timeRange} basePath="/dashboard/analytics" />
-    </div>
+    <PageHeader
+      title="Analytics"
+      actions={<TimeRangePicker current={timeRange} basePath="/dashboard/analytics" />}
+      actionsClassName="w-full sm:w-auto"
+    />
   )
 }
 
@@ -57,9 +50,12 @@ function AnalyticsError({ timeRange }: { timeRange: TimeRange }) {
               Something went wrong. Please try again.
             </p>
           </div>
-          <Button render={<Link href={`/dashboard/analytics?range=${timeRange}`} />} variant="outline">
+          <Link
+            href={`/dashboard/analytics?range=${timeRange}`}
+            className={buttonVariants({ variant: 'outline' })}
+          >
             Try again
-          </Button>
+          </Link>
         </CardContent>
       </Card>
     </div>
@@ -145,9 +141,9 @@ export default async function AnalyticsPage({
             <p className="text-muted-foreground">
               No links created yet. Create a link to start seeing analytics.
             </p>
-            <Button render={<Link href="/dashboard/create" />}>
+            <Link href="/dashboard/create" className={buttonVariants()}>
               Create Link
-            </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>
@@ -213,117 +209,131 @@ export default async function AnalyticsPage({
   // day that has clicks.
   const clicksOverTime = zeroFillDays(clicksSeriesResult.data, windowStart, days)
 
-  // Device breakdown (RPC rows arrive pre-sorted, largest first), already
-  // `{ name, value }`, the shape PieChart consumes.
-  const deviceData = devicesResult.data
-
-  // Browser breakdown (top 6)
-  const browserData = browsersResult.data
-    .map((b) => ({ label: b.name, value: b.value }))
-    .slice(0, 6)
-
-  // Top referrers (top 10)
-  const referrerData = referrersResult.data.map((r) => ({ label: r.name, value: r.clicks }))
-
-  // Top countries (top 10)
-  const countryData = countriesResult.data.map((c) => ({ label: c.name, value: c.clicks }))
+  // Every breakdown renders as the same ranked list. The period total is the
+  // share column's denominator on all of them.
+  const deviceItems = namedItems(devicesResult.data)
+  const browserItems = namedItems(browsersResult.data.slice(0, 8))
+  const referrerItems = referrersResult.data.map((r) => ({ label: r.name, value: r.clicks }))
+  const countryRows = countryItems(countriesResult.data)
 
   // Top links: which of the user's links are actually driving these clicks
   // (top 10), from the per-link ranged counts in the embedded aggregate above.
   const topLinksData = userLinks
-    .map((l) => ({ label: l.short_code, value: l.clicks[0]?.count ?? 0 }))
+    .map((l) => ({
+      label: `tws.bio/${l.short_code}`,
+      href: `/dashboard/links/${l.id}`,
+      value: l.clicks[0]?.count ?? 0,
+    }))
     .filter((l) => l.value > 0)
     .sort((a, b) => b.value - a.value)
     .slice(0, 10)
+
+  // A period with no clicks is one explanation with one next step, not six
+  // empty cards.
+  if (totalClicks === 0) {
+    return (
+      <div>
+        <AnalyticsHeader timeRange={timeRange} />
+        <Card className="bg-card border-border">
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="font-medium text-foreground">
+              {days !== null ? `No clicks in the last ${days} days` : 'No clicks yet'}
+            </p>
+            {timeRange !== 'all' ? (
+              <Link
+                href="/dashboard/analytics?range=all"
+                className={buttonVariants({ variant: 'outline' })}
+              >
+                View all time
+              </Link>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Clicks show up here as soon as someone opens a short link.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div>
       <AnalyticsHeader timeRange={timeRange} />
 
-      {/* Total clicks stat */}
-      <div className="mb-8">
-        <StatCard
-          title={days !== null ? `Total Clicks (Last ${days} days)` : 'Total Clicks (All time)'}
-          value={totalClicks.toLocaleString()}
-          trend={totalClicksTrend}
-          trendLabel={days !== null ? `vs prior ${days} days` : undefined}
-        />
-      </div>
-
-      {/* Clicks Over Time */}
-      <Card className="bg-card border-border mb-8">
-        <CardHeader>
-          <CardTitle>Clicks Over Time</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <LazyClicksOverTimeChart data={clicksOverTime} />
-        </CardContent>
-      </Card>
-
-      {/* Top Links - which links are actually driving these clicks */}
-      <Card className="bg-card border-border mb-8">
-        <CardHeader>
-          <CardTitle>Top Links</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <LazyBarChart
-            data={topLinksData}
-            emptyMessage="No clicks yet"
-          />
-        </CardContent>
-      </Card>
-
-      {/* Breakdown Charts Grid */}
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
+      <div className="flex flex-col gap-6">
+        {/* The period total is the page's headline number, above its chart. */}
         <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle>Devices</CardTitle>
+          <CardHeader className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+            <div>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                {days !== null ? `Clicks, last ${days} days` : 'Clicks, all time'}
+              </CardTitle>
+              <p className="mt-1 font-mono text-3xl tracking-tight tabular-nums text-foreground">
+                {totalClicks.toLocaleString('en-US')}
+              </p>
+            </div>
+            {totalClicksTrend && days !== null && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <TrendChip trend={totalClicksTrend} />
+                  vs prior {days} days
+                </span>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
-            <LazyPieChart
-              data={deviceData}
-              colorMap={DEVICE_COLORS}
-              innerRadius={60}
-              outerRadius={80}
-              className="mx-auto h-[260px] w-full"
-              ariaLabel="Donut chart showing device breakdown"
-            />
+            <LazyClicksOverTimeChart data={clicksOverTime} />
           </CardContent>
         </Card>
 
+        {/* Top Links: which links are actually driving these clicks */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle>Browsers</CardTitle>
+            <CardTitle>Top Links</CardTitle>
           </CardHeader>
           <CardContent>
-            <LazyBarChart
-              data={browserData}
-              orientation="vertical"
-              className="h-[220px] w-full"
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Referrers + Countries */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle>Top Referrers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <LazyBarChart data={referrerData} />
+            <BarList items={topLinksData} label="Top links by clicks" total={totalClicks} mono />
           </CardContent>
         </Card>
 
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle>Top Countries</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <LazyBarChart data={countryData} />
-          </CardContent>
-        </Card>
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Top Referrers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BarList items={referrerItems} label="Top referrers by clicks" total={totalClicks} />
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Top Countries</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BarList items={countryRows} label="Top countries by clicks" total={totalClicks} />
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Browsers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BarList items={browserItems} label="Browsers by clicks" total={totalClicks} />
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Devices</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BarList items={deviceItems} label="Devices by clicks" total={totalClicks} />
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )

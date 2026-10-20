@@ -15,7 +15,7 @@ import {
 const TYPE_OPTIONS = [
   { value: 'all', label: 'All types' },
   { value: 'url', label: 'URL' },
-  { value: 'deep_link', label: 'Deep Link' },
+  { value: 'deep_link', label: 'Deep link' },
 ]
 
 const STATUS_OPTIONS = [
@@ -124,18 +124,20 @@ export function LinksToolbar() {
           value={search}
           onChange={(e) => handleSearchChange(e.target.value)}
           placeholder="Search short code or URL…"
-          className="pl-8"
+          className="pl-9 sm:pl-8"
           aria-label="Search links"
           aria-busy={isPending}
         />
       </div>
 
+      {/* Two columns on a phone (Sort and Clear take a full row each), one
+          row from sm up. Same 44px / 36px heights as the search box. */}
       <div
-        className={`flex flex-wrap items-center gap-2 ${isPending ? 'opacity-60' : ''}`}
+        className={`grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center ${isPending ? 'opacity-60' : ''}`}
         aria-busy={isPending}
       >
         <Select value={currentType} onValueChange={(v) => v && updateParam('type', v)}>
-          <SelectTrigger size="sm" className="w-[130px]" aria-label="Filter by type">
+          <SelectTrigger className="w-full sm:w-[130px]" aria-label="Filter by type">
             <SelectValue options={TYPE_OPTIONS} />
           </SelectTrigger>
           <SelectContent>
@@ -148,7 +150,7 @@ export function LinksToolbar() {
         </Select>
 
         <Select value={currentStatus} onValueChange={(v) => v && updateParam('status', v)}>
-          <SelectTrigger size="sm" className="w-[130px]" aria-label="Filter by status">
+          <SelectTrigger className="w-full sm:w-[130px]" aria-label="Filter by status">
             <SelectValue options={STATUS_OPTIONS} />
           </SelectTrigger>
           <SelectContent>
@@ -161,7 +163,7 @@ export function LinksToolbar() {
         </Select>
 
         <Select value={currentSort} onValueChange={(v) => v && updateParam('sort', v, 'created_desc')}>
-          <SelectTrigger size="sm" className="w-[150px]" aria-label="Sort links">
+          <SelectTrigger className="col-span-2 w-full sm:col-span-1 sm:w-[150px]" aria-label="Sort links">
             <SelectValue options={SORT_OPTIONS} />
           </SelectTrigger>
           <SelectContent>
@@ -183,7 +185,7 @@ export function LinksToolbar() {
               startTransition(() => router.push(pathname))
             }}
             disabled={isPending}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none"
+            className="focus-ring col-span-2 inline-flex min-h-11 items-center justify-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none sm:col-span-1 sm:min-h-9"
           >
             <X className="size-3.5" />
             Clear

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { geistMono } from "./mono-font";
 import "./globals.css";
 
 // DM Serif Display lives in ./fonts.ts and is applied only by the pages that
@@ -36,8 +37,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`dark ${inter.variable}`}>
-      <body className={inter.className}>{children}</body>
+    <html lang="en" className={`dark ${inter.variable} ${geistMono.variable}`}>
+      <body className={`${inter.className} antialiased`}>{children}</body>
     </html>
   );
 }

@@ -11,29 +11,24 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 export default function DashboardLoading() {
   return (
     <div aria-busy="true" aria-live="polite">
-      <div className="flex items-center justify-between mb-6 gap-4">
+      <div className="mb-6 flex items-center justify-between gap-4">
         <div className="h-8 w-40 rounded-md bg-muted" />
-        {/* Create Link button */}
-        <div className="h-9 w-28 rounded-md bg-muted" />
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i} className="bg-card border-border">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="h-3.5 w-20 rounded bg-muted" />
-                  <div className="h-7 w-14 rounded bg-muted mt-2" />
-                  {/* Trend chip + "vs prior 30 days" row */}
-                  <div className="h-3 w-28 rounded bg-muted mt-2" />
-                </div>
-                <div className="h-6 w-6 rounded bg-muted" />
+      {/* Stat strip: the same joined cells as the page */}
+      <div className="mb-8">
+        <div className="mb-3 h-3 w-64 max-w-full rounded bg-muted" />
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-foreground/10 ring-1 ring-foreground/10 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-card p-4 sm:p-5">
+              <div className="h-3.5 w-20 rounded bg-muted" />
+              <div className="mt-2 flex h-8 items-center sm:h-9">
+                <div className="h-7 w-14 rounded bg-muted" />
               </div>
-            </CardContent>
-          </Card>
-        ))}
+              <div className="mt-1.5 h-4 w-20 rounded bg-muted" />
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Chart card */}

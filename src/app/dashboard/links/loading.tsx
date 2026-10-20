@@ -11,26 +11,27 @@ import { Card, CardContent } from '@/components/ui/card'
 export default function LinksLoading() {
   return (
     <div aria-busy="true" aria-live="polite">
-      <div className="flex items-center justify-between mb-6 gap-3">
+      <div className="mb-6 flex items-center justify-between gap-3">
         <div className="h-8 w-20 rounded-md bg-muted" />
-        <div className="h-9 w-28 rounded-md bg-muted" />
+        {/* Export CSV */}
+        <div className="h-11 w-32 rounded-md bg-muted sm:h-9" />
       </div>
 
       {/* Toolbar: search + type/status/sort selects */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-        <div className="h-9 flex-1 min-w-0 sm:max-w-xs rounded-md bg-muted" />
+        <div className="h-11 flex-1 min-w-0 rounded-md bg-muted sm:h-9 sm:max-w-xs" />
         <div className="flex flex-wrap items-center gap-2">
-          <div className="h-8 w-[130px] rounded-md bg-muted" />
-          <div className="h-8 w-[130px] rounded-md bg-muted" />
-          <div className="h-8 w-[150px] rounded-md bg-muted" />
+          <div className="h-11 w-[130px] rounded-md bg-muted sm:h-9" />
+          <div className="h-11 w-[130px] rounded-md bg-muted sm:h-9" />
+          <div className="h-11 w-[150px] rounded-md bg-muted sm:h-9" />
         </div>
       </div>
 
       {/* Table card */}
-      <Card className="bg-card border-border overflow-hidden">
+      <Card className="bg-card border-border overflow-hidden py-0">
         <CardContent className="p-0">
-          <div className="border-b border-border px-4 py-3 hidden md:flex gap-4">
-            {['Short Code', 'Original URL', 'Type', 'Clicks', 'Status', 'Created', 'Actions'].map(
+          <div className="border-b border-border px-4 py-3 hidden xl:flex gap-4">
+            {['Short Code', 'Original URL', 'Clicks', 'Status', 'Created', 'Actions'].map(
               (label) => (
                 <div key={label} className="h-3.5 w-20 rounded bg-muted" />
               )

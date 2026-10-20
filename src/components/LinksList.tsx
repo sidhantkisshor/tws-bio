@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import type { User } from '@supabase/supabase-js'
 import { getAnonLinkIds, type HomeLink } from '@/hooks/useLinks'
-import { getShortUrl } from '@/lib/utils'
+import { formatDate, getShortUrl } from '@/lib/utils'
 import { TickerChip } from '@/components/TickerChip'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { TypeBadge } from '@/components/dashboard/TypeBadge'
 import { Button } from '@/components/ui/button'
 
 interface LinksListProps {
@@ -18,6 +18,8 @@ interface LinksListProps {
   linksError: boolean
   onRetry: () => void
 }
+
+const HEADING_CLASS = 'text-base font-semibold text-foreground'
 
 export function LinksList({
   user,
@@ -42,18 +44,18 @@ export function LinksList({
 
     return (
       <div className="max-w-2xl mx-auto space-y-3">
-        <h3 className="text-lg font-semibold text-foreground">Recent Links</h3>
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-xl border border-border bg-card p-4">
-            <div className="flex items-center justify-between">
+        <h2 className={HEADING_CLASS}>Recent links</h2>
+        <div className="divide-y divide-border rounded-xl border border-border bg-card">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex h-14 items-center justify-between gap-4 px-4">
               <div className="space-y-2">
-                <div className="h-4 w-32 bg-muted rounded" />
-                <div className="h-3 w-48 bg-muted rounded" />
+                <div className="h-4 w-32 rounded bg-muted" />
+                <div className="h-3 w-48 rounded bg-muted" />
               </div>
-              <div className="h-8 w-16 bg-muted rounded" />
+              <div className="h-8 w-16 rounded bg-muted" />
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     )
   }
@@ -61,7 +63,7 @@ export function LinksList({
   if (linksError) {
     return (
       <div className="max-w-2xl mx-auto space-y-3">
-        <h3 className="text-lg font-semibold text-foreground">Recent Links</h3>
+        <h2 className={HEADING_CLASS}>Recent links</h2>
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
           <p role="alert" className="text-sm text-muted-foreground">
             Couldn&apos;t load your links.
@@ -80,41 +82,55 @@ export function LinksList({
 
   return (
     <div className="max-w-2xl mx-auto space-y-3">
-      <h3 className="text-lg font-semibold text-foreground">Recent Links</h3>
-      {links.map((link) => {
-        const isDeepLink = link.link_type === 'deep_link'
-
-        return (
-          <Card
-            key={link.id}
-            className="bg-card border-border hover:border-primary/30 transition-colors"
-          >
-            <CardContent>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <TickerChip code={link.short_code} href={getShortUrl(link.short_code)} />
-                  {isDeepLink && (
-                    <Badge variant="secondary">Deep Link</Badge>
-                  )}
+      <h2 className={HEADING_CLASS}>Recent links</h2>
+      {/* One bordered list, the same pattern as the /resources rows. */}
+      <ul className="divide-y divide-border rounded-xl border border-border bg-card">
+        {links.map((link) => {
+          const clicks = link.total_clicks ?? 0
+          return (
+            <li key={link.id} className="flex flex-col gap-1.5 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+              <div className="min-w-0 sm:flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                  <TickerChip
+                    code={link.short_code}
+                    href={getShortUrl(link.short_code)}
+                    touchTarget
+                  />
+                  <TypeBadge type={link.link_type} />
                 </div>
-                <p className="text-muted-foreground text-sm truncate mt-2">
+                <p className="mt-1.5 truncate text-xs text-muted-foreground">
                   {link.original_url}
                 </p>
-                <div className="flex items-center gap-3 mt-1.5">
-                  <span className="text-muted-foreground text-xs font-mono tabular-nums">
-                    {link.total_clicks ?? 0} click{(link.total_clicks ?? 0) !== 1 ? 's' : ''}
-                  </span>
-                  {link.created_at && (
-                    <span className="text-muted-foreground text-xs font-mono tabular-nums">
-                      {new Date(link.created_at).toLocaleDateString()}
-                    </span>
-                  )}
-                </div>
               </div>
-            </CardContent>
-          </Card>
-        )
-      })}
+              <div className="flex items-baseline gap-3 sm:block sm:shrink-0 sm:text-right">
+                <p className="font-mono text-sm tabular-nums text-foreground">
+                  {clicks.toLocaleString('en-US')}
+                  <span className="ml-1 text-[11px] text-muted-foreground">
+                    {clicks === 1 ? 'click' : 'clicks'}
+                  </span>
+                </p>
+                {link.created_at && (
+                  <p className="font-mono text-[11px] tabular-nums text-muted-foreground sm:mt-0.5">
+                    {formatDate(link.created_at)}
+                  </p>
+                )}
+              </div>
+            </li>
+          )
+        })}
+        {/* Signed-in only: anonymous visitors with pre-019 anon links see this
+            list too, and /dashboard/links would send them to /login. */}
+        {user && (
+          <li>
+            <Link
+              href="/dashboard/links"
+              className="flex h-11 items-center px-4 text-sm text-primary-text hover:underline focus-ring"
+            >
+              View all links
+            </Link>
+          </li>
+        )}
+      </ul>
     </div>
   )
 }

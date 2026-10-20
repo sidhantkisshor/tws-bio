@@ -18,7 +18,7 @@ export function CopyShortLinkButton({ shortCode }: { shortCode: string }) {
     try {
       await navigator.clipboard.writeText(getShortUrl(shortCode))
       setCopied(true)
-      toast.success('Copied!')
+      toast.success('Link copied')
       setTimeout(() => setCopied(false), 1500)
     } catch {
       toast.error('Failed to copy')
@@ -31,9 +31,9 @@ export function CopyShortLinkButton({ shortCode }: { shortCode: string }) {
       size="icon-xs"
       onClick={handleCopy}
       aria-label="Copy short URL"
-      // The 24px button keeps its look; the invisible margin makes a 40px
+      // The 24px button keeps its look; the invisible margin makes a 44px
       // target for a thumb.
-      className="relative text-muted-foreground after:absolute after:-inset-2 after:content-[''] hover:text-primary-text"
+      className="relative text-muted-foreground after:absolute after:-inset-2.5 after:content-[''] hover:text-primary-text"
     >
       {copied ? <Check className="size-3.5 text-primary-text" /> : <Copy className="size-3.5" />}
     </Button>

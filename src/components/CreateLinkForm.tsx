@@ -6,7 +6,7 @@ import { cn, generateShortCode, isValidUrl, getShortUrl, normalizeUrl } from '@/
 import { isSafeUrl } from '@/lib/redirectSafety'
 import { isReservedShortCode } from '@/lib/shortCodes'
 import { toast } from 'sonner'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -42,11 +42,21 @@ const NEW_CAMPAIGN = '__new__'
 
 const DEEP_LINK_ERROR = 'Use a supported app scheme (such as instagram://) or an https:// link.'
 
+// The owner works in India and the dashboard files days in IST, so the ticket
+// clock reads IST too. en-GB with a 24-hour cycle gives HH:MM:SS.
+const TICKET_TIME = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Kolkata',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+})
+
 interface CreatedLink {
   /** Row id, for the ticket's link to this link's stats page. */
   id: string
   shortCode: string
-  /** HH:MM:SS UTC, captured client-side at creation time. */
+  /** HH:MM:SS in India time (IST), captured client-side at creation time. */
   filledAt: string
   destHost: string
   copied: boolean
@@ -75,9 +85,15 @@ interface CreateLinkFormProps {
   initialUser?: { id: string } | null
   /** Called with the created row so a parent list can prepend it. */
   onCreated?: (link: HomeLink) => void
+  /**
+   * Show the card's own heading (default true). A page that already has an h1
+   * for the form, such as /dashboard/create, passes false so the title is not
+   * said twice.
+   */
+  showHeader?: boolean
 }
 
-export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkFormProps) {
+export function CreateLinkForm({ initialUser = null, onCreated, showHeader = true }: CreateLinkFormProps) {
   const { user: authUser, loading: authLoading } = useAuth()
   const user = initialUser && authLoading ? initialUser : authUser
   const [url, setUrl] = useState('')
@@ -177,12 +193,12 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
   }
 
   // Success: swap the form for the execution ticket. The row is computed
-  // client-side at creation time (FILLED · HH:MM:SS UTC · → destination-host).
+  // client-side at creation time (FILLED · HH:MM:SS IST · → destination-host).
   const showTicket = (link: HomeLink, copied: boolean) => {
     setCreatedLink({
       id: link.id,
       shortCode: link.short_code,
-      filledAt: new Date().toISOString().slice(11, 19),
+      filledAt: TICKET_TIME.format(new Date()),
       destHost: formatDestHost(link.original_url),
       copied,
     })
@@ -311,7 +327,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
           if (campaignFailed) {
             toast.warning('Deep link created, but could not assign it to the campaign.')
           } else if (copied) {
-            toast.success('Deep link created and copied to clipboard!')
+            toast.success('Deep link created and copied to clipboard.')
           } else {
             toast.success('Deep link created. Copy it from the ticket below.')
           }
@@ -345,7 +361,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
           if (campaignFailed) {
             toast.warning('Link created, but could not assign it to the campaign.')
           } else if (copied) {
-            toast.success('Link created and copied to clipboard!')
+            toast.success('Link created and copied to clipboard.')
           } else {
             toast.success('Link created. Copy it from the ticket below.')
           }
@@ -393,14 +409,16 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
     return (
       <div className="max-w-2xl mx-auto">
         <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-xl text-foreground">Sign in to shorten URLs</CardTitle>
-            <CardDescription>
-              Sign in to create short links, deep links, and campaigns, all saved to your dashboard with analytics. Accounts are invite-only.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/login" className={cn(buttonVariants(), 'h-10 px-6')}>
+          <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <h2 className="font-heading text-xl leading-snug font-medium text-foreground">
+                Sign in to shorten URLs
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Short links, deep links and campaigns, saved to your dashboard with click analytics. Accounts are invite-only.
+              </p>
+            </div>
+            <Link href="/login" className={cn(buttonVariants(), 'shrink-0 sm:px-4')}>
               Sign in
             </Link>
           </CardContent>
@@ -423,16 +441,16 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                 copiedOnMount={createdLink.copied}
               />
               <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                FILLED · {createdLink.filledAt} UTC · → {createdLink.destHost}
+                FILLED · {createdLink.filledAt} IST · <span className="whitespace-nowrap">→ {createdLink.destHost}</span>
               </p>
             </div>
             <div className="flex flex-wrap gap-3 mt-6">
-              <Button type="button" onClick={resetForm} className="h-10 px-6">
+              <Button type="button" onClick={resetForm} className="sm:px-4">
                 Create another
               </Button>
               <a
                 href={`/dashboard/links/${createdLink.id}`}
-                className={cn(buttonVariants({ variant: 'outline' }), 'h-10 px-6')}
+                className={cn(buttonVariants({ variant: 'outline' }), 'sm:px-4')}
               >
                 View in dashboard
               </a>
@@ -452,32 +470,34 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
   return (
     <div className="max-w-2xl mx-auto">
       <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle className="text-xl text-foreground">Shorten Your URL</CardTitle>
-          <CardDescription>Create a short, memorable link in seconds</CardDescription>
-        </CardHeader>
+        {showHeader && (
+          <CardHeader>
+            {/* A real h2, the same pattern as the sign-in gate and AuthShell. */}
+            <h2
+              data-slot="card-title"
+              className="font-heading text-xl leading-snug font-medium text-foreground"
+            >
+              Shorten a URL
+            </h2>
+          </CardHeader>
+        )}
         <CardContent>
-          <form onSubmit={handleSubmit} noValidate>
+          <form
+            onSubmit={handleSubmit}
+            noValidate
+            aria-label={showHeader ? undefined : 'Shorten a URL'}
+          >
             {/* Always mounted, so screen readers announce the banner when
                 detection switches the link to a deep link. */}
             <div role="status">
               {detectedPlatform && (
-                <div className="mb-5 rounded-lg border border-primary/20 bg-primary/10 p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-primary-text" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p className="text-sm text-primary-text">
-                      <strong>{detectedPlatform}</strong> deep links detected and configured automatically!
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowAdvanced(true)}
-                    className="text-primary-text hover:text-primary-text/80 text-sm font-medium"
-                  >
-                    View settings
-                  </button>
+                <div className="mb-5 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/10 px-4 py-3">
+                  <svg className="size-5 shrink-0 text-primary-text" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm text-primary-text">
+                    <strong>{detectedPlatform}</strong> deep links detected and filled in.
+                  </p>
                 </div>
               )}
             </div>
@@ -486,7 +506,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
               {/* URL input row */}
               <div>
                 <Label htmlFor="url" className="mb-2">Long URL</Label>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
                     id="url"
                     type="url"
@@ -498,13 +518,13 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                       if (normalized !== url) handleUrlChange(normalized)
                     }}
                     placeholder="https://example.com/very-long-url"
-                    className="flex-1 bg-muted h-10"
+                    className="sm:flex-1"
                     aria-invalid={!!fieldErrors.url}
                     aria-describedby={fieldErrors.url ? 'url-error' : undefined}
                     required
                   />
-                  <Button type="submit" disabled={loading} className="h-10 px-6">
-                    {loading ? 'Creating...' : linkType === 'deep_link' ? 'Create Deep Link' : 'Shorten'}
+                  <Button type="submit" disabled={loading} className="w-full sm:w-auto sm:px-4">
+                    {loading ? 'Creating...' : linkType === 'deep_link' ? 'Create deep link' : 'Shorten'}
                   </Button>
                 </div>
                 {fieldErrors.url && (
@@ -518,7 +538,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
               <div>
                 <Label htmlFor="custom" className="mb-2">Custom short code (optional)</Label>
                 <div className="flex">
-                  <span className="inline-flex items-center rounded-l-lg border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
+                  <span className="inline-flex items-center rounded-l-lg border border-r-0 border-input bg-muted px-3 font-mono text-base text-muted-foreground md:text-sm">
                     {process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'}/
                   </span>
                   <Input
@@ -530,7 +550,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                       clearFieldError('customCode')
                     }}
                     placeholder="custom-link"
-                    className="rounded-l-none bg-muted h-10"
+                    className="rounded-l-none font-mono"
                     pattern="[a-z0-9-]+"
                     aria-invalid={!!fieldErrors.customCode}
                     aria-describedby={fieldErrors.customCode ? 'custom-code-error' : undefined}
@@ -558,7 +578,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                 >
                   <SelectTrigger
                     id="campaign"
-                    className="w-full data-[size=default]:h-10 bg-muted dark:bg-muted dark:hover:bg-muted"
+                    className="w-full"
                   >
                     <SelectValue options={campaignOptions} />
                   </SelectTrigger>
@@ -582,7 +602,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                       }}
                       placeholder="Campaign name"
                       aria-label="New campaign name"
-                      className="mt-2 bg-muted h-10"
+                      className="mt-2"
                       aria-invalid={!!fieldErrors.campaignName}
                       aria-describedby={fieldErrors.campaignName ? 'campaign-name-error' : undefined}
                     />
@@ -602,7 +622,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                   onClick={() => setShowAdvanced(!showAdvanced)}
                   aria-expanded={showAdvanced}
                   aria-controls="advanced-options"
-                  className="text-sm text-primary-text hover:text-primary-text/80 font-medium flex items-center gap-1"
+                  className="flex min-h-11 items-center gap-1 rounded-sm text-sm font-medium text-primary-text hover:text-primary-text/80 focus-ring sm:min-h-0"
                 >
                   <svg
                     className={`w-4 h-4 ${showAdvanced ? 'rotate-90' : ''}`}
@@ -613,27 +633,27 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
-                  Advanced Options (Deep Linking)
+                  Advanced options (deep linking)
                 </button>
               </div>
 
               {showAdvanced && (
-                <div id="advanced-options" className="space-y-4 p-4 bg-muted rounded-lg">
+                <div id="advanced-options" className="space-y-4 rounded-lg border border-border p-4">
                   <div>
-                    <Label id="link-type-label" className="mb-3">Link Type</Label>
+                    <Label id="link-type-label" className="mb-3">Link type</Label>
                     <RadioGroup
                       aria-labelledby="link-type-label"
                       value={linkType}
                       onValueChange={(val) => setLinkType(val as 'url' | 'deep_link')}
-                      className="flex gap-6"
+                      className="flex flex-col gap-0 sm:flex-row sm:gap-6"
                     >
                       <div className="flex items-center gap-2">
-                        <RadioGroupItem value="url" id="type-url" />
-                        <Label htmlFor="type-url" className="font-normal cursor-pointer">Regular URL</Label>
+                        <RadioGroupItem value="url" id="type-url" className="border-muted-foreground/70" />
+                        <Label htmlFor="type-url" className="min-h-11 flex-1 font-normal cursor-pointer sm:min-h-0 sm:flex-none">Regular URL</Label>
                       </div>
                       <div className="flex items-center gap-2">
-                        <RadioGroupItem value="deep_link" id="type-deep" />
-                        <Label htmlFor="type-deep" className="font-normal cursor-pointer">Deep Link (Mobile App)</Label>
+                        <RadioGroupItem value="deep_link" id="type-deep" className="border-muted-foreground/70" />
+                        <Label htmlFor="type-deep" className="min-h-11 flex-1 font-normal cursor-pointer sm:min-h-0 sm:flex-none">Deep link (mobile app)</Label>
                       </div>
                     </RadioGroup>
                   </div>
@@ -642,7 +662,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                     <>
                       <div>
                         <Label htmlFor="ios" className="mb-2">
-                          iOS Deep Link {autoDetected && <span className="text-primary-text">(Auto-detected)</span>}
+                          iOS deep link {autoDetected && <span className="text-primary-text">(auto-detected)</span>}
                         </Label>
                         <Input
                           id="ios"
@@ -654,7 +674,6 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                             clearFieldError('iosDeepLink')
                           }}
                           placeholder="instagram://user?username=name"
-                          className="bg-muted h-10"
                           aria-invalid={!!fieldErrors.iosDeepLink}
                           aria-describedby={fieldErrors.iosDeepLink ? 'ios-error' : undefined}
                         />
@@ -666,7 +685,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                       </div>
                       <div>
                         <Label htmlFor="android" className="mb-2">
-                          Android Deep Link {autoDetected && <span className="text-primary-text">(Auto-detected)</span>}
+                          Android deep link {autoDetected && <span className="text-primary-text">(auto-detected)</span>}
                         </Label>
                         <Input
                           id="android"
@@ -678,7 +697,6 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                             clearFieldError('androidDeepLink')
                           }}
                           placeholder="instagram://user?username=name"
-                          className="bg-muted h-10"
                           aria-invalid={!!fieldErrors.androidDeepLink}
                           aria-describedby={fieldErrors.androidDeepLink ? 'android-error' : undefined}
                         />
@@ -690,7 +708,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                       </div>
                       <div>
                         <Label htmlFor="fallback" className="mb-2">
-                          Fallback URL {autoDetected && <span className="text-primary-text">(Auto-detected)</span>}
+                          Fallback URL {autoDetected && <span className="text-primary-text">(auto-detected)</span>}
                         </Label>
                         <Input
                           id="fallback"
@@ -706,7 +724,6 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                             if (normalized !== fallbackUrl) setFallbackUrl(normalized)
                           }}
                           placeholder="https://app-store-link.com"
-                          className="bg-muted h-10"
                           aria-invalid={!!fieldErrors.fallbackUrl}
                           aria-describedby={fieldErrors.fallbackUrl ? 'fallback-error' : 'fallback-hint'}
                         />

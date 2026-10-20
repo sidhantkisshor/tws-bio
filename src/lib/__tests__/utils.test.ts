@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isValidUrl, generateShortCode, getShortUrl, BLOCKED_HOSTNAMES, formatDate } from '@/lib/utils'
+import { isValidUrl, generateShortCode, getShortUrl, BLOCKED_HOSTNAMES, formatDate, formatCount, plural } from '@/lib/utils'
 
 describe('isValidUrl - SSRF / abuse blocklist', () => {
   const blocked = [
@@ -92,14 +92,46 @@ describe('getShortUrl', () => {
 describe('formatDate', () => {
   it('shows the India Standard Time date, whatever zone it runs in', () => {
     // 20:00 UTC on 19 October is 01:30 IST on 20 October.
-    expect(formatDate('2026-10-19T20:00:00Z')).toBe('10/20/2026')
-    expect(formatDate('2026-10-19T18:29:59Z')).toBe('10/19/2026')
-    expect(formatDate('2026-10-19T18:30:00Z')).toBe('10/20/2026')
+    expect(formatDate('2026-10-19T20:00:00Z')).toBe('20 Oct 2026')
+    expect(formatDate('2026-10-19T18:29:59Z')).toBe('19 Oct 2026')
+    expect(formatDate('2026-10-19T18:30:00Z')).toBe('20 Oct 2026')
+  })
+
+  it('spells every month with three letters', () => {
+    expect(formatDate('2026-09-10T06:00:00Z')).toBe('10 Sep 2026')
+    expect(formatDate('2026-06-01T06:00:00Z')).toBe('1 Jun 2026')
+    expect(formatDate('2026-12-31T17:00:00Z')).toBe('31 Dec 2026')
   })
 
   it('shows a placeholder for a missing or invalid date', () => {
     expect(formatDate(null)).toBe('---')
     expect(formatDate(undefined)).toBe('---')
     expect(formatDate('not a date')).toBe('---')
+  })
+})
+
+describe('formatCount', () => {
+  it('uses the singular for exactly one', () => {
+    expect(formatCount(1, 'link')).toBe('1 link')
+    expect(formatCount(1, 'click')).toBe('1 click')
+  })
+
+  it('uses the plural for zero and for more than one', () => {
+    expect(formatCount(0, 'link')).toBe('0 links')
+    expect(formatCount(2, 'link')).toBe('2 links')
+  })
+
+  it('groups thousands the en-US way, whatever the runtime locale', () => {
+    expect(formatCount(1538, 'click')).toBe('1,538 clicks')
+    expect(formatCount(100000, 'click')).toBe('100,000 clicks')
+  })
+
+  it('takes an irregular plural', () => {
+    expect(formatCount(2, 'entry', 'entries')).toBe('2 entries')
+    expect(formatCount(1, 'entry', 'entries')).toBe('1 entry')
+  })
+
+  it('is also exported as plural', () => {
+    expect(plural(1, 'link')).toBe('1 link')
   })
 })

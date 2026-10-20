@@ -47,13 +47,13 @@ ${opts.headHtml ?? ''}<title>${opts.title}</title>
 *{box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:20px;min-height:100vh;margin:0;padding:24px;background:#0a0a0a;color:#FAFAFA}
 .card{text-align:center;padding:32px 28px;background:#111111;border:1px solid #1f1f1f;border-radius:10px;max-width:400px;width:100%}
-.eyebrow{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.14em;color:#999999;margin:0 0 16px}
+.eyebrow{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:11px;font-weight:400;text-transform:uppercase;letter-spacing:0.14em;color:#999999;margin:0 0 8px}
 h1{font-size:22px;font-weight:600;margin:0 0 10px}
 p{color:#999999;font-size:14px;line-height:1.5;margin:0}
-.btn{display:inline-block;margin-top:20px;padding:12px 24px;background:#00802B;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:500;font-size:14px;transition:background-color 150ms}
-.btn:hover{background:#00B03B}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-top:20px;padding:0 24px;background:#00802B;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:500;font-size:14px;transition:background-color 150ms}
+.btn:hover{background:#006E25}
 .btn:focus-visible{outline:2px solid #00B03B;outline-offset:2px}
-.wordmark{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12px;letter-spacing:0.08em;color:#999999}
+.wordmark{border-left:2px solid #00B03B;padding-left:8px;line-height:1.2;font-family:inherit;font-weight:600;letter-spacing:0;color:#999999}
 ${opts.extraCss ?? ''}
 </style>
 </head>
@@ -65,6 +65,28 @@ ${opts.cardHtml}
 ${opts.footerScript ?? ''}
 </body>
 </html>`
+}
+
+// Where a follower who hit a dead link is sent: the business site, not the
+// invite-only link tool. The tool's own home stays one quiet link below.
+const TRUSTED_HOME_URL = 'https://tradingwithsidhant.com'
+
+const ALT_LINK_CSS =
+  '.alt{margin:8px 0 0;font-size:13px}.alt a{display:inline-flex;align-items:center;min-height:44px;color:#999999;text-underline-offset:3px}.alt a:hover{color:#FAFAFA}.alt a:focus-visible{outline:2px solid #00B03B;outline-offset:2px;border-radius:4px}'
+
+/**
+ * Split '404: LINK NOT FOUND' into the code (small mono label) and the reason
+ * (the h1, in sentence case), so the page has a real heading. The <title> keeps
+ * the full eyebrow string. A string with no ': ' stays a single h1.
+ */
+function statusHeading(eyebrow: string): string {
+  const split = eyebrow.indexOf(': ')
+  if (split === -1) return `<h1>${eyebrow}</h1>`
+  const code = eyebrow.slice(0, split)
+  const label = eyebrow.slice(split + 2)
+  const sentence = label.charAt(0) + label.slice(1).toLowerCase()
+  return `<p class="eyebrow">${code}</p>
+<h1>${sentence}</h1>`
 }
 
 /**
@@ -82,9 +104,12 @@ export function deadLinkResponse(
   const safeDomain = htmlEscape(SHORT_DOMAIN)
   const html = brandPageHtml({
     title: eyebrow,
-    cardHtml: `<h1 class="eyebrow">${eyebrow}</h1>
+    // The status code is the small label; the sentence-case reason is the h1.
+    cardHtml: `${statusHeading(eyebrow)}
 <p>${message}</p>
-<a class="btn" href="${safeHomeUrl}">Go to ${safeDomain}</a>`,
+<a class="btn" href="${TRUSTED_HOME_URL}">Go to Trading with Sidhant</a>
+<p class="alt"><a href="${safeHomeUrl}">Open ${safeDomain}</a></p>`,
+    extraCss: ALT_LINK_CSS,
   })
   return new NextResponse(html, { status, headers: DEAD_LINK_HEADERS })
 }
@@ -112,7 +137,7 @@ export function unavailableResponse(): NextResponse {
   const html = brandPageHtml({
     title: eyebrow,
     headHtml: `<meta http-equiv="refresh" content="${RETRY_PAGE_SECONDS}">`,
-    cardHtml: `<h1 class="eyebrow">${eyebrow}</h1>
+    cardHtml: `${statusHeading(eyebrow)}
 <p>This link is fine, but it couldn't be looked up just now. This page will try again in a moment.</p>
 <a class="btn" href="">Try again</a>`,
   })

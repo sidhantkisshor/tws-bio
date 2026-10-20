@@ -14,12 +14,16 @@ import {
   rangeWindow,
   zeroFillDays,
 } from '@/lib/analytics'
-import { AlertTriangle, ChevronLeft } from 'lucide-react'
-import { LazyBarChart, LazyClicksOverTimeChart, LazyPieChart } from '@/components/charts/lazy'
+import { AlertTriangle } from 'lucide-react'
+import { LazyClicksOverTimeChart } from '@/components/charts/lazy'
+import { BarList, countryItems, namedItems } from '@/components/charts/BarList'
+import { plural } from '@/lib/utils'
 import { TimeRangePicker } from '@/components/TimeRangePicker'
 import { TrendChip, computeTrend } from '@/components/dashboard/StatCard'
-import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { buttonVariants } from '@/components/ui/button-variants'
+import { PageHeader } from '@/components/dashboard/PageHeader'
+import { displayUrl } from '@/components/dashboard/displayUrl'
+import { Card, CardAction, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 
 // What an empty campaign's stats are, without asking the database.
 const NO_ROWS = { data: [], error: false }
@@ -127,143 +131,207 @@ export default async function CampaignDetailPage({
   const priorClicks = priorWindowTotal(combinedClicksResult, totalClicksResult)
   const periodTrend = priorClicks !== null ? computeTrend(totalClicks, priorClicks) : null
 
+  // What the links have collected since they were made, for the empty-period
+  // explanation below.
+  const allTimeClicks = campaignLinks.reduce((sum, l) => sum + (l.total_clicks || 0), 0)
+
   return (
     <div>
-      <div className="flex items-center gap-2 mb-6">
-        <Link
-          href="/dashboard/campaigns"
-          aria-label="Back to campaigns"
-          className="-ml-2 inline-flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          <ChevronLeft className="size-5" />
-        </Link>
-        <div className="min-w-0">
-          <h1 className="font-heading text-2xl text-foreground wrap-break-word">{campaign.name}</h1>
-          {campaign.description && (
-            <p className="text-sm text-muted-foreground wrap-break-word">{campaign.description}</p>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title={campaign.name}
+        description={campaign.description}
+        backHref="/dashboard/campaigns"
+        backLabel="Back to campaigns"
+        actions={<TimeRangePicker current={timeRange} basePath={`/dashboard/campaigns/${id}`} />}
+        actionsClassName="w-full sm:w-auto"
+      />
 
-      {statsError ? (
-        <Card className="bg-card border-border mb-8">
-          <CardContent className="flex flex-col items-center text-center gap-4 py-12">
-            <div className="rounded-full bg-destructive/10 p-3">
-              <AlertTriangle className="size-6 text-destructive" />
-            </div>
-            <div>
-              <p className="text-foreground font-medium">Couldn&apos;t load campaign statistics</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Something went wrong. Please try again.
-              </p>
-            </div>
-            <Button render={<Link href={`/dashboard/campaigns/${id}?range=${timeRange}`} />} variant="outline">
-              Try again
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-            <TimeRangePicker current={timeRange} basePath={`/dashboard/campaigns/${id}`} />
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>
-                {totalClicks.toLocaleString()} clicks &middot; {linkIds.length} links
-              </span>
-              <TrendChip trend={periodTrend} />
-            </div>
-          </div>
-
-          <Card className="bg-card border-border mb-8">
-            <CardHeader>
-              <CardTitle>Clicks Over Time</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <LazyClicksOverTimeChart data={clicksOverTime} />
+      <div className="flex flex-col gap-6">
+        {statsError ? (
+          <Card className="bg-card border-border">
+            <CardContent className="flex flex-col items-center text-center gap-4 py-12">
+              <div className="rounded-full bg-destructive/10 p-3">
+                <AlertTriangle className="size-6 text-destructive" />
+              </div>
+              <div>
+                <p className="text-foreground font-medium">Couldn&apos;t load campaign statistics</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Something went wrong. Please try again.
+                </p>
+              </div>
+              <Link
+                href={`/dashboard/campaigns/${id}?range=${timeRange}`}
+                className={buttonVariants({ variant: 'outline' })}
+              >
+                Try again
+              </Link>
             </CardContent>
           </Card>
-
-          <div className="grid md:grid-cols-2 gap-6 mb-8">
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle>Referrers</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <LazyBarChart
-                  data={referrers.map((r) => ({ label: r.name, value: r.clicks }))}
-                  className="h-48 w-full"
-                />
-              </CardContent>
-            </Card>
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle>Devices</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <LazyPieChart data={devices} className="h-48 w-full" />
-              </CardContent>
-            </Card>
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle>Countries</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <LazyBarChart
-                  data={countries.map((c) => ({ label: c.name, value: c.clicks }))}
-                  color="var(--chart-3)"
-                  className="h-48 w-full"
-                />
-              </CardContent>
-            </Card>
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle>Browsers</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <LazyPieChart data={browsers} className="h-48 w-full" />
-              </CardContent>
-            </Card>
-          </div>
-        </>
-      )}
-
-      {/* The links list is real data whenever its own query worked, so it
-          stays under a stats error card. */}
-      {!linksError && (
-        <Card className="bg-card border-border overflow-hidden">
-          <CardHeader className="border-b border-border">
-            <CardTitle>Links in Campaign</CardTitle>
-          </CardHeader>
-          {campaignLinks.length > 0 ? (
-            <div className="divide-y divide-border">
-              {campaignLinks.map((link) => (
+        ) : totalClicks === 0 ? (
+          // One explanation and one next step, in place of five empty cards.
+          <Card className="bg-card border-border">
+            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+              <p className="font-medium text-foreground">
+                {days !== null ? `No clicks in the last ${days} days` : 'No clicks yet'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {allTimeClicks > 0
+                  ? `${plural(allTimeClicks, 'click')} before this period.`
+                  : 'Clicks show up here as soon as someone opens a short link.'}
+              </p>
+              {allTimeClicks > 0 && timeRange !== 'all' && (
                 <Link
-                  key={link.id}
-                  href={`/dashboard/links/${link.id}`}
-                  className="block px-6 py-3 hover:bg-muted"
+                  href={`/dashboard/campaigns/${id}?range=all`}
+                  className={buttonVariants({ variant: 'outline' })}
                 >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <span className="text-sm font-medium text-primary-text">tws.bio/{link.short_code}</span>
-                      <p className="text-xs text-muted-foreground truncate max-w-md">{link.original_url}</p>
-                    </div>
-                    <span className="shrink-0 text-sm text-muted-foreground">{(link.total_clicks || 0).toLocaleString()} clicks</span>
-                  </div>
+                  View all time
                 </Link>
-              ))}
-            </div>
-          ) : (
-            <CardContent>
-              <div className="flex flex-col items-center text-center gap-4 py-12">
-                <p className="text-muted-foreground">No links in this campaign yet.</p>
-                <Button render={<Link href="/dashboard/create" />}>
-                  Create Link
-                </Button>
-              </div>
+              )}
             </CardContent>
-          )}
-        </Card>
-      )}
+          </Card>
+        ) : (
+          <>
+            <Card className="bg-card border-border">
+              <CardHeader className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+                <div>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {days !== null ? `Clicks, last ${days} days` : 'Clicks, all time'}
+                  </CardTitle>
+                  <p className="mt-1 font-mono text-3xl tracking-tight tabular-nums text-foreground">
+                    {totalClicks.toLocaleString('en-US')}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                  {periodTrend && days !== null && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <TrendChip trend={periodTrend} />
+                      vs prior {days} days
+                    </span>
+                  )}
+                  <span>
+                    <span className="font-mono tabular-nums text-foreground">
+                      {linkIds.length.toLocaleString('en-US')}
+                    </span>{' '}
+                    {linkIds.length === 1 ? 'link' : 'links'}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <LazyClicksOverTimeChart data={clicksOverTime} />
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card className="bg-card border-border">
+                <CardHeader>
+                  <CardTitle>Referrers</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <BarList
+                    items={referrers.map((r) => ({ label: r.name, value: r.clicks }))}
+                    label="Referrers by clicks"
+                    total={totalClicks}
+                  />
+                </CardContent>
+              </Card>
+              <Card className="bg-card border-border">
+                <CardHeader>
+                  <CardTitle>Countries</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <BarList
+                    items={countryItems(countries)}
+                    label="Countries by clicks"
+                    total={totalClicks}
+                  />
+                </CardContent>
+              </Card>
+              <Card className="bg-card border-border">
+                <CardHeader>
+                  <CardTitle>Browsers</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <BarList
+                    items={namedItems(browsers.slice(0, 8))}
+                    label="Browsers by clicks"
+                    total={totalClicks}
+                  />
+                </CardContent>
+              </Card>
+              <Card className="bg-card border-border">
+                <CardHeader>
+                  <CardTitle>Devices</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <BarList
+                    items={namedItems(devices)}
+                    label="Devices by clicks"
+                    total={totalClicks}
+                  />
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
+
+        {/* The links list is real data whenever its own query worked, so it
+            stays under a stats error card. */}
+        {!linksError && (
+          <Card className="bg-card border-border gap-0 pb-0">
+            <CardHeader className="border-b border-border">
+              <CardTitle>Links in Campaign</CardTitle>
+              {/* The rows count every click a link has had, not this range, so
+                  they will not add up to the total above. */}
+              <CardAction className="self-center text-xs text-muted-foreground">
+                All-time clicks
+              </CardAction>
+            </CardHeader>
+            {campaignLinks.length > 0 ? (
+              <div className="divide-y divide-border">
+                {campaignLinks.map((link) => {
+                  const clicks = link.total_clicks || 0
+                  return (
+                    <Link
+                      key={link.id}
+                      href={`/dashboard/links/${link.id}`}
+                      className="block px-4 py-3 outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <span className="block truncate font-mono text-sm text-foreground">
+                            tws.bio/{link.short_code}
+                          </span>
+                          <p
+                            className="truncate text-xs text-muted-foreground"
+                            title={link.original_url}
+                          >
+                            {displayUrl(link.original_url)}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-sm text-muted-foreground">
+                          <span className="font-mono tabular-nums text-foreground">
+                            {clicks.toLocaleString('en-US')}
+                          </span>{' '}
+                          {clicks === 1 ? 'click' : 'clicks'}
+                        </span>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            ) : (
+              <CardContent>
+                <div className="flex flex-col items-center text-center gap-4 py-12">
+                  <p className="text-muted-foreground">No links in this campaign yet.</p>
+                  <Link href="/dashboard/create" className={buttonVariants()}>
+                    Create Link
+                  </Link>
+                </div>
+              </CardContent>
+            )}
+          </Card>
+        )}
+      </div>
     </div>
   )
 }

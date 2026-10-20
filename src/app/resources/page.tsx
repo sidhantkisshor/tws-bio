@@ -9,13 +9,23 @@ export const metadata: Metadata = {
   description: 'Trading tools, platforms, and resources curated by @tradingwithsidhant',
 }
 
+// Bare host for a row ('www.' dropped). The config is fixed, trusted data, but
+// a malformed URL still falls back to the raw string instead of throwing.
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www[.]/, '')
+  } catch {
+    return url
+  }
+}
+
 export default function ResourcesPage() {
   return (
     <div className={`min-h-screen bg-background flex flex-col ${dmSerif.variable}`}>
       {/* The audience page: a server-only nav, so no auth client JS ships here. */}
       <PublicNav />
 
-      <main className="flex-1 w-full max-w-2xl mx-auto px-4 pt-28 pb-16">
+      <main className="flex-1 w-full max-w-[44rem] mx-auto px-4 pt-28 pb-16">
         <h1 className="text-3xl md:text-4xl font-bold text-foreground leading-tight">
           Trading{' '}
           <span className="font-[family-name:var(--font-dm-serif)] italic text-primary-text">
@@ -24,10 +34,10 @@ export default function ResourcesPage() {
         </h1>
         <p className="text-muted-foreground mt-3 mb-10">Tools, platforms, and links I use for trading.</p>
 
-        <div className="space-y-10">
+        <div className="space-y-8">
           {resources.map((group) => (
             <section key={group.category}>
-              <h2 className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground mb-3">
+              <h2 className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground mb-2">
                 {group.category}
               </h2>
               <div className="divide-y divide-border border border-border rounded-lg overflow-hidden transition-colors hover:border-primary/30">
@@ -37,17 +47,22 @@ export default function ResourcesPage() {
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-between px-4 py-3 hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+                    className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-sm font-medium text-foreground">{item.title}</span>
+                      <span className="sr-only"> (opens in a new tab)</span>
                       {item.description && (
                         <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
                       )}
                     </div>
-                    <svg className="w-4 h-4 text-muted-foreground flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
+                    {/* The destination host is the trust signal: show it before the tap. */}
+                    <span className="flex shrink-0 items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                      {hostOf(item.url)}
+                      <svg aria-hidden="true" className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </span>
                   </a>
                 ))}
               </div>

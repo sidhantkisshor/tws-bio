@@ -2,7 +2,6 @@
 
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { toast } from 'sonner'
 import { CircleAlert, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -43,28 +42,32 @@ export function LoginForm() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [googlePending, setGooglePending] = useState(false)
+  // Shown inline, next to the fields, until the visitor edits one: a toast
+  // vanishes before a failed sign-in can be read and fixed.
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
     setLoading(true)
 
     try {
       // Lazy import keeps @supabase/* out of this static page's first-load JS.
       const { createClient } = await import('@/lib/supabase/client')
       const supabase = createClient()
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
-      if (error) throw error
+      if (signInError) throw signInError
 
       // Success: stay disabled through the redirect. Loading resets only on failure.
       router.push('/dashboard')
       router.refresh()
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to log in')
+      setError(err instanceof Error ? err.message : 'Failed to log in')
       setLoading(false)
     }
   }
@@ -85,8 +88,11 @@ export function LoginForm() {
             autoComplete="email"
             required
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="bg-muted"
+            onChange={(e) => {
+              setEmail(e.target.value)
+              setError(null)
+            }}
+            aria-invalid={!!error}
           />
         </div>
 
@@ -99,10 +105,23 @@ export function LoginForm() {
             autoComplete="current-password"
             required
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="bg-muted"
+            onChange={(e) => {
+              setPassword(e.target.value)
+              setError(null)
+            }}
+            aria-invalid={!!error}
           />
         </div>
+
+        {error && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+          >
+            <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
         <Button
           type="submit"

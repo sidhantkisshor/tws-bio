@@ -112,7 +112,7 @@ export function ExportLinksButton({
       downloadCsv(linksToCsv(allLinks))
       if (allLinks.length < totalCount) {
         toast.warning(
-          `Exported the first ${allLinks.length.toLocaleString()} of ${totalCount.toLocaleString()} links.`
+          `Exported the first ${allLinks.length.toLocaleString('en-US')} of ${totalCount.toLocaleString('en-US')} links.`
         )
       }
     } catch {
@@ -125,7 +125,6 @@ export function ExportLinksButton({
   return (
     <Button
       variant="outline"
-      size="sm"
       onClick={handleExport}
       disabled={links.length === 0 || exporting}
       aria-label={
@@ -135,12 +134,12 @@ export function ExportLinksButton({
       }
       title={
         hasMorePages
-          ? `Exports all ${totalCount.toLocaleString()} matching links, not just this page`
+          ? `Exports all ${totalCount.toLocaleString('en-US')} matching links, not just this page`
           : undefined
       }
     >
       {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
-      {hasMorePages ? `Export All (${totalCount.toLocaleString()})` : 'Export CSV'}
+      {hasMorePages ? `Export All (${totalCount.toLocaleString('en-US')})` : 'Export CSV'}
     </Button>
   )
 }
