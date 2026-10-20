@@ -31,7 +31,7 @@ function DialogOverlay({
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/60 supports-backdrop-filter:backdrop-blur-xs",
+        "fixed inset-0 isolate z-50 bg-black/70",
         className
       )}
       {...props}
@@ -84,7 +84,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2", className)}
+      className={cn("flex flex-col gap-2 pr-10", className)}
       {...props}
     />
   )

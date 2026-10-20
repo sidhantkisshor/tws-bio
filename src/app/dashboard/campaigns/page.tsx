@@ -2,7 +2,8 @@ import { getAuthenticatedUser, createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { AlertTriangle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
+import { PageHeader } from '@/components/dashboard/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatDate } from '@/lib/utils'
 
@@ -52,12 +53,14 @@ export default async function CampaignsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 gap-4">
-        <h1 className="font-heading text-2xl text-foreground">Campaigns</h1>
-        <Button render={<Link href="/dashboard/create" />}>
-          Create Link
-        </Button>
-      </div>
+      <PageHeader
+        title="Campaigns"
+        actions={
+          <Link href="/dashboard/create" className={buttonVariants()}>
+            Create Link
+          </Link>
+        }
+      />
 
       {hasError ? (
         <Card className="bg-card border-border">
@@ -71,31 +74,46 @@ export default async function CampaignsPage() {
                 Something went wrong. Please try again.
               </p>
             </div>
-            <Button render={<Link href="/dashboard/campaigns" />} variant="outline">
+            <Link href="/dashboard/campaigns" className={buttonVariants({ variant: 'outline' })}>
               Try again
-            </Button>
+            </Link>
           </CardContent>
         </Card>
       ) : campaignStats.length > 0 ? (
-        <Card className="bg-card border-border overflow-hidden">
+        <Card className="bg-card border-border overflow-hidden gap-0 py-0">
           <div className="divide-y divide-border">
             {campaignStats.map((campaign) => (
               <Link
                 key={campaign.id}
                 href={`/dashboard/campaigns/${campaign.id}`}
-                className="block px-6 py-4 hover:bg-muted"
+                className="block px-4 py-4 outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">{campaign.name}</h3>
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-semibold text-foreground">{campaign.name}</h3>
                     {campaign.description && (
-                      <p className="text-sm text-muted-foreground mt-0.5">{campaign.description}</p>
+                      <p className="mt-0.5 truncate text-sm text-muted-foreground">{campaign.description}</p>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 sm:gap-6 text-sm text-muted-foreground">
-                    <span>{campaign.totalLinks} links</span>
-                    <span>{campaign.totalClicks.toLocaleString()} clicks</span>
-                    <span>{formatDate(campaign.created_at)}</span>
+                  {/* Fixed right-aligned columns from sm up, so the numbers line
+                      up down the list. The click count is the value: it takes the
+                      foreground color, the labels stay muted. */}
+                  <div className="flex shrink-0 flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground sm:flex-nowrap sm:gap-6">
+                    <span className="sm:w-20 sm:text-right">
+                      <span className="font-mono tabular-nums">
+                        {campaign.totalLinks.toLocaleString('en-US')}
+                      </span>{' '}
+                      {campaign.totalLinks === 1 ? 'link' : 'links'}
+                    </span>
+                    <span className="sm:w-28 sm:text-right">
+                      <span className="font-mono tabular-nums text-foreground">
+                        {campaign.totalClicks.toLocaleString('en-US')}
+                      </span>{' '}
+                      {campaign.totalClicks === 1 ? 'click' : 'clicks'}
+                    </span>
+                    <span className="sm:w-40 sm:text-right">
+                      Created {formatDate(campaign.created_at)}
+                    </span>
                   </div>
                 </div>
               </Link>
@@ -106,9 +124,9 @@ export default async function CampaignsPage() {
         <Card className="bg-card border-border">
           <CardContent className="flex flex-col items-center text-center gap-4 py-12">
             <p className="text-muted-foreground">No campaigns yet. Create one when making a new link.</p>
-            <Button render={<Link href="/dashboard/create" />}>
+            <Link href="/dashboard/create" className={buttonVariants()}>
               Create Link
-            </Button>
+            </Link>
           </CardContent>
         </Card>
       )}

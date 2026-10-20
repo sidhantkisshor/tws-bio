@@ -9,6 +9,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart'
+import { SHORT_MONTHS } from '@/lib/utils'
 
 interface ClickChartProps {
   data: { date: string; clicks: number }[]
@@ -32,6 +33,36 @@ const chartConfig = {
 // UTC. Local midnight on that date formats back to the same date in any zone.
 function parseLocalDate(value: string): Date {
   return new Date(value.includes('T') ? value : `${value}T00:00:00`)
+}
+
+/**
+ * '5 Oct', or '5 Oct 2026' with the year. The key is a calendar day, so the
+ * fixed month table plus the local getters read it back the same in every
+ * viewer zone.
+ */
+function formatDay(value: string, withYear = false): string {
+  const d = parseLocalDate(value)
+  const day = `${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`
+  return withYear ? `${day} ${d.getFullYear()}` : day
+}
+
+// Count back from the newest day in even steps, so the latest day always has a
+// label and the gaps are equal. recharts' own interval picks ticks by label
+// width, which gave neighbours 6px apart next to gaps of 30px.
+function pickTicks(dates: string[]): string[] {
+  const n = dates.length
+  const step = n <= 7 ? 1 : n <= 31 ? 7 : n <= 92 ? 21 : Math.ceil((n - 1) / 4)
+  const out: string[] = []
+  for (let i = n - 1; i >= 0; i -= step) out.unshift(dates[i])
+  return out
+}
+
+// A round step (1, 2, 5, 10, 20, 50 ...) for four even bands, so the top tick is
+// a clean number instead of the raw peak.
+function niceStep(raw: number): number {
+  const p = 10 ** Math.floor(Math.log10(raw))
+  const m = raw / p
+  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p
 }
 
 export function ClickChart({ data, error }: ClickChartProps) {
@@ -62,16 +93,20 @@ export function ClickChart({ data, error }: ClickChartProps) {
   if (!data.length || !hasClicks) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
-        No click data yet
+        No clicks in this period
       </div>
     )
   }
 
   const maxClicks = Math.max(...data.map((d) => d.clicks))
+  const step = niceStep(Math.max(maxClicks, 4) / 4)
 
   return (
-    <ChartContainer config={chartConfig} className="h-64 w-full">
-      <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+    <ChartContainer
+      config={chartConfig}
+      className="h-64 w-full [&_.recharts-yAxis_.recharts-cartesian-axis-tick_text]:font-mono [&_.recharts-yAxis_.recharts-cartesian-axis-tick_text]:tabular-nums"
+    >
+      <AreaChart data={data} margin={{ top: 5, right: 22, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="clicksGradient" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="var(--color-clicks)" stopOpacity={0.3} />
@@ -88,41 +123,45 @@ export function ClickChart({ data, error }: ClickChartProps) {
           tickLine={false}
           axisLine={false}
           tickMargin={8}
-          tickFormatter={(value: string) => {
-            return parseLocalDate(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-          }}
+          ticks={pickTicks(data.map((d) => d.date))}
+          interval={0}
+          tickFormatter={(value: string) => formatDay(value)}
         />
         <YAxis
           tickLine={false}
           axisLine={false}
           tickMargin={8}
-          allowDecimals={false}
-          domain={[0, Math.max(maxClicks + 1, 4)]}
+          width="auto"
+          ticks={[0, step, step * 2, step * 3, step * 4]}
+          domain={[0, step * 4]}
+          tickFormatter={(v: number) => v.toLocaleString('en-US')}
         />
         <ChartTooltip
           content={
             <ChartTooltipContent
               labelFormatter={(value) => {
-                if (typeof value === 'string') {
-                  return parseLocalDate(value).toLocaleDateString('en-US', {
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })
-                }
-                return value
+                return typeof value === 'string' ? formatDay(value, true) : value
               }}
             />
           }
         />
         <Area
-          type="monotone"
+          type="linear"
           dataKey="clicks"
           stroke="var(--color-clicks)"
-          strokeWidth={2.5}
+          strokeWidth={2}
           fill="url(#clicksGradient)"
-          dot={{ r: 3, fill: 'var(--color-clicks)', stroke: 'var(--card)', strokeWidth: 1 }}
-          activeDot={{ r: 5, fill: 'var(--color-clicks)', stroke: 'var(--card)', strokeWidth: 2 }}
+          // A dot per day turns a 90-day line into a row of beads: draw them
+          // only while there are few enough to read.
+          dot={
+            data.length <= 14
+              ? { r: 2.5, fill: 'var(--color-clicks)', stroke: 'var(--card)', strokeWidth: 1 }
+              : false
+          }
+          activeDot={{ r: 4, fill: 'var(--color-clicks)', stroke: 'var(--card)', strokeWidth: 2 }}
+          // The draw-in replays on every resize, and a chart that animates on
+          // each range change adds delay for no meaning.
+          isAnimationActive={false}
         />
       </AreaChart>
     </ChartContainer>

@@ -22,6 +22,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { TickerChip } from '@/components/TickerChip'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -261,9 +262,13 @@ export function EditLinkDialog({
       <DialogContent className="flex flex-col sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Edit Link</DialogTitle>
-          <DialogDescription>
+          {/* The code is shown, not offered as a field: a read-only input was
+              the first thing in the dialog, so it took the focus ring and
+              looked like the field to edit. Focus now starts on Original URL. */}
+          <DialogDescription className="sr-only">
             Update the settings for this short link.
           </DialogDescription>
+          <TickerChip code={link.short_code} copyable={false} className="self-start" />
         </DialogHeader>
 
         <form
@@ -278,16 +283,6 @@ export function EditLinkDialog({
               are taller than a phone screen, and Save must stay in reach.
               The bleed (-mx-4 px-4) keeps focus rings from clipping. */}
           <div className="-mx-4 grid min-h-0 content-start gap-4 overflow-y-auto px-4 py-2">
-            <div className="grid gap-2">
-              <Label htmlFor="edit-short-code">Short Code</Label>
-              <Input
-                id="edit-short-code"
-                value={link.short_code}
-                readOnly
-                className="font-mono bg-muted"
-              />
-            </div>
-
             <div className="grid gap-2">
               <Label htmlFor={FIELD_IDS.originalUrl}>Original URL</Label>
               <Input

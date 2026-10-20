@@ -8,18 +8,19 @@ import { Card } from '@/components/ui/card'
  */
 export default function CampaignsLoading() {
   return (
-    <div aria-busy="true" aria-live="polite">
+    <div role="status" aria-busy="true" aria-live="polite" className="animate-pulse">
+      <span className="sr-only">Loading campaigns</span>
       <div className="flex items-center justify-between mb-6 gap-4">
         <div className="h-8 w-36 rounded-md bg-muted" />
         {/* Create Link button */}
-        <div className="h-9 w-28 rounded-md bg-muted" />
+        <div className="h-11 w-28 rounded-md bg-muted sm:h-9" />
       </div>
 
       {/* Campaign list card */}
-      <Card className="bg-card border-border overflow-hidden">
+      <Card className="bg-card border-border overflow-hidden gap-0 py-0">
         <div className="divide-y divide-border">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="px-6 py-4">
+            <div key={i} className="px-4 py-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div>
                   <div className="h-4 w-40 rounded bg-muted" />

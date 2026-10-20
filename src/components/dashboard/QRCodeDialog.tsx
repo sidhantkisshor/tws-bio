@@ -17,21 +17,12 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 
-// The preview SVG needs literal color strings, so the theme tokens are
-// resolved from the stylesheet once and cached (hex fallbacks match the
-// current globals.css values for the pre-hydration edge case).
-let qrColors: { bg: string; fg: string } | null = null
-function getQrColors() {
-  if (!qrColors) {
-    const styles =
-      typeof document !== 'undefined' ? getComputedStyle(document.documentElement) : null
-    qrColors = {
-      bg: styles?.getPropertyValue('--card').trim() || '#111111',
-      fg: styles?.getPropertyValue('--chart-1').trim() || '#00B03B',
-    }
-  }
-  return qrColors
-}
+// The preview is dark modules on a light plate, like the printed file: a
+// light-on-dark code is an optional feature in QR decoders, and some scanners
+// cannot read it. The SVG needs literal colors; these are the --foreground and
+// --background values from globals.css.
+const PREVIEW_LIGHT = '#FAFAFA'
+const PREVIEW_DARK = '#0A0A0A'
 
 // The downloads are built from a hidden second render in print colors. Its
 // dark modules are the path with this fill.
@@ -139,20 +130,20 @@ export function QRCodeDialog({
         <div className="flex flex-col items-center gap-3 py-4">
           {/* Shrinks below 304px so a 360px phone does not scroll the dialog
               sideways. */}
-          <div className="w-full max-w-[304px] rounded-xl bg-card p-6">
+          <div className="w-full max-w-[304px] rounded-lg bg-foreground p-6">
             {/* Level M here too, so the screen and the printed file carry
                 the same code. */}
             <QRCode
               value={url}
               size={256}
               level="M"
-              bgColor={getQrColors().bg}
-              fgColor={getQrColors().fg}
+              bgColor={PREVIEW_LIGHT}
+              fgColor={PREVIEW_DARK}
               style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Downloads are black on white, ready to print.
+            Same code as the download, ready to print.
           </p>
           <div ref={printRef} hidden>
             <QRCode value={url} level="M" bgColor={PRINT_LIGHT} fgColor={PRINT_DARK} />
@@ -161,11 +152,11 @@ export function QRCodeDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={handleDownloadSvg}>
-            <Download className="size-4 mr-1.5" />
+            <Download className="size-4" />
             Download SVG
           </Button>
           <Button onClick={handleDownloadPng}>
-            <Download className="size-4 mr-1.5" />
+            <Download className="size-4" />
             Download PNG
           </Button>
         </DialogFooter>

@@ -72,13 +72,13 @@ export function DeleteLinkDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete Link</AlertDialogTitle>
+          <AlertDialogTitle>Delete this link?</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete{' '}
-            <span className="font-mono font-medium break-all text-foreground">
+            This deletes{' '}
+            <span className="font-mono wrap-break-word text-foreground">
               {displayUrl}
-            </span>
-            ? This action cannot be undone.
+            </span>{' '}
+            and its click history. This cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

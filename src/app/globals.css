@@ -10,9 +10,12 @@
   --font-heading: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-dm-serif: var(--font-dm-serif);
-  /* Data voice: zero-byte system mono stack — short codes, counts, timestamps.
-     Deliberately NOT a webfont (loading budget + terminal vernacular). */
-  --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+  /* Data voice: self-hosted Geist Mono (weight 400 only, about 10 KB, see
+     mono-font.ts) for short codes and mono labels, so the signature element
+     draws the same on every platform. 0/O and l/I/1 stay distinct in it. The
+     system stack is the fallback while it loads. Mono text must never ask for
+     weight 500 or bold: only 400 is loaded. */
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   /* Dark elevation system: overlays float, cards stay ring/border-defined. */
   --shadow-overlay: 0 8px 30px rgb(0 0 0 / 0.55), 0 2px 8px rgb(0 0 0 / 0.35);
   --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.4);
@@ -73,26 +76,32 @@
   --foreground: #FAFAFA;
   --card: #111111;
   --card-foreground: #FAFAFA;
-  --popover: #111111;
+  /* One step lighter than --card so menus, dialogs and toasts lift off the
+     cards they cover. */
+  --popover: #161616;
   --popover-foreground: #FAFAFA;
   --primary: #00802B;
   --primary-foreground: #FFFFFF;
-  /* AA-legible green for TEXT on dark surfaces (#0a0a0a/#111111/#1a1a1a) — --primary (#00802B)
+  /* AA-legible green for TEXT on dark surfaces (#0a0a0a/#111111/#1a1a1a). --primary (#00802B)
      is reserved for solid fills, where it's paired with --primary-foreground (white). */
   --primary-text: var(--brand);
   --secondary: #1a1a1a;
   --secondary-foreground: #FAFAFA;
   --muted: #1a1a1a;
   --muted-foreground: #999999;
-  --accent: #1a1a1a;
+  /* Hover and highlight fill: a clear step above --popover (#161616). */
+  --accent: #262626;
   --accent-foreground: #FAFAFA;
-  --destructive: #FF4433;
+  /* Same red, lighter for dark surfaces: error text on #111 is 6.75:1. */
+  --destructive: #FF6B5C;
   --border: #1f1f1f;
-  --input: #1f1f1f;
+  /* Field and outline-button edges: 1.5:1 on a #111 card. --border stays
+     #1f1f1f so card and table dividers stay calm. */
+  --input: #2e2e2e;
   --ring: var(--brand);
   --radius: 0.625rem;
 
-  /* Fill-flash background — used ONLY by the tick-fill animation, never resting. */
+  /* Fill-flash background, used ONLY by the tick-fill animation, never resting. */
   --tick-flash: rgb(0 176 59 / 0.16);
   /* Shared hero/auth glow, all in the brand green family (no foreign hues). */
   --gradient-hero: radial-gradient(
@@ -102,17 +111,16 @@
     transparent 70%
   );
 
-  /* Chart colors: shared token ramp for every chart component (ClickChart,
-     BarChart, PieChart, MiniSparkline). Single-series charts use --chart-1
-     (brand green). Multi-series/categorical charts (PieChart donuts) draw from
-     the full --chart-1..5 ramp in order: never invent a one-off hex per chart.
-     All five stay in the brand's green family, alternating light/dark so
-     adjacent pie/bar segments stay distinguishable. */
+  /* Chart colors: shared token ramp for every chart. Single-series charts use
+     --chart-1 (brand green), always: never pick another step for one series.
+     Multi-series charts draw from the ramp in order, and --chart-5 (neutral
+     gray) is reserved for "Other" and unknown. Measured on #111: 6.5, 15.6,
+     3.8, 10.8 and 4.0:1; neighbors are 2.4 to 4.1:1 apart. */
   --chart-1: #00B03B;
-  --chart-2: #6EE7B7;
-  --chart-3: #047857;
-  --chart-4: #A7F3D0;
-  --chart-5: #065F46;
+  --chart-2: #BBF7D0;
+  --chart-3: #15803D;
+  --chart-4: #4ADE80;
+  --chart-5: #737373;
 
   /* Sidebar */
   --sidebar: #0d0d0d;
@@ -127,7 +135,7 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
   }
@@ -137,7 +145,7 @@
   html {
     @apply font-sans;
   }
-  /* Selecting a short URL — the core action — selects in brand green, not UA blue. */
+  /* Selecting a short URL (the core action) selects in brand green, not UA blue. */
   ::selection {
     background-color: var(--primary);
     color: var(--primary-foreground);
@@ -173,5 +181,17 @@
   }
   to {
     box-shadow: inset 0 0 0 999px rgb(0 176 59 / 0);
+  }
+}
+
+/* Keyboard focus for anything that is not an Input or a SelectTrigger (those
+   keep the full-strength border-ring). A 2px outline in the brand green, 2px
+   outside the element: 6.5:1 on #111, and it stays visible on a green fill,
+   where a border change plus a 50% halo disappeared. Pair it with outline-none:
+   this rule is more specific, so it wins. */
+@utility focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 }

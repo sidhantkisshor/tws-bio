@@ -19,7 +19,7 @@ interface TickerChipProps {
   /** Start on the green Check state, then revert after 1.2s. */
   copiedOnMount?: boolean
   /**
-   * Grow the copy button's hit area to 40px for thumbs, without changing how
+   * Grow the copy button's hit area to 44px for thumbs, without changing how
    * the chip looks. The extra area fills the gap beside the label, so it never
    * covers the label link.
    */
@@ -82,7 +82,7 @@ export function TickerChip({
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          className="truncate rounded-sm transition-colors hover:text-primary-text focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="truncate rounded-sm transition-colors hover:text-primary-text focus-ring"
         >
           {SHORT_DOMAIN}/{code}
         </a>
@@ -97,8 +97,8 @@ export function TickerChip({
           onClick={handleCopy}
           aria-label={copied ? 'Short link copied' : 'Copy short link'}
           className={cn(
-            'inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
-            touchTarget && "relative after:absolute after:-inset-2 after:content-['']",
+            'inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-ring',
+            touchTarget && "relative after:absolute after:-inset-y-2.5 after:-left-2 after:-right-3 after:content-['']",
           )}
         >
           <span className="relative block size-3.5">

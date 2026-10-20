@@ -20,7 +20,11 @@ const ranges: { value: TimeRange; label: string }[] = [
  */
 export function TimeRangePicker({ current, basePath }: TimeRangePickerProps) {
   return (
-    <div role="group" aria-label="Time range" className="flex gap-1 bg-muted rounded-lg p-1">
+    <div
+      role="group"
+      aria-label="Time range"
+      className="grid w-full grid-cols-4 gap-1 rounded-lg bg-muted p-1 sm:inline-grid sm:w-auto"
+    >
       {ranges.map(({ value, label }) => {
         const active = current === value
         return (
@@ -28,9 +32,12 @@ export function TimeRangePicker({ current, basePath }: TimeRangePickerProps) {
             key={value}
             href={`${basePath}?range=${value}`}
             aria-current={active ? 'page' : undefined}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+            // 44px tall on touch screens. The selected segment sinks to the page
+            // color and takes the green text: state is color plus depth, not
+            // white against grey alone.
+            className={`inline-flex min-h-11 items-center justify-center rounded-md px-3.5 text-sm font-medium transition-colors focus-ring sm:min-h-8 sm:px-3 ${
               active
-                ? 'bg-card text-foreground shadow-sm'
+                ? 'bg-background text-primary-text'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >

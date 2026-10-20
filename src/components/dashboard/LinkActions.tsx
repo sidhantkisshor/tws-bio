@@ -36,7 +36,7 @@ export function LinkActions({
   touch = false,
 }: {
   link: LinkRow
-  /** Phone cards: 40px buttons a thumb can hit. Table rows keep 24px ones. */
+  /** Phone cards: 44px buttons a thumb can hit. Table rows keep 24px ones. */
   touch?: boolean
 }) {
   const router = useRouter()
@@ -57,7 +57,7 @@ export function LinkActions({
   const managed = isResourceDropRow(link.short_code)
   const showToggle = !managed || !link.is_active
 
-  const buttonClass = touch ? 'size-10' : undefined
+  const buttonClass = touch ? 'size-11' : undefined
   const iconClass = touch ? 'size-4' : 'size-3.5'
 
   async function setActive(nextActive: boolean) {
@@ -128,7 +128,7 @@ export function LinkActions({
     <>
       {/* No Copy button here: the row's TickerChip (LinksTable short-code cell)
           is the single copy affordance, with the fill flash + Check morph. */}
-      <div className={cn('flex items-center', touch ? 'gap-2' : 'gap-1')}>
+      <div className="flex items-center gap-1">
         {/* A real link rather than a Button, so it can open in a new tab. No
             prefetch: twenty rows would each fetch a dynamic page that the
             owner opens for one link at most. */}
@@ -173,10 +173,9 @@ export function LinkActions({
             onClick={handleToggleActive}
             disabled={toggling}
             aria-label={link.is_active ? 'Deactivate link' : 'Activate link'}
-            className={cn(
-              link.is_active ? 'text-primary-text hover:text-primary-text/80' : 'text-muted-foreground',
-              buttonClass,
-            )}
+            // Same neutral tone in both states: the Status column already says
+            // which one it is, and a green icon per row was noise.
+            className={cn('text-muted-foreground hover:text-foreground', buttonClass)}
           >
             <Power className={iconClass} />
           </Button>
@@ -190,7 +189,7 @@ export function LinkActions({
               setDeleteOpen(true)
             }}
             aria-label="Delete link"
-            className={cn('text-destructive hover:text-destructive', buttonClass)}
+            className={cn('text-muted-foreground hover:text-destructive', buttonClass)}
           >
             <Trash2 className={iconClass} />
           </Button>

@@ -39,12 +39,42 @@ export function getShortUrl(shortCode: string): string {
 // server-only and this one also runs in the browser).
 const DATE_TIME_ZONE = 'Asia/Kolkata'
 
+/**
+ * Three-letter month names. en-IN and en-GB spell September 'Sept' in current
+ * ICU data, which breaks the three-letter rhythm of a date column, so dates
+ * take the month number from Intl and the name from here.
+ */
+export const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+const DATE_PARTS = new Intl.DateTimeFormat('en-US', {
+  timeZone: DATE_TIME_ZONE,
+  day: 'numeric',
+  month: 'numeric',
+  year: 'numeric',
+})
+
 export function formatDate(value: string | number | Date | null | undefined): string {
   if (!value) return '---'
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return '---'
-  return d.toLocaleDateString('en-US', { timeZone: DATE_TIME_ZONE })
+  // '20 Oct 2026': day first and the month spelled out, so 10/8 is never
+  // ambiguous, and the column lines up with the chart axis ('5 Oct').
+  const parts = Object.fromEntries(DATE_PARTS.formatToParts(d).map((p) => [p.type, p.value]))
+  return `${parts.day} ${SHORT_MONTHS[Number(parts.month) - 1]} ${parts.year}`
 }
+
+/**
+ * A count with its noun, pluralised: formatCount(1, 'link') is '1 link',
+ * formatCount(2, 'link') is '2 links', formatCount(1538, 'click') is
+ * '1,538 clicks'. The number is pinned to en-US grouping so the server and
+ * every browser agree. Pass `many` for an irregular plural.
+ */
+export function formatCount(n: number, one: string, many: string = `${one}s`): string {
+  return `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
+}
+
+/** Same helper under the name the design findings use. */
+export const plural = formatCount
 
 // Canonicalize an IPv4 host given in any notation (dotted-decimal, dotted-octal,
 // dotted-hex, or a bare decimal/hex/octal integer) to a dotted-quad string.
@@ -144,7 +174,7 @@ function isBlockedIPv6(g: number[]): boolean {
   if (g.every((x) => x === 0)) return true // :: unspecified
   if ((g[0] & 0xfe00) === 0xfc00) return true // fc00::/7 unique local
   if ((g[0] & 0xffc0) === 0xfe80) return true // fe80::/10 link-local
-  // Embedded-IPv4 forms — decode the trailing 32 bits and range-check them:
+  // Embedded-IPv4 forms: decode the trailing 32 bits and range-check them:
   //   ::ffff:0:0/96 (IPv4-mapped), ::/96 (deprecated IPv4-compatible),
   //   64:ff9b::/96 (NAT64 well-known prefix).
   const embedsIPv4 =

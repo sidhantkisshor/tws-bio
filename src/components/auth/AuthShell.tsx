@@ -29,9 +29,13 @@ export function AuthShell({ title, description, children }: AuthShellProps) {
         <div className="text-center">
           <Link
             href="/"
-            className="inline-block rounded-md text-3xl font-bold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="inline-flex items-center gap-2 rounded-md text-3xl font-bold tracking-tight text-foreground focus-ring"
           >
-            tws.<span className="font-[family-name:var(--font-dm-serif)] italic text-primary-text">bio</span>
+            {/* Same tick bar as Wordmark; the serif 'bio' is this page's one display moment. */}
+            <span aria-hidden className="h-[0.85em] w-0.5 bg-primary-text" />
+            <span>
+              tws.<span className="font-[family-name:var(--font-dm-serif)] italic text-primary-text">bio</span>
+            </span>
           </Link>
         </div>
 
@@ -39,7 +43,7 @@ export function AuthShell({ title, description, children }: AuthShellProps) {
           <CardHeader>
             <h1
               data-slot="card-title"
-              className="font-heading text-2xl leading-snug font-medium"
+              className="font-heading text-2xl leading-snug font-semibold tracking-tight"
             >
               {title}
             </h1>

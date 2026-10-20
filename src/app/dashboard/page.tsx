@@ -5,12 +5,14 @@ import {
   rangeWindow,
   zeroFillDays,
 } from '@/lib/analytics'
-import { StatCard, computeTrend } from '@/components/dashboard/StatCard'
+import { StatCell, computeTrend } from '@/components/dashboard/StatCard'
+import { displayUrl } from '@/components/dashboard/displayUrl'
 import { LazyClickChart } from '@/components/charts/lazy'
 import { TypeBadge } from '@/components/dashboard/TypeBadge'
-import { Link2, MousePointerClick, Activity, BarChart3, AlertTriangle } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
+import { PageHeader } from '@/components/dashboard/PageHeader'
 import {
   Table,
   TableBody,
@@ -248,12 +250,9 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 gap-4">
-        <h1 className="font-heading text-2xl text-foreground">Overview</h1>
-        <Button render={<Link href="/dashboard/create" />}>
-          Create Link
-        </Button>
-      </div>
+      {/* No Create Link here: the sidebar button (and the + in the phone top
+          bar) is always on screen, so a second one only competed with it. */}
+      <PageHeader title="Overview" />
 
       {statsError && (
         <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 mb-6 text-sm">
@@ -270,45 +269,19 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Stat Cards */}
-      <div className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {/* Gradient glow effect behind stat cards: the shared brand-green
-            radial token; the gradient already fades to transparent, so no
-            blur filter (a 100px blur forced an expensive GPU pass over a
-            large region for a visually identical result). */}
-        <div
-          className="pointer-events-none absolute -top-16 left-1/2 -translate-x-1/2 w-[500px] h-[200px] opacity-20"
-          style={{ background: 'var(--gradient-hero)' }}
-        />
-        <StatCard
-          title="Total Links"
-          value={totalLinks}
-          icon={<Link2 className="h-6 w-6" />}
-          trend={totalLinksTrend}
-          trendLabel="vs prior 30 days"
-        />
-        <StatCard
-          title="Total Clicks"
-          value={totalClicks.toLocaleString()}
-          icon={<MousePointerClick className="h-6 w-6" />}
-          trend={totalClicksTrend}
-          trendLabel="vs prior 30 days"
-        />
-        <StatCard
-          title="Avg Clicks/Link"
-          value={avgClicksPerLink}
-          icon={<Activity className="h-6 w-6" />}
-          trend={avgClicksTrend}
-          trendLabel="vs prior 30 days"
-        />
-        <StatCard
-          title="Active Links"
-          value={activeLinks}
-          icon={<BarChart3 className="h-6 w-6" />}
-          trend={activeLinksTrend}
-          trendLabel="vs prior 30 days"
-        />
-      </div>
+      {/* Stats: one joined strip (two rows on a phone) instead of four cards.
+          The 1px gaps over a tinted background draw the dividers. */}
+      <section aria-label="Summary" className="mb-8">
+        <p className="mb-3 text-xs text-muted-foreground">
+          Changes compare the last 30 days with the 30 days before.
+        </p>
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-foreground/10 ring-1 ring-foreground/10 lg:grid-cols-4">
+          <StatCell title="Total Links" value={totalLinks.toLocaleString('en-US')} trend={totalLinksTrend} />
+          <StatCell title="Total Clicks" value={totalClicks.toLocaleString('en-US')} trend={totalClicksTrend} />
+          <StatCell title="Avg Clicks/Link" value={avgClicksPerLink.toLocaleString('en-US')} trend={avgClicksTrend} />
+          <StatCell title="Active Links" value={activeLinks.toLocaleString('en-US')} trend={activeLinksTrend} />
+        </div>
+      </section>
 
       {/* Clicks Over Time Chart */}
       <Card className="bg-card border-border mb-8">
@@ -326,7 +299,7 @@ export default async function DashboardPage() {
           <CardTitle>Recent Links</CardTitle>
           <Link
             href="/dashboard/links"
-            className="text-sm text-primary-text hover:text-primary-text/80"
+            className="focus-ring rounded-sm text-sm text-primary-text hover:text-primary-text/80"
           >
             View all
           </Link>
@@ -356,34 +329,40 @@ export default async function DashboardPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="px-6">Short Link</TableHead>
-                <TableHead className="px-6">Original URL</TableHead>
-                <TableHead className="px-6">Type</TableHead>
-                <TableHead className="px-6">Clicks</TableHead>
-                <TableHead className="px-6">Created</TableHead>
+                <TableHead className="px-4 lg:px-6">Short Link</TableHead>
+                <TableHead className="hidden px-4 md:table-cell lg:px-6">Original URL</TableHead>
+                <TableHead className="px-4 text-right lg:px-6">Clicks</TableHead>
+                <TableHead className="hidden px-4 lg:table-cell lg:px-6">Created</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {recentLinks.map((link) => (
                 <TableRow key={link.id}>
-                  <TableCell className="px-6 py-4">
-                    <Link
-                      href={`/dashboard/links/${link.id}`}
-                      className="text-primary-text hover:text-primary-text/80"
-                    >
-                      tws.bio/{link.short_code}
-                    </Link>
+                  {/* On a phone the cell is also the URL column: code on top,
+                      destination under it, clicks at the right. */}
+                  <TableCell className="w-full max-w-0 px-4 py-3 md:w-auto md:max-w-none lg:px-6">
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/dashboard/links/${link.id}`}
+                        className="focus-ring truncate rounded-sm font-mono text-sm text-foreground transition-colors hover:text-primary-text"
+                      >
+                        tws.bio/{link.short_code}
+                      </Link>
+                      {link.link_type === 'deep_link' && <TypeBadge type={link.link_type} />}
+                    </div>
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground md:hidden">
+                      {displayUrl(link.original_url)}
+                    </span>
                   </TableCell>
-                  <TableCell className="px-6 py-4 text-foreground truncate max-w-xs">
-                    {link.original_url}
+                  <TableCell className="hidden w-full max-w-0 px-4 py-3 md:table-cell lg:px-6">
+                    <span className="block truncate text-muted-foreground" title={link.original_url}>
+                      {displayUrl(link.original_url)}
+                    </span>
                   </TableCell>
-                  <TableCell className="px-6 py-4">
-                    <TypeBadge type={link.link_type} />
+                  <TableCell className="px-4 py-3 text-right font-mono tabular-nums text-foreground lg:px-6">
+                    {(link.total_clicks || 0).toLocaleString('en-US')}
                   </TableCell>
-                  <TableCell className="px-6 py-4 text-foreground">
-                    {link.total_clicks || 0}
-                  </TableCell>
-                  <TableCell className="px-6 py-4 text-muted-foreground">
+                  <TableCell className="hidden px-4 py-3 text-muted-foreground lg:table-cell lg:px-6">
                     {link.created_at
                       ? formatDate(link.created_at)
                       : '---'}
@@ -396,9 +375,9 @@ export default async function DashboardPage() {
           <CardContent>
             <div className="flex flex-col items-center text-center py-12 gap-4">
               <p className="text-muted-foreground">No links created yet.</p>
-              <Button render={<Link href="/dashboard/create" />}>
+              <Link href="/dashboard/create" className={buttonVariants()}>
                 Create Link
-              </Button>
+              </Link>
             </div>
           </CardContent>
         )}

@@ -13,6 +13,8 @@ import {
   Menu,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
+import { Wordmark } from '@/components/Wordmark'
 import {
   Sheet,
   SheetTrigger,
@@ -42,10 +44,13 @@ function NavItem({
       href={item.href}
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
-      className={`flex items-center gap-3 px-4 py-2.5 rounded-r-md text-sm font-medium transition-colors ${
+      // The 2px left border is always there (transparent when inactive), so the
+      // icon and label do not shift right when an item becomes active. The
+      // active bar is the same green as the TickerChip tick it echoes.
+      className={`focus-ring flex min-h-11 items-center gap-3 border-l-2 px-4 py-2.5 rounded-r-md text-sm font-medium transition-colors md:min-h-0 ${
         active
-          ? 'bg-accent text-primary-text border-l-2 border-primary'
-          : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+          ? 'bg-accent text-primary-text border-primary-text'
+          : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent'
       }`}
     >
       <Icon className="size-4" />
@@ -54,18 +59,12 @@ function NavItem({
   )
 }
 
-function CreateLinkButton({
-  onClick,
-  className = '',
-}: {
-  onClick?: () => void
-  className?: string
-}) {
+function CreateLinkButton({ onClick }: { onClick?: () => void }) {
   return (
     <Link
       href="/dashboard/create"
       onClick={onClick}
-      className={`flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${className}`}
+      className={`${buttonVariants({ size: 'lg' })} w-full`}
     >
       <Plus className="size-4" />
       Create Link
@@ -96,8 +95,8 @@ function SidebarContent({
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-5">
-        <Link href="/" className="font-heading text-xl text-foreground">
-          tws.bio
+        <Link href="/" className="inline-block rounded-md text-lg text-foreground focus-ring">
+          <Wordmark />
         </Link>
       </div>
 
@@ -147,14 +146,14 @@ export function DashboardSidebar({ userEmail }: { userEmail: string }) {
 
       {/* Mobile top bar + sheet */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between h-14 px-4 bg-card border-b border-border">
-        <Link href="/" className="font-heading text-xl text-foreground">
-          tws.bio
+        <Link href="/" className="rounded-md text-lg text-foreground focus-ring">
+          <Wordmark />
         </Link>
         <div className="flex items-center gap-1">
           <Link
             href="/dashboard/create"
             aria-label="Create Link"
-            className="flex items-center justify-center rounded-md bg-primary size-9 text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="focus-ring flex size-11 items-center justify-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/90"
           >
             <Plus className="size-5" />
           </Link>
@@ -166,7 +165,7 @@ export function DashboardSidebar({ userEmail }: { userEmail: string }) {
             >
               <Menu className="size-5" />
             </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0">
+            <SheetContent side="left" className="w-64 bg-card p-0">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
               <SidebarContent
                 pathname={pathname}

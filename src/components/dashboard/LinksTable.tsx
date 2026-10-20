@@ -6,13 +6,13 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Trash2 } from 'lucide-react'
 import { effectiveSelection, isResourceDropRow, selectableLinkIds } from '@/lib/linkRows'
-import { formatDate, getShortUrl } from '@/lib/utils'
+import { cn, formatCount, formatDate, getShortUrl } from '@/lib/utils'
+import { displayUrl } from '@/components/dashboard/displayUrl'
 import type { Database } from '@/types/database'
 import { TickerChip } from '@/components/TickerChip'
 import { LinkActions } from '@/components/dashboard/LinkActions'
 import { MiniSparkline } from '@/components/charts/MiniSparkline'
 import { TypeBadge } from '@/components/dashboard/TypeBadge'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -40,12 +40,22 @@ const checkboxClassName =
 const checkboxStyle = { accentColor: 'var(--primary)' }
 
 // Type carries the link's shape (URL vs deep link); Status carries whether
-// it's currently live. Both used to render as identical solid green pills.
-// Type is now a neutral outline+icon chip (shared TypeBadge component),
-// reserving the solid brand-green fill exclusively for the Active signal
-// (finding: links-type-status-badge-differentiation).
+// it's currently live. Type is a neutral outline+icon chip (shared TypeBadge
+// component). Status is a dot and a word, not a pill: twenty solid green
+// "Active" pills made the normal case the loudest thing on the page, so green
+// is now only the small dot and the exception (Inactive) is the dim one.
 function StatusBadge({ active }: { active: boolean | null }) {
-  return <Badge variant={active ? 'default' : 'secondary'}>{active ? 'Active' : 'Inactive'}</Badge>
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap">
+      <span
+        aria-hidden
+        className={cn('size-1.5 rounded-full', active ? 'bg-primary-text' : 'bg-muted-foreground/50')}
+      />
+      <span className={active ? 'text-foreground' : 'text-muted-foreground'}>
+        {active ? 'Active' : 'Inactive'}
+      </span>
+    </span>
+  )
 }
 
 // Says why a Resource Drop row has no checkbox and fewer actions: the Resource
@@ -158,7 +168,7 @@ export function LinksTable({
         toast.error(error.message)
         return
       }
-      toast.success(`${ids.length} link${ids.length === 1 ? '' : 's'} ${active ? 'activated' : 'deactivated'}`)
+      toast.success(`${formatCount(ids.length, 'link')} ${active ? 'activated' : 'deactivated'}`)
       setSelected(new Set())
       router.refresh()
     } catch {
@@ -181,7 +191,7 @@ export function LinksTable({
         toast.error(error.message)
         return
       }
-      toast.success(`${ids.length} link${ids.length === 1 ? '' : 's'} deleted`)
+      toast.success(`${formatCount(ids.length, 'link')} deleted`)
       setSelected(new Set())
       setBulkDeleteOpen(false)
       router.refresh()
@@ -195,8 +205,16 @@ export function LinksTable({
   return (
     <>
       {someSelected && (
-        // Wraps on phones, where the four buttons are wider than the card.
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-muted/40 px-4 py-2.5">
+        // Floats at the bottom of the screen instead of sitting above the
+        // table: inserting a bar there pushed every row down under the pointer
+        // after the first click, and on a phone it appeared far from the card
+        // that was just ticked. From md up it centres over the content column,
+        // not the sidebar.
+        <div
+          role="region"
+          aria-label="Bulk actions"
+          className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-xl flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border bg-popover px-4 py-2.5 shadow-overlay md:left-[calc(16rem+1rem)]"
+        >
           <span className="text-sm font-medium text-foreground">{selectedCount} selected</span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => bulkSetActive(true)} disabled={bulkBusy}>
@@ -216,35 +234,39 @@ export function LinksTable({
         </div>
       )}
 
-      {/* Desktop / tablet: full table, scoped horizontal scroll only if needed */}
-      <div className="hidden md:block">
+      {/* Wide screens only (xl): below 1280px the sidebar leaves 960px or less,
+          which the table's columns do not fit in, so the card list takes over. */}
+      <div className="hidden xl:block">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10 px-4">
+              <TableHead className="w-10 px-3">
                 <input
                   type="checkbox"
                   className={checkboxClassName}
                   style={checkboxStyle}
                   checked={allSelected}
+                  ref={(el) => {
+                    // Some rows ticked, not all: show the dash, not an empty box.
+                    if (el) el.indeterminate = someSelected && !allSelected
+                  }}
                   onChange={toggleAll}
                   disabled={selectableIds.length === 0}
                   aria-label="Select all links"
                 />
               </TableHead>
-              <TableHead className="px-4">Short Code</TableHead>
-              <TableHead className="px-4">Original URL</TableHead>
-              <TableHead className="px-4">Type</TableHead>
-              <TableHead className="px-4">Clicks</TableHead>
-              <TableHead className="px-4">Status</TableHead>
-              <TableHead className="px-4">Created</TableHead>
-              <TableHead className="px-4">Actions</TableHead>
+              <TableHead className="px-3">Short Code</TableHead>
+              <TableHead className="px-3">Original URL</TableHead>
+              <TableHead className="px-3 text-right">Clicks</TableHead>
+              <TableHead className="px-3">Status</TableHead>
+              <TableHead className="px-3">Created</TableHead>
+              <TableHead className="px-3">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {links.map((link) => (
               <TableRow key={link.id} data-state={selected.has(link.id) ? 'selected' : undefined}>
-                <TableCell className="px-4 py-3">
+                <TableCell className="px-3 py-3">
                   <RowCheckbox
                     link={link}
                     checked={selected.has(link.id)}
@@ -252,36 +274,42 @@ export function LinksTable({
                     className={checkboxClassName}
                   />
                 </TableCell>
-                <TableCell className="px-4 py-3">
+                <TableCell className="px-3 py-3">
                   {/* Signature ticker chip: brings the row's single copy affordance
-                      (fill flash + Check morph), so LinkActions carries no Copy button. */}
-                  <TickerChip code={link.short_code} href={getShortUrl(link.short_code)} />
+                      (fill flash + Check morph), so LinkActions carries no Copy button.
+                      Only the exception gets a badge: a plain URL needs no label. */}
+                  <div className="flex items-center gap-2">
+                    <TickerChip code={link.short_code} href={getShortUrl(link.short_code)} className="max-w-64" />
+                    {link.link_type === 'deep_link' && <TypeBadge type={link.link_type} />}
+                  </div>
                   {isResourceDropRow(link.short_code) && <ResourceDropLabel />}
                 </TableCell>
-                <TableCell className="px-4 py-3">
+                {/* w-full + max-w-0: the URL column takes whatever width the
+                    others leave and truncates inside it, so the table always
+                    fits its card. */}
+                <TableCell className="w-full max-w-0 px-3 py-3">
                   <span
-                    className="block max-w-xs truncate text-sm text-muted-foreground"
+                    className="block truncate text-sm text-muted-foreground"
                     title={link.original_url}
                   >
-                    {link.original_url}
+                    {displayUrl(link.original_url)}
                   </span>
                 </TableCell>
-                <TableCell className="px-4 py-3">
-                  <TypeBadge type={link.link_type} />
-                </TableCell>
-                <TableCell className="px-4 py-3">
-                  <div className="flex items-center gap-2">
+                <TableCell className="px-3 py-3">
+                  <div className="flex items-center justify-end gap-2">
                     <MiniSparkline data={sparklines[link.id] || []} />
-                    <span className="font-mono tabular-nums">{link.total_clicks || 0}</span>
+                    <span className="min-w-[4ch] text-right font-mono tabular-nums">
+                      {(link.total_clicks || 0).toLocaleString('en-US')}
+                    </span>
                   </div>
                 </TableCell>
-                <TableCell className="px-4 py-3">
+                <TableCell className="px-3 py-3">
                   <StatusBadge active={link.is_active} />
                 </TableCell>
-                <TableCell className="px-4 py-3 text-sm tabular-nums text-muted-foreground">
+                <TableCell className="px-3 py-3 text-sm tabular-nums text-muted-foreground">
                   {link.created_at ? formatDate(link.created_at) : '---'}
                 </TableCell>
-                <TableCell className="px-4 py-3">
+                <TableCell className="px-3 py-3">
                   <LinkActions link={link} />
                 </TableCell>
               </TableRow>
@@ -290,23 +318,37 @@ export function LinksTable({
         </Table>
       </div>
 
-      {/* Mobile: stacked card-per-link layout so every field and action stays on-screen */}
-      <div className="divide-y divide-border md:hidden">
+      {/* Below xl: stacked card-per-link layout so every field and action stays on-screen */}
+      <div className="divide-y divide-border xl:hidden">
         {links.map((link) => (
           <div key={link.id} className="flex flex-col gap-3 p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-3">
-                <RowCheckbox
-                  link={link}
-                  checked={selected.has(link.id)}
-                  onToggle={() => toggleOne(link.id)}
-                  className={`${checkboxClassName} mt-0.5 shrink-0`}
-                />
+                {/* The box stays 16px; the label grows its hit area to 44px with
+                    negative margins, so the card layout does not change. */}
+                <label className="-mx-3.5 -mb-3.5 -mt-3 inline-flex size-11 shrink-0 items-center justify-center">
+                  <RowCheckbox
+                    link={link}
+                    checked={selected.has(link.id)}
+                    onToggle={() => toggleOne(link.id)}
+                    className={`${checkboxClassName} shrink-0`}
+                  />
+                </label>
                 <div className="min-w-0">
                   <TickerChip code={link.short_code} href={getShortUrl(link.short_code)} touchTarget />
-                  <span className="mt-1 block truncate text-sm text-muted-foreground">
-                    {link.original_url}
-                  </span>
+                  {/* The date rides on the URL line: the meta row below is
+                      already full on a 390px phone. */}
+                  <div className="mt-1 flex items-baseline gap-3">
+                    <span
+                      className="min-w-0 flex-1 truncate text-sm text-muted-foreground"
+                      title={link.original_url}
+                    >
+                      {displayUrl(link.original_url)}
+                    </span>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {link.created_at ? formatDate(link.created_at) : '---'}
+                    </span>
+                  </div>
                   {isResourceDropRow(link.short_code) && <ResourceDropLabel />}
                 </div>
               </div>
@@ -314,20 +356,17 @@ export function LinksTable({
             </div>
 
             <div className="flex items-center gap-3 pl-7 text-sm text-muted-foreground">
-              <TypeBadge type={link.link_type} />
+              {link.link_type === 'deep_link' && <TypeBadge type={link.link_type} />}
               <MiniSparkline data={sparklines[link.id] || []} />
               {/* Same page as the View stats action. No prefetch, as there. */}
               <Link
                 href={`/dashboard/links/${link.id}`}
                 prefetch={false}
-                className="relative rounded-sm font-mono tabular-nums transition-colors after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-[''] hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="relative whitespace-nowrap rounded-sm font-mono tabular-nums transition-colors after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-[''] hover:text-foreground focus-ring"
               >
-                {link.total_clicks || 0} clicks
+                {formatCount(link.total_clicks || 0, 'click')}
                 <span className="sr-only">, view stats</span>
               </Link>
-              <span className="ml-auto tabular-nums">
-                {link.created_at ? formatDate(link.created_at) : '---'}
-              </span>
             </div>
 
             <div className="-mx-1 flex items-center justify-end">
@@ -341,7 +380,7 @@ export function LinksTable({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete {selectedCount} link{selectedCount === 1 ? '' : 's'}
+              Delete {formatCount(selectedCount, 'link')}
             </AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete the selected link{selectedCount === 1 ? '' : 's'} and all

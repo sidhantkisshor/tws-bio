@@ -57,7 +57,9 @@ export function computeTrend(
 function formatDelta(delta: number, isRatio?: boolean): string {
   const rounded = isRatio ? Math.round(delta * 10) / 10 : Math.round(delta)
   const sign = rounded > 0 ? '+' : ''
-  return `${sign}${rounded}`
+  // Pinned to en-US so '+1,538' reads the same on the server and in every
+  // browser, and matches the grouped totals beside it.
+  return `${sign}${rounded.toLocaleString('en-US', { maximumFractionDigits: isRatio ? 1 : 0 })}`
 }
 
 /**
@@ -75,7 +77,7 @@ export function TrendChip({ trend }: { trend: StatTrend | null | undefined }) {
 
   if (trend.isNew) {
     return (
-      <span className="inline-flex items-center gap-0.5 rounded-full bg-primary-text/10 px-1.5 py-0.5 text-xs font-medium text-primary-text">
+      <span className="inline-flex items-center gap-0.5 rounded-full bg-primary-text/10 px-1.5 py-0.5 font-mono text-xs tabular-nums text-primary-text">
         New {deltaText}
       </span>
     )
@@ -92,35 +94,64 @@ export function TrendChip({ trend }: { trend: StatTrend | null | undefined }) {
         : 'text-destructive'
 
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-medium ${colorClass}`}>
-      <span className="inline-flex items-center gap-0.5">
+    <span className={`inline-flex items-center gap-1 text-xs ${colorClass}`}>
+      <span className="inline-flex items-center gap-0.5 font-mono tabular-nums">
         <Icon className="h-3 w-3" />
-        {Math.abs(trend.percent)}%
+        {Math.abs(trend.percent).toLocaleString('en-US')}%
       </span>
-      <span className="text-muted-foreground font-normal">({deltaText})</span>
+      <span className="font-mono tabular-nums text-muted-foreground">({deltaText})</span>
     </span>
+  )
+}
+
+/**
+ * One cell of the Overview's joined stat strip: label, number, trend. The
+ * strip draws the dividers (1px gaps over a tinted background), so a cell is
+ * only a flat panel. No icon: the label already names the number.
+ */
+export function StatCell({
+  title,
+  value,
+  trend,
+}: {
+  title: string
+  value: string | number
+  trend?: StatTrend | null
+}) {
+  return (
+    <div className="bg-card p-4 sm:p-5">
+      <p className="text-xs font-medium text-muted-foreground">{title}</p>
+      <p className="mt-2 font-mono text-2xl tabular-nums tracking-tight text-foreground sm:text-3xl">
+        {value}
+      </p>
+      {trend && (
+        <div className="mt-1.5">
+          <TrendChip trend={trend} />
+        </div>
+      )}
+    </div>
   )
 }
 
 export function StatCard({ title, value, icon, trend, trendLabel }: StatCardProps) {
   return (
     <Card className="bg-card border-border">
-      <CardContent className="pt-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-3xl font-bold font-mono tabular-nums text-foreground mt-1">{value}</p>
-            {trend && (
-              <div className="flex items-center gap-1.5 mt-1.5">
-                <TrendChip trend={trend} />
-                {trendLabel && (
-                  <span className="text-xs text-muted-foreground">{trendLabel}</span>
-                )}
-              </div>
+      <CardContent>
+        {/* The icon sits in the title row, small and muted: it labels the card,
+            it is not a green accent. */}
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm text-muted-foreground">{title}</p>
+          {icon && <span className="text-muted-foreground [&_svg]:size-4">{icon}</span>}
+        </div>
+        <p className="mt-1 font-mono text-3xl tabular-nums text-foreground">{value}</p>
+        {trend && (
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <TrendChip trend={trend} />
+            {trendLabel && (
+              <span className="text-xs text-muted-foreground">{trendLabel}</span>
             )}
           </div>
-          {icon && <div className="text-primary">{icon}</div>}
-        </div>
+        )}
       </CardContent>
     </Card>
   )

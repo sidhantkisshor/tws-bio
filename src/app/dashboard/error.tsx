@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { AlertTriangle } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
 
 /**
  * Dashboard-level error boundary. Catches thrown errors from any query in
@@ -26,7 +27,7 @@ export default function DashboardError({
   return (
     <div className="flex items-center justify-center py-24">
       <Card className="bg-card border-border max-w-md w-full">
-        <CardContent className="pt-6 flex flex-col items-center gap-3 text-center">
+        <CardContent className="flex flex-col items-center gap-3 text-center">
           <div className="rounded-full bg-destructive/10 p-3">
             <AlertTriangle className="h-6 w-6 text-destructive" />
           </div>
@@ -39,9 +40,9 @@ export default function DashboardError({
           </p>
           <div className="flex gap-3 mt-2">
             <Button onClick={() => reset()}>Try again</Button>
-            <Button render={<Link href="/dashboard" />} variant="outline">
+            <Link href="/dashboard" className={buttonVariants({ variant: 'outline' })}>
               Back to Overview
-            </Button>
+            </Link>
           </div>
         </CardContent>
       </Card>
