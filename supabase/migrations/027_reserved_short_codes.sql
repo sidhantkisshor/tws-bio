@@ -1,6 +1,6 @@
 -- Migration 027: Refuse reserved short codes in the database (audit sec-3)
 --
--- NOT APPLIED as of 2026-10-19. Run the preflight below against the remote
+-- APPLIED to production on 2026-10-20 (preflight and verify passed). Run the preflight below against the remote
 -- database first.
 --
 -- What changes: adds the CHECK constraint short_code_not_reserved on links. It

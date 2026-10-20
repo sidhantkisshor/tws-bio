@@ -1,6 +1,6 @@
 -- Migration 025: Evaluate auth.uid() once per query in RLS policies (audit db-3)
 --
--- NOT APPLIED as of 2026-10-19. Run the preflight below against the remote
+-- APPLIED to production on 2026-10-20 (preflight and verify passed). Run the preflight below against the remote
 -- database first. Policy names on the remote have drifted from these files
 -- before (the live links SELECT policy was once "View links policy", a name no
 -- migration creates), so ADJUST EVERY POLICY NAME BELOW TO THE PREFLIGHT 1
@@ -148,9 +148,15 @@ ALTER POLICY "Users can delete own API keys" ON public.api_keys
 -- this file does not name (see preflight 1). pg_policies prints the wrapped
 -- form as "( SELECT auth.uid() AS uid)", so whatever is left after removing
 -- that text is a bare call.
+--
+-- The remote (preflight of 2026-10-20) had most policies calling
+-- public.uid(), a SQL wrapper that returns auth.uid(). pg_policies prints it as
+-- "uid()", which the text check above cannot see, so the second check reads
+-- the policy's dependencies instead and refuses any call to the wrapper.
 DO $$
 DECLARE
   v_bare text;
+  v_wrapper text;
 BEGIN
   SELECT string_agg(format('%s.%s', tablename, policyname), ', ')
   INTO v_bare
@@ -162,6 +168,23 @@ BEGIN
 
   IF v_bare IS NOT NULL THEN
     RAISE EXCEPTION 'Policies still calling auth.uid() bare: %', v_bare;
+  END IF;
+
+  IF to_regprocedure('public.uid()') IS NOT NULL THEN
+    SELECT string_agg(format('%s.%s', c.relname, pol.polname), ', ')
+    INTO v_wrapper
+    FROM pg_policy pol
+    JOIN pg_class c ON c.oid = pol.polrelid
+    JOIN pg_namespace cn ON cn.oid = c.relnamespace
+    JOIN pg_depend d ON d.classid = 'pg_policy'::regclass AND d.objid = pol.oid
+      AND d.refclassid = 'pg_proc'::regclass
+    WHERE cn.nspname = 'public'
+      AND d.refobjid = to_regprocedure('public.uid()')
+      AND NOT (c.relname = 'links' AND pol.polcmd = 'a');
+
+    IF v_wrapper IS NOT NULL THEN
+      RAISE EXCEPTION 'Policies still calling public.uid(): %', v_wrapper;
+    END IF;
   END IF;
 END $$;
 

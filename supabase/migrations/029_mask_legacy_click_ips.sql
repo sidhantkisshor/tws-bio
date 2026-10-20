@@ -1,6 +1,6 @@
 -- Migration 029: Mask the full visitor IPs left on old clicks (audit db-6)
 --
--- NOT APPLIED as of 2026-10-20. Run the preflight below against the remote
+-- APPLIED to production on 2026-10-20 (preflight and verify passed). Run the preflight below against the remote
 -- database first: the remote has drifted from these files before (CLAUDE.md).
 --
 -- What changes: every clicks row whose ip_address is still a full address

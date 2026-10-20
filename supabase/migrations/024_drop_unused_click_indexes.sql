@@ -1,9 +1,11 @@
 -- Migration 024: Drop two clicks indexes no query uses (audit db-10)
 --
--- NOT APPLIED as of 2026-10-19. Run the preflight below against the remote
+-- APPLIED to production on 2026-10-20 (preflight and verify passed). Run the preflight below against the remote
 -- database first: the remote has drifted from these files before (CLAUDE.md).
 --
 -- What changes: drops idx_clicks_visitor_id and idx_clicks_clicked_at (001).
+-- On 2026-10-20 both were already absent on the remote, so applying it changed
+-- nothing; it is kept so a fresh database ends in the same state.
 --
 -- Why: every click writes to every index on clicks, the one table that keeps
 -- growing. visitor_id is never written (no code sets it), so its index holds

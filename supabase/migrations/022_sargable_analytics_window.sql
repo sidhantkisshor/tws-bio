@@ -1,7 +1,7 @@
 -- Migration 022: Index-friendly date window and IST chart days in the
 -- analytics RPCs (audit db-1)
 --
--- NOT APPLIED as of 2026-10-20. Run the preflight below against the remote
+-- APPLIED to production on 2026-10-20 (preflight and verify passed). Run the preflight below against the remote
 -- database first: the remote has drifted from these files before (CLAUDE.md).
 --
 -- DEPLOY ORDER: apply this right before the app deploy that moves the
