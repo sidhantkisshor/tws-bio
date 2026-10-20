@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Database } from '@/types/database'
 
-// Only the columns the home links list actually renders — keeps the query
+// Only the columns the home links list actually renders: keeps the query
 // payload small and the ghost columns (custom_meta, tags, qr_code_url,
 // password_hash) out of the wire format.
 export type HomeLink = Pick<
@@ -14,8 +14,10 @@ export type HomeLink = Pick<
 const HOME_LINK_COLUMNS =
   'id, short_code, original_url, link_type, total_clicks, created_at'
 
+// Ids of links created anonymously before migration 019. Nothing writes this
+// key any more (anonymous creation is gone); it is only read so those older
+// links still show up for the browser that made them.
 const ANON_LINKS_KEY = 'anon_links'
-const MAX_ANON_LINKS = 50
 
 export function getAnonLinkIds(): string[] {
   if (typeof window === 'undefined') return []
@@ -27,34 +29,15 @@ export function getAnonLinkIds(): string[] {
   }
 }
 
-// Pure merge: prepend id, dedupe (id moves to front), cap at max (newest kept).
-export function mergeAnonLinkId(
-  existing: string[],
-  id: string,
-  max: number
-): string[] {
-  return [id, ...existing.filter((i) => i !== id)].slice(0, max)
-}
-
-export function saveAnonLinkId(id: string) {
-  if (typeof window === 'undefined') return
-  try {
-    // Re-read the latest value immediately before writing so a concurrent
-    // write from another tab is merged rather than clobbered.
-    const ids = getAnonLinkIds()
-    const updated = mergeAnonLinkId(ids, id, MAX_ANON_LINKS)
-    localStorage.setItem(ANON_LINKS_KEY, JSON.stringify(updated))
-  } catch {
-    // localStorage unavailable
-  }
-}
-
 export function useLinks(
   userId: string | null | undefined,
   authLoading = false
 ) {
   const [links, setLinks] = useState<HomeLink[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  // Bumped by retry() to run the fetch again with the same inputs.
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     // Wait for auth to resolve before fetching: firing with userId=undefined
@@ -66,46 +49,63 @@ export function useLinks(
 
     async function fetchLinks() {
       setLoading(true)
-      // Dynamic import keeps supabase-js out of the static home-page bundle.
-      const { createClient } = await import('@/lib/supabase/client')
-      const supabase = createClient()
+      setError(false)
 
-      if (userId) {
-        const { data } = await supabase
-          .from('links')
-          .select(HOME_LINK_COLUMNS)
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(10)
-        if (!ignore) setLinks(data || [])
-      } else {
-        // Fetch anonymous links from localStorage IDs. Direct table reads are
-        // owner-only under RLS, so this goes through the get_links_by_ids
-        // definer RPC — possession of a link's UUID is proof of creation.
-        const anonIds = getAnonLinkIds()
-        if (anonIds.length > 0) {
-          const { data } = await supabase.rpc('get_links_by_ids', {
-            p_ids: anonIds,
-          })
-          if (!ignore) setLinks((data || []).slice(0, 10))
-        } else {
-          if (!ignore) setLinks([])
+      try {
+        // Dynamic imports keep supabase-js out of the static home-page bundle,
+        // and each sits in the branch that needs it: a visitor with no session
+        // and no saved anonymous ids never downloads it.
+        if (userId) {
+          const { createClient } = await import('@/lib/supabase/client')
+          const { data, error: queryError } = await createClient()
+            .from('links')
+            .select(HOME_LINK_COLUMNS)
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(10)
+          if (queryError) throw queryError
+          if (!ignore) setLinks(data ?? [])
+          return
         }
-      }
 
-      if (!ignore) setLoading(false)
+        const anonIds = getAnonLinkIds()
+        if (anonIds.length === 0) {
+          if (!ignore) setLinks([])
+          return
+        }
+
+        // Direct table reads are owner-only under RLS, so this goes through
+        // the get_links_by_ids definer RPC: possession of a link's UUID is
+        // proof of creation.
+        const { createClient } = await import('@/lib/supabase/client')
+        const { data, error: rpcError } = await createClient().rpc('get_links_by_ids', {
+          p_ids: anonIds,
+        })
+        if (rpcError) throw rpcError
+        if (!ignore) setLinks((data ?? []).slice(0, 10))
+      } catch (err) {
+        // Without this, a failed load looks exactly like having no links.
+        console.error('Failed to load links:', err)
+        if (!ignore) setError(true)
+      } finally {
+        if (!ignore) setLoading(false)
+      }
     }
 
-    fetchLinks()
+    void fetchLinks()
 
     return () => {
       ignore = true
     }
-  }, [userId, authLoading])
+  }, [userId, authLoading, attempt])
 
   const addLink = useCallback((link: HomeLink) => {
     setLinks((prev) => [link, ...prev])
   }, [])
 
-  return { links, loading, addLink }
+  const retry = useCallback(() => {
+    setAttempt((n) => n + 1)
+  }, [])
+
+  return { links, loading, error, addLink, retry }
 }

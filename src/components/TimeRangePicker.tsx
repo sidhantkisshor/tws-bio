@@ -13,22 +13,31 @@ const ranges: { value: TimeRange; label: string }[] = [
   { value: 'all', label: 'All' },
 ]
 
+/**
+ * The one range control on Analytics and the link and campaign detail pages,
+ * writing the one `?range=` vocabulary that parseTimeRange reads. Plain links,
+ * so it needs no client JS and every range is its own URL.
+ */
 export function TimeRangePicker({ current, basePath }: TimeRangePickerProps) {
   return (
-    <div className="flex gap-1 bg-muted rounded-lg p-1">
-      {ranges.map(({ value, label }) => (
-        <Link
-          key={value}
-          href={`${basePath}?range=${value}`}
-          className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${
-            current === value
-              ? 'bg-card text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          {label}
-        </Link>
-      ))}
+    <div role="group" aria-label="Time range" className="flex gap-1 bg-muted rounded-lg p-1">
+      {ranges.map(({ value, label }) => {
+        const active = current === value
+        return (
+          <Link
+            key={value}
+            href={`${basePath}?range=${value}`}
+            aria-current={active ? 'page' : undefined}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+              active
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+          </Link>
+        )
+      })}
     </div>
   )
 }

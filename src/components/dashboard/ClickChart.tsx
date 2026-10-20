@@ -12,7 +12,7 @@ import {
 
 interface ClickChartProps {
   data: { date: string; clicks: number }[]
-  /** True when the underlying click query failed — renders a distinct
+  /** True when the underlying click query failed: renders a distinct
    * message from the zero-clicks empty state so a swallowed error doesn't
    * read as "this link genuinely has no clicks yet". */
   error?: boolean
@@ -25,10 +25,11 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-// Dates arrive as plain 'YYYY-MM-DD' strings. Parsing those directly with
-// `new Date(...)` treats them as UTC midnight, which renders as the prior
-// day in any negative-UTC-offset timezone. Anchoring to local midnight
-// keeps the displayed date stable regardless of viewer timezone.
+// Dates arrive as plain 'YYYY-MM-DD' keys, each naming a calendar day in India
+// (dayKey in lib/analytics). A key is a label, not an instant, so it must show
+// as written in every viewer zone. Parsing it directly with `new Date(...)`
+// treats it as UTC midnight, which renders as the prior day in any zone behind
+// UTC. Local midnight on that date formats back to the same date in any zone.
 function parseLocalDate(value: string): Date {
   return new Date(value.includes('T') ? value : `${value}T00:00:00`)
 }

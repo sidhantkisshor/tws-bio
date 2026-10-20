@@ -41,6 +41,7 @@ function NavItem({
     <Link
       href={item.href}
       onClick={onClick}
+      aria-current={active ? 'page' : undefined}
       className={`flex items-center gap-3 px-4 py-2.5 rounded-r-md text-sm font-medium transition-colors ${
         active
           ? 'bg-accent text-primary-text border-l-2 border-primary'

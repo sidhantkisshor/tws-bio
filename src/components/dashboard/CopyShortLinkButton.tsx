@@ -7,7 +7,7 @@ import { getShortUrl } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
 /**
- * Copy-to-clipboard affordance for a short link's own detail page — the one
+ * Copy-to-clipboard affordance for a short link's own detail page: the one
  * place a user is most likely to want to grab the URL again, but where it
  * previously rendered as plain static text with no copy/share action.
  */
@@ -31,7 +31,9 @@ export function CopyShortLinkButton({ shortCode }: { shortCode: string }) {
       size="icon-xs"
       onClick={handleCopy}
       aria-label="Copy short URL"
-      className="text-muted-foreground hover:text-primary-text"
+      // The 24px button keeps its look; the invisible margin makes a 40px
+      // target for a thumb.
+      className="relative text-muted-foreground after:absolute after:-inset-2 after:content-[''] hover:text-primary-text"
     >
       {copied ? <Check className="size-3.5 text-primary-text" /> : <Copy className="size-3.5" />}
     </Button>

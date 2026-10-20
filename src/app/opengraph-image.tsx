@@ -1,12 +1,12 @@
 import { ImageResponse } from 'next/og'
 
-export const alt = 'tws.bio — Short links, big impact'
+export const alt = 'tws.bio: Short links, big impact'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
 /**
  * Generated OG image: dark brand canvas, tws.bio wordmark, green tick,
- * thin hairline. Deliberately self-contained — no external fetches or
+ * thin hairline. Deliberately self-contained: no external fetches or
  * custom font loading, so it can never fail a social-card render.
  */
 export default function OpenGraphImage() {

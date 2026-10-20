@@ -1,3 +1,5 @@
+> Historical record (written July 2026). Completed or superseded: do not execute. Current state: CLAUDE.md.
+
 # REMEDIATION_SUMMARY.md
 
 Branch: `audit-fixes` (from `feat/frontend-redesign`, snapshot `7f8bddb`). **Not merged** — ready for your review.

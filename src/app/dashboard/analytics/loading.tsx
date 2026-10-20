@@ -10,10 +10,10 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 export default function AnalyticsLoading() {
   return (
     <div aria-busy="true" aria-live="polite">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="h-8 w-32 rounded-md bg-muted" />
-        {/* Range picker */}
-        <div className="h-9 w-36 rounded-md bg-muted" />
+        {/* Range picker (TimeRangePicker's four tabs) */}
+        <div className="h-10 w-48 rounded-lg bg-muted" />
       </div>
 
       {/* Total clicks stat */}
@@ -45,15 +45,15 @@ export default function AnalyticsLoading() {
         </CardContent>
       </Card>
 
-      {/* Devices / Browsers */}
+      {/* Devices donut / Browsers bars, at the page's chart heights */}
       <div className="grid md:grid-cols-2 gap-6 mb-8">
-        {Array.from({ length: 2 }).map((_, i) => (
-          <Card key={i} className="bg-card border-border">
+        {['h-[260px]', 'h-[220px]'].map((height) => (
+          <Card key={height} className="bg-card border-border">
             <CardHeader>
               <div className="h-4 w-24 rounded bg-muted" />
             </CardHeader>
             <CardContent>
-              <div className="h-56 w-full rounded-md bg-muted/50" />
+              <div className={`${height} w-full rounded-md bg-muted/50`} />
             </CardContent>
           </Card>
         ))}

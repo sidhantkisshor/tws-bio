@@ -1,3 +1,5 @@
+> Historical record (written July 2026). Completed or superseded: do not execute. Current state: CLAUDE.md.
+
 # Dashboard Audit → Improve Loop — Design
 
 **Date:** 2026-07-15

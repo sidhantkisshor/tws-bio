@@ -27,8 +27,9 @@ export function Navbar() {
         tws.bio
       </Link>
 
-      {/* Desktop nav links — the logged-out set is the optimistic default (no
-          skeleton on the marketing shell); it swaps once a session resolves. */}
+      {/* Desktop nav links: the logged-out set is the optimistic default (no
+          skeleton on the marketing shell); it swaps once a session resolves.
+          Accounts are invite-only, so the logged-out action is sign-in only. */}
       <div className="hidden md:flex items-center gap-4">
         {user ? (
           <>
@@ -50,14 +51,8 @@ export function Navbar() {
             >
               Home
             </Link>
-            <Link
-              href="/login"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Log in
-            </Link>
-            <Button render={<Link href="/signup" />} size="sm">
-              Sign up
+            <Button render={<Link href="/login" />} size="sm">
+              Sign in
             </Button>
           </>
         )}
@@ -117,21 +112,11 @@ export function Navbar() {
                     render={
                       <Link
                         href="/login"
-                        className="text-sm text-foreground hover:text-muted-foreground transition-colors"
-                      />
-                    }
-                  >
-                    Log in
-                  </SheetClose>
-                  <SheetClose
-                    render={
-                      <Link
-                        href="/signup"
                         className={cn(buttonVariants({ size: 'sm' }), 'w-full')}
                       />
                     }
                   >
-                    Sign up
+                    Sign in
                   </SheetClose>
                 </>
               )}

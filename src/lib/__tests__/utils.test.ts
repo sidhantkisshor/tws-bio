@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isValidUrl, generateShortCode, getShortUrl, BLOCKED_HOSTNAMES } from '@/lib/utils'
+import { isValidUrl, generateShortCode, getShortUrl, BLOCKED_HOSTNAMES, formatDate } from '@/lib/utils'
 
 describe('isValidUrl - SSRF / abuse blocklist', () => {
   const blocked = [
@@ -86,5 +86,20 @@ describe('generateShortCode', () => {
 describe('getShortUrl', () => {
   it('appends the short code to the base URL', () => {
     expect(getShortUrl('abc123')).toMatch(/\/abc123$/)
+  })
+})
+
+describe('formatDate', () => {
+  it('shows the India Standard Time date, whatever zone it runs in', () => {
+    // 20:00 UTC on 19 October is 01:30 IST on 20 October.
+    expect(formatDate('2026-10-19T20:00:00Z')).toBe('10/20/2026')
+    expect(formatDate('2026-10-19T18:29:59Z')).toBe('10/19/2026')
+    expect(formatDate('2026-10-19T18:30:00Z')).toBe('10/20/2026')
+  })
+
+  it('shows a placeholder for a missing or invalid date', () => {
+    expect(formatDate(null)).toBe('---')
+    expect(formatDate(undefined)).toBe('---')
+    expect(formatDate('not a date')).toBe('---')
   })
 })

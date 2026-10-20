@@ -20,7 +20,7 @@ interface BarChartProps {
 /**
  * Unified bar chart for every dashboard "top N" / breakdown widget. Replaces
  * the former ReferrerChart / BarListChart / BrowserChart / charts.BarChart
- * quartet — one component, two orientations, one set of standardized axis and
+ * quartet: one component, two orientations, one set of standardized axis and
  * tooltip styling drawn from the chart tokens (see ui/chart + globals.css).
  */
 export function BarChart({
@@ -30,7 +30,7 @@ export function BarChart({
   emptyMessage = 'No data yet',
   className = 'h-[280px] w-full',
 }: BarChartProps) {
-  // Categories that are all zero are indistinguishable from "no data" — an axis
+  // Categories that are all zero are indistinguishable from "no data": an axis
   // of invisible zero-width bars reads as broken, not empty.
   const hasVisibleData = data.length > 0 && data.some((d) => d.value > 0)
 
@@ -82,7 +82,7 @@ export function BarChart({
 
   return (
     <ChartContainer config={chartConfig} className={className}>
-      {/* margin left:80 + YAxis width:75 are layout-load-bearing — category labels need the room */}
+      {/* margin left:80 + YAxis width:75 are layout-load-bearing: category labels need the room */}
       <RechartsBarChart data={data} layout="vertical" margin={{ left: 80 }}>
         <YAxis
           type="category"

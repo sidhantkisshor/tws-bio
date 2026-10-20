@@ -1,3 +1,5 @@
+> Historical record (written February 2026). Completed or superseded: do not execute. Current state: CLAUDE.md.
+
 # Security Audit Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

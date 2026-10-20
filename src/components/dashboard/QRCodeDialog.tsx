@@ -1,8 +1,11 @@
 'use client'
 
-import { useRef, useCallback } from 'react'
+import { useRef } from 'react'
 import QRCode from 'react-qr-code'
+import { toast } from 'sonner'
+import { Download } from 'lucide-react'
 import { getShortUrl } from '@/lib/utils'
+import { qrExportSize, qrFileName, standardQrSvg } from '@/lib/qrExport'
 import { TickerChip } from '@/components/TickerChip'
 import {
   Dialog,
@@ -13,11 +16,10 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Download } from 'lucide-react'
 
-// The QR SVG and download canvas need literal color strings, so the theme
-// tokens are resolved from the stylesheet once and cached (hex fallbacks match
-// the current globals.css values for the pre-hydration edge case).
+// The preview SVG needs literal color strings, so the theme tokens are
+// resolved from the stylesheet once and cached (hex fallbacks match the
+// current globals.css values for the pre-hydration edge case).
 let qrColors: { bg: string; fg: string } | null = null
 function getQrColors() {
   if (!qrColors) {
@@ -31,6 +33,34 @@ function getQrColors() {
   return qrColors
 }
 
+// The downloads are built from a hidden second render in print colors. Its
+// dark modules are the path with this fill.
+const PRINT_DARK = '#000000'
+const PRINT_LIGHT = '#FFFFFF'
+
+const PREPARE_FAILED = 'Could not prepare the QR code. Please try again.'
+
+function readPrintCode(container: HTMLElement | null) {
+  const svg = container?.querySelector('svg')
+  const moduleCount = svg?.viewBox.baseVal?.width
+  const darkPath = svg?.querySelector(`path[fill="${PRINT_DARK}"]`)?.getAttribute('d')
+  if (!moduleCount || !darkPath) return null
+  return { moduleCount, darkPath }
+}
+
+function saveFile(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  // Revoked later, not at once: Safari can drop a download whose URL is
+  // revoked before it has started reading it.
+  setTimeout(() => URL.revokeObjectURL(url), 30_000)
+}
+
 export function QRCodeDialog({
   shortCode,
   open,
@@ -40,40 +70,60 @@ export function QRCodeDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const qrRef = useRef<HTMLDivElement>(null)
+  const printRef = useRef<HTMLDivElement>(null)
   const url = getShortUrl(shortCode)
 
-  const handleDownload = useCallback(() => {
-    const svg = qrRef.current?.querySelector('svg')
-    if (!svg) return
+  function handleDownloadSvg() {
+    const code = readPrintCode(printRef.current)
+    if (!code) {
+      toast.error(PREPARE_FAILED)
+      return
+    }
+    const svg = standardQrSvg(code.moduleCount, code.darkPath)
+    saveFile(new Blob([svg], { type: 'image/svg+xml' }), qrFileName(shortCode, 'svg'))
+  }
 
-    const svgData = new XMLSerializer().serializeToString(svg)
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
+  function handleDownloadPng() {
+    const code = readPrintCode(printRef.current)
+    if (!code) {
+      toast.error(PREPARE_FAILED)
+      return
+    }
+    const { sizePx } = qrExportSize(code.moduleCount)
+    const svgUrl = URL.createObjectURL(
+      new Blob([standardQrSvg(code.moduleCount, code.darkPath)], { type: 'image/svg+xml' }),
+    )
     const img = new Image()
     img.onload = () => {
-      // Add padding around the QR code
-      const padding = 32
-      canvas.width = img.width + padding * 2
-      canvas.height = img.height + padding * 2
-
-      // Fill background
-      ctx.fillStyle = getQrColors().bg
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-      // Draw QR code centered
-      ctx.drawImage(img, padding, padding)
-
-      const pngUrl = canvas.toDataURL('image/png')
-      const downloadLink = document.createElement('a')
-      downloadLink.download = `qr-${shortCode}.png`
-      downloadLink.href = pngUrl
-      downloadLink.click()
+      URL.revokeObjectURL(svgUrl)
+      const canvas = document.createElement('canvas')
+      canvas.width = sizePx
+      canvas.height = sizePx
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        toast.error(PREPARE_FAILED)
+        return
+      }
+      // The SVG is already sizePx square with whole-pixel modules, so it is
+      // drawn 1:1 and stays sharp.
+      ctx.imageSmoothingEnabled = false
+      ctx.fillStyle = PRINT_LIGHT
+      ctx.fillRect(0, 0, sizePx, sizePx)
+      ctx.drawImage(img, 0, 0, sizePx, sizePx)
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          toast.error(PREPARE_FAILED)
+          return
+        }
+        saveFile(blob, qrFileName(shortCode, 'png'))
+      }, 'image/png')
     }
-    img.src = 'data:image/svg+xml;base64,' + btoa(svgData)
-  }, [shortCode])
+    img.onerror = () => {
+      URL.revokeObjectURL(svgUrl)
+      toast.error(PREPARE_FAILED)
+    }
+    img.src = svgUrl
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -86,22 +136,35 @@ export function QRCodeDialog({
           <TickerChip code={shortCode} className="self-start" />
         </DialogHeader>
 
-        <div className="flex flex-col items-center gap-4 py-4">
-          <div
-            ref={qrRef}
-            className="rounded-xl bg-card p-6"
-          >
+        <div className="flex flex-col items-center gap-3 py-4">
+          {/* Shrinks below 304px so a 360px phone does not scroll the dialog
+              sideways. */}
+          <div className="w-full max-w-[304px] rounded-xl bg-card p-6">
+            {/* Level M here too, so the screen and the printed file carry
+                the same code. */}
             <QRCode
               value={url}
               size={256}
+              level="M"
               bgColor={getQrColors().bg}
               fgColor={getQrColors().fg}
+              style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
             />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Downloads are black on white, ready to print.
+          </p>
+          <div ref={printRef} hidden>
+            <QRCode value={url} level="M" bgColor={PRINT_LIGHT} fgColor={PRINT_DARK} />
           </div>
         </div>
 
         <DialogFooter>
-          <Button onClick={handleDownload}>
+          <Button variant="outline" onClick={handleDownloadSvg}>
+            <Download className="size-4 mr-1.5" />
+            Download SVG
+          </Button>
+          <Button onClick={handleDownloadPng}>
             <Download className="size-4 mr-1.5" />
             Download PNG
           </Button>

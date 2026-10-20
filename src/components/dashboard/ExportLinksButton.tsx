@@ -4,24 +4,15 @@ import { useState } from 'react'
 import { Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { createClient } from '@/lib/supabase/client'
+import { applyLinkFilters, applyLinkSort, type LinkListParams } from '@/lib/linkFilters'
 import { getShortUrl } from '@/lib/utils'
 import type { Database } from '@/types/database'
 
 type LinkRow = Database['public']['Tables']['links']['Row']
 
-type TypeFilter = 'all' | 'url' | 'deep_link'
-type StatusFilter = 'all' | 'active' | 'inactive'
-type SortOption = 'created_desc' | 'created_asc' | 'clicks_desc' | 'clicks_asc'
+export type LinksExportFilters = LinkListParams
 
-export interface LinksExportFilters {
-  q: string
-  type: TypeFilter
-  status: StatusFilter
-  sort: SortOption
-}
-
-// Hard ceiling on a single "export all" fetch — guards against an unbounded
+// Hard ceiling on a single "export all" fetch: guards against an unbounded
 // request if an account somehow accumulates an enormous number of links.
 // Far above realistic dashboard usage; if it's ever hit the CSV is still
 // produced (just truncated), and the user is told so via toast rather than
@@ -67,57 +58,31 @@ function downloadCsv(csv: string) {
 
 // Re-runs the Links page's search/filter/sort against the `links` table
 // without the page-level `.range()` cap, so "Export All" exports every
-// matching link instead of just the page currently on screen. Mirrors the
-// query built server-side in `src/app/dashboard/links/page.tsx` — keep the
-// two in sync if the filter set ever changes. RLS is owner-only on `links`,
-// and the explicit `user_id` filter matches that same page's belt-and-braces
-// scoping.
+// matching link instead of just the page currently on screen. The page builds
+// its own queries with the same linkFilters helpers, so the CSV and the table
+// always pick the same rows. RLS is owner-only on `links`, and the explicit
+// `user_id` filter matches that same page's belt-and-braces scoping.
 async function fetchAllFilteredLinks(filters: LinksExportFilters): Promise<LinkRow[]> {
+  // Loaded on first export, not with the page, so supabase-js stays out of
+  // the Links page's initial bundle for an owner who only reads the table.
+  const { createClient } = await import('@/lib/supabase/client')
   const supabase = createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return []
 
-  let query = supabase.from('links').select('*').eq('user_id', user.id)
-
-  if (filters.q) {
-    const safeQ = filters.q.replace(/[(),%]/g, '')
-    if (safeQ) {
-      query = query.or(`short_code.ilike.%${safeQ}%,original_url.ilike.%${safeQ}%`)
-    }
-  }
-  if (filters.type === 'url') {
-    query = query.or('link_type.eq.url,link_type.is.null')
-  } else if (filters.type === 'deep_link') {
-    query = query.eq('link_type', 'deep_link')
-  }
-  if (filters.status === 'active') {
-    query = query.eq('is_active', true)
-  } else if (filters.status === 'inactive') {
-    query = query.or('is_active.eq.false,is_active.is.null')
-  }
-
-  switch (filters.sort) {
-    case 'created_asc':
-      query = query.order('created_at', { ascending: true })
-      break
-    case 'clicks_desc':
-      query = query.order('total_clicks', { ascending: false, nullsFirst: false })
-      break
-    case 'clicks_asc':
-      query = query.order('total_clicks', { ascending: true, nullsFirst: true })
-      break
-    default:
-      query = query.order('created_at', { ascending: false })
-  }
+  const query = applyLinkSort(
+    applyLinkFilters(supabase.from('links').select('*').eq('user_id', user.id), filters),
+    filters.sort
+  )
 
   const { data, error } = await query.range(0, EXPORT_ROW_LIMIT - 1)
   if (error) throw error
   return data ?? []
 }
 
-// Client-side CSV export — the links table is already server-rendered into
+// Client-side CSV export: the links table is already server-rendered into
 // the page, so no new endpoint/RPC is needed to close the "no export
 // affordance" gap (finding: dashboard-csv-export). When the current
 // filters span more than one page, the button switches to "Export All" and

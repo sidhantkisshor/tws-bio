@@ -1,3 +1,5 @@
+> Historical record (written March 2026). Completed or superseded: do not execute. Current state: CLAUDE.md.
+
 # Brand Command Center — Design
 
 **Date**: 2026-03-24

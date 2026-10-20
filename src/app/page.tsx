@@ -5,15 +5,16 @@ import { HomeInteractive } from '@/components/HomeInteractive'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { dmSerif } from '@/app/fonts'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'tws.bio - URL Shortener',
-  description: 'Create short links with analytics and mobile deep linking. Free, fast, and secure — sign in to get started.',
+  description: 'Create short links with analytics and mobile deep linking. Free, fast, and secure. Sign in to get started.',
   openGraph: {
-    title: 'tws.bio — Short links, big impact',
+    title: 'tws.bio: Short links, big impact',
     description:
-      'Create short links with analytics and mobile deep linking — by Trading with Sidhant.',
+      'Create short links with analytics and mobile deep linking, by Trading with Sidhant.',
     url: '/',
     siteName: 'tws.bio',
     type: 'website',
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className={cn('min-h-screen bg-background flex flex-col', dmSerif.variable)}>
       <Navbar />
 
       <main className="flex-1">
@@ -41,23 +42,18 @@ export default function HomePage() {
             </span>
           </h1>
           <p className="relative mx-auto max-w-2xl text-muted-foreground text-xl mt-6">
-            Create short links with analytics and mobile deep linking. Free, fast, and secure — sign in to get started.
+            Create short links with analytics and mobile deep linking. Free, fast, and secure. Sign in to get started.
           </p>
 
-          {/* Server-rendered CTAs — in first-byte HTML, no client JS required */}
+          {/* Server-rendered CTA: in first-byte HTML, no client JS required.
+              Accounts are invite-only, so the one action is signing in. */}
           <div className="relative mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link href="/signup" className={cn(buttonVariants({ size: 'lg' }), 'px-6')}>
-              Create your first link
-            </Link>
-            <Link
-              href="/login"
-              className={cn(buttonVariants({ variant: 'ghost', size: 'lg' }), 'px-6')}
-            >
+            <Link href="/login" className={cn(buttonVariants({ size: 'lg' }), 'px-6')}>
               Sign in
             </Link>
           </div>
 
-          {/* Static demo ticker chip — the product specimen (server HTML, no JS) */}
+          {/* Static demo ticker chip: the product specimen (server HTML, no JS) */}
           <div className="relative mt-6 flex justify-center">
             <span className="inline-flex items-center gap-2 rounded-md border border-border border-l-2 border-l-primary-text bg-card px-2.5 py-1 font-mono text-sm tabular-nums">
               <span className="text-foreground">tws.bio/yt-live</span>

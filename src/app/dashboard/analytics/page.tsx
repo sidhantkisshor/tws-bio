@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation'
-import { Suspense } from 'react'
 import Link from 'next/link'
 import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
 import {
@@ -9,14 +8,16 @@ import {
   getTopReferrersResult,
   getCountryBreakdownResult,
   getTotalClicksResult,
+  parseTimeRange,
+  priorWindowTotal,
+  rangeWindow,
+  zeroFillDays,
   type TimeRange,
 } from '@/lib/analytics'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { BarChart } from '@/components/charts/BarChart'
-import { PieChart } from '@/components/charts/PieChart'
-import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
-import { ClicksOverTimeChart } from '@/components/charts/ClicksOverTimeChart'
+import { LazyBarChart, LazyClicksOverTimeChart, LazyPieChart } from '@/components/charts/lazy'
+import { TimeRangePicker } from '@/components/TimeRangePicker'
 import { StatCard, computeTrend } from '@/components/dashboard/StatCard'
 import { AlertTriangle } from 'lucide-react'
 
@@ -30,12 +31,39 @@ const DEVICE_COLORS: Record<string, string> = {
   unknown: 'var(--chart-5)',
 }
 
-const VALID_RANGES = new Set(['7', '30', '90', 'all'])
-const RANGE_TO_TIME_RANGE: Record<string, TimeRange> = {
-  '7': '7d',
-  '30': '30d',
-  '90': '90d',
-  all: 'all',
+function AnalyticsHeader({ timeRange }: { timeRange: TimeRange }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <h1 className="font-heading text-2xl text-foreground">Analytics</h1>
+      <TimeRangePicker current={timeRange} basePath="/dashboard/analytics" />
+    </div>
+  )
+}
+
+// A failed fetch must never render identically to "you have no links yet" or
+// "0 clicks", so every failure gets this distinct state with a retry.
+function AnalyticsError({ timeRange }: { timeRange: TimeRange }) {
+  return (
+    <div>
+      <AnalyticsHeader timeRange={timeRange} />
+      <Card className="bg-card border-border">
+        <CardContent className="flex flex-col items-center text-center gap-4 py-12">
+          <div className="rounded-full bg-destructive/10 p-3">
+            <AlertTriangle className="size-6 text-destructive" />
+          </div>
+          <div>
+            <p className="text-foreground font-medium">Couldn&apos;t load analytics</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Something went wrong. Please try again.
+            </p>
+          </div>
+          <Button render={<Link href={`/dashboard/analytics?range=${timeRange}`} />} variant="outline">
+            Try again
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
 }
 
 export default async function AnalyticsPage({
@@ -51,22 +79,16 @@ export default async function AnalyticsPage({
   }
 
   const { range: rangeParam } = await searchParams
-  const range = VALID_RANGES.has(rangeParam || '') ? rangeParam! : '30'
-  const timeRange = RANGE_TO_TIME_RANGE[range]
-
-  // Calculate start date
-  let startDate: Date | null = null
-  if (range !== 'all') {
-    const days = parseInt(range, 10)
-    startDate = new Date()
-    startDate.setDate(startDate.getDate() - days)
-  }
-  // One exact window boundary shared by every aggregation below (RPC helpers
-  // and the prior-period count), so no two queries disagree by milliseconds.
-  const since = startDate ? startDate.toISOString() : null
+  // Old bookmarks with ?range=30 still parse; the picker now writes ?range=30d.
+  const timeRange = parseTimeRange(rangeParam)
+  const { since: windowStart, priorSince, days } = rangeWindow(timeRange)
+  // One exact window boundary shared by every aggregation below (the
+  // embedded per-link counts, the RPC helpers and the prior-period count),
+  // so no two queries disagree about where the range starts.
+  const since = windowStart?.toISOString() ?? null
 
   // Get user's link IDs (short_code + a per-link ranged click count ride
-  // along via the embedded `clicks(count)` aggregate — it feeds the Top
+  // along via the embedded `clicks(count)` aggregate: it feeds the Top
   // Links breakdown below without fetching a single raw click row, and
   // clicks RLS still applies to the embedded count).
   let firstLinksQuery = supabase
@@ -111,46 +133,13 @@ export default async function AnalyticsPage({
 
   if (userLinksError) {
     console.error('[analytics-page] userLinks query:', userLinksError)
-
-    // A failed fetch must never render identically to "you have no links
-    // yet" — surface a distinct error state with a retry affordance.
-    return (
-      <div>
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="font-heading text-2xl text-foreground">Analytics</h1>
-          <Suspense>
-            <DateRangePicker />
-          </Suspense>
-        </div>
-        <Card className="bg-card border-border">
-          <CardContent className="flex flex-col items-center text-center gap-4 py-12">
-            <div className="rounded-full bg-destructive/10 p-3">
-              <AlertTriangle className="size-6 text-destructive" />
-            </div>
-            <div>
-              <p className="text-foreground font-medium">Couldn&apos;t load analytics</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Something went wrong. Please try again.
-              </p>
-            </div>
-            <Button render={<Link href="/dashboard/analytics" />} variant="outline">
-              Try again
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
+    return <AnalyticsError timeRange={timeRange} />
   }
 
   if (!userLinks || userLinks.length === 0) {
     return (
       <div>
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="font-heading text-2xl text-foreground">Analytics</h1>
-          <Suspense>
-            <DateRangePicker />
-          </Suspense>
-        </div>
+        <AnalyticsHeader timeRange={timeRange} />
         <Card className="bg-card border-border">
           <CardContent className="flex flex-col items-center text-center gap-4 py-12">
             <p className="text-muted-foreground">
@@ -168,9 +157,9 @@ export default async function AnalyticsPage({
   const linkIds = userLinks.map((l) => l.id)
 
   // Every aggregation runs DB-side via the SECURITY INVOKER RPC helpers
-  // (clicks RLS applies — called as the logged-in user) in a single parallel
-  // wave, replacing the old fetch-every-raw-click-row + JS aggregation that
-  // silently undercounted past PostgREST's 1000-row response cap.
+  // (clicks RLS applies, since they run as the logged-in user) in a single
+  // parallel wave, replacing the old fetch-every-raw-click-row + JS
+  // aggregation that silently undercounted past PostgREST's 1000-row cap.
   const filter = { timeRange, linkIds, since }
   const [
     clicksSeriesResult,
@@ -179,7 +168,7 @@ export default async function AnalyticsPage({
     referrersResult,
     countriesResult,
     totalClicksResult,
-    priorClicksResult,
+    combinedClicksResult,
   ] = await Promise.all([
     getClicksOverTimeResult(filter),
     getDeviceBreakdownResult(filter),
@@ -188,23 +177,13 @@ export default async function AnalyticsPage({
     getCountryBreakdownResult(filter),
     getTotalClicksResult(filter),
     // Count the combined current + prior span via the existing POST-based RPC;
-    // subtracting the current total below yields the bounded prior window. This
-    // avoids a potentially oversized `.in(linkIds)` query string for accounts
-    // with many links.
-    (async () => {
-      if (!startDate) return null
-      const days = parseInt(range, 10)
-      const priorStart = new Date(startDate)
-      priorStart.setDate(priorStart.getDate() - days)
-      return getTotalClicksResult({
-        timeRange,
-        linkIds,
-        since: priorStart.toISOString(),
-      })
-    })(),
+    // subtracting the current total (priorWindowTotal) yields the bounded
+    // prior window. This avoids a potentially oversized `.in(linkIds)` query
+    // string for accounts with many links. 'all' has no prior window.
+    priorSince ? getTotalClicksResult({ ...filter, since: priorSince.toISOString() }) : null,
   ])
 
-  // A failed aggregation must never masquerade as "0 clicks" — render the
+  // A failed aggregation must never masquerade as "0 clicks", so render the
   // same destructive-tinted error state used for the links query above.
   const mainError =
     clicksSeriesResult.error ||
@@ -215,86 +194,26 @@ export default async function AnalyticsPage({
     totalClicksResult.error
 
   if (mainError) {
-    return (
-      <div>
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="font-heading text-2xl text-foreground">Analytics</h1>
-          <Suspense>
-            <DateRangePicker />
-          </Suspense>
-        </div>
-        <Card className="bg-card border-border">
-          <CardContent className="flex flex-col items-center text-center gap-4 py-12">
-            <div className="rounded-full bg-destructive/10 p-3">
-              <AlertTriangle className="size-6 text-destructive" />
-            </div>
-            <div>
-              <p className="text-foreground font-medium">Couldn&apos;t load analytics</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Something went wrong. Please try again.
-              </p>
-            </div>
-            <Button render={<Link href="/dashboard/analytics" />} variant="outline">
-              Try again
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
+    return <AnalyticsError timeRange={timeRange} />
   }
 
-  if (priorClicksResult?.error) {
+  if (combinedClicksResult?.error) {
     console.error('[analytics-page] prior clicks query failed')
   }
   // On a prior-count failure hide the trend chip rather than comparing the
   // current window against a fake zero baseline.
-  const priorTotalClicks =
-    priorClicksResult && !priorClicksResult.error
-      ? Math.max(priorClicksResult.data - totalClicksResult.data, 0)
-      : null
+  const priorTotalClicks = priorWindowTotal(combinedClicksResult, totalClicksResult)
 
   const totalClicks = totalClicksResult.data
   const totalClicksTrend =
     priorTotalClicks !== null ? computeTrend(totalClicks, priorTotalClicks) : null
 
-  // Clicks over time: day buckets from the RPC, keyed by date
-  const clicksByDate: Record<string, number> = {}
-  for (const row of clicksSeriesResult.data) {
-    clicksByDate[row.date.slice(0, 10)] = row.clicks
-  }
+  // Clicks over time: one bucket per day of the range (exactly 30 for 30d),
+  // with empty days as 0. For all time it runs from the first to the last
+  // day that has clicks.
+  const clicksOverTime = zeroFillDays(clicksSeriesResult.data, windowStart, days)
 
-  // Fill in missing dates for a continuous chart
-  const clicksOverTime: { date: string; clicks: number }[] = []
-  if (startDate) {
-    const end = new Date()
-    const current = new Date(startDate)
-    while (current <= end) {
-      const dateStr = current.toISOString().split('T')[0]
-      clicksOverTime.push({
-        date: dateStr,
-        clicks: clicksByDate[dateStr] || 0,
-      })
-      current.setUTCDate(current.getUTCDate() + 1)
-    }
-  } else {
-    // "all" range: just use existing dates sorted
-    const sortedDates = Object.keys(clicksByDate).sort()
-    if (sortedDates.length > 0) {
-      const first = new Date(sortedDates[0] + 'T00:00:00Z')
-      const last = new Date(sortedDates[sortedDates.length - 1] + 'T00:00:00Z')
-      const current = new Date(first)
-      while (current <= last) {
-        const dateStr = current.toISOString().split('T')[0]
-        clicksOverTime.push({
-          date: dateStr,
-          clicks: clicksByDate[dateStr] || 0,
-        })
-        current.setUTCDate(current.getUTCDate() + 1)
-      }
-    }
-  }
-
-  // Device breakdown (RPC rows arrive pre-sorted, largest first) — already
+  // Device breakdown (RPC rows arrive pre-sorted, largest first), already
   // `{ name, value }`, the shape PieChart consumes.
   const deviceData = devicesResult.data
 
@@ -310,7 +229,7 @@ export default async function AnalyticsPage({
   const countryData = countriesResult.data.map((c) => ({ label: c.name, value: c.clicks }))
 
   // Top links: which of the user's links are actually driving these clicks
-  // (top 10) — per-link ranged counts from the embedded aggregate above.
+  // (top 10), from the per-link ranged counts in the embedded aggregate above.
   const topLinksData = userLinks
     .map((l) => ({ label: l.short_code, value: l.clicks[0]?.count ?? 0 }))
     .filter((l) => l.value > 0)
@@ -319,21 +238,15 @@ export default async function AnalyticsPage({
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="font-heading text-2xl text-foreground">Analytics</h1>
-        <Suspense>
-          <DateRangePicker />
-        </Suspense>
-      </div>
+      <AnalyticsHeader timeRange={timeRange} />
 
       {/* Total clicks stat */}
       <div className="mb-8">
         <StatCard
-          title={range !== 'all' ? `Total Clicks (Last ${range} days)` : 'Total Clicks (All time)'}
+          title={days !== null ? `Total Clicks (Last ${days} days)` : 'Total Clicks (All time)'}
           value={totalClicks.toLocaleString()}
           trend={totalClicksTrend}
-          trendLabel={`vs prior ${range} days`}
+          trendLabel={days !== null ? `vs prior ${days} days` : undefined}
         />
       </div>
 
@@ -343,7 +256,7 @@ export default async function AnalyticsPage({
           <CardTitle>Clicks Over Time</CardTitle>
         </CardHeader>
         <CardContent>
-          <ClicksOverTimeChart data={clicksOverTime} />
+          <LazyClicksOverTimeChart data={clicksOverTime} />
         </CardContent>
       </Card>
 
@@ -353,7 +266,7 @@ export default async function AnalyticsPage({
           <CardTitle>Top Links</CardTitle>
         </CardHeader>
         <CardContent>
-          <BarChart
+          <LazyBarChart
             data={topLinksData}
             emptyMessage="No clicks yet"
           />
@@ -367,7 +280,7 @@ export default async function AnalyticsPage({
             <CardTitle>Devices</CardTitle>
           </CardHeader>
           <CardContent>
-            <PieChart
+            <LazyPieChart
               data={deviceData}
               colorMap={DEVICE_COLORS}
               innerRadius={60}
@@ -383,7 +296,7 @@ export default async function AnalyticsPage({
             <CardTitle>Browsers</CardTitle>
           </CardHeader>
           <CardContent>
-            <BarChart
+            <LazyBarChart
               data={browserData}
               orientation="vertical"
               className="h-[220px] w-full"
@@ -399,7 +312,7 @@ export default async function AnalyticsPage({
             <CardTitle>Top Referrers</CardTitle>
           </CardHeader>
           <CardContent>
-            <BarChart data={referrerData} />
+            <LazyBarChart data={referrerData} />
           </CardContent>
         </Card>
 
@@ -408,7 +321,7 @@ export default async function AnalyticsPage({
             <CardTitle>Top Countries</CardTitle>
           </CardHeader>
           <CardContent>
-            <BarChart data={countryData} />
+            <LazyBarChart data={countryData} />
           </CardContent>
         </Card>
       </div>

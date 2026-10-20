@@ -32,14 +32,14 @@ interface PieChartProps {
   emptyMessage?: string
 }
 
-// First char upper, rest untouched — drives legend labels off the raw category.
+// First char upper, rest untouched. Drives legend labels off the raw category.
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 /**
  * Unified donut chart for the dashboard's categorical breakdowns (devices,
- * browsers, ...). Replaces the former DeviceChart / DonutChart pair — one
+ * browsers, ...). Replaces the former DeviceChart / DonutChart pair: one
  * component with an optional per-category color map and a legend driven from
  * the data itself.
  */
@@ -52,7 +52,7 @@ export function PieChart({
   ariaLabel = 'Donut chart showing distribution by category',
   emptyMessage = 'No data yet',
 }: PieChartProps) {
-  // All-zero categories still emit zero-degree arcs — a ring-less legend reads
+  // All-zero categories still emit zero-degree arcs, and a ring-less legend reads
   // as a broken widget rather than empty data.
   const hasVisibleData = data.length > 0 && data.some((d) => d.value > 0)
 
@@ -74,7 +74,7 @@ export function PieChart({
       ? (colorMap[name] ?? COLORS[index % COLORS.length])
       : COLORS[index % COLORS.length]
 
-  // Categories are dynamic, so the config is built from the data — this drives
+  // Categories are dynamic, so the config is built from the data: this drives
   // the legend labels; swatches pick up each slice's cell fill automatically.
   const chartConfig: ChartConfig = {}
   data.forEach((entry, index) => {

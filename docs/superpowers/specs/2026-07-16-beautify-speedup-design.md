@@ -1,3 +1,5 @@
+> Historical record (written July 2026). Completed or superseded: do not execute. Current state: CLAUDE.md.
+
 # tws.bio — "The Clean Fill" beauty + speed pass (2026-07-16)
 
 Synthesized from a 5-surface multi-agent audit (44 beauty / 35 perf findings) and 3 independent

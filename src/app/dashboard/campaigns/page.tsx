@@ -37,7 +37,7 @@ export default async function CampaignsPage() {
   }
 
   // A failed fetch must never render identically to "you have no campaigns
-  // yet" — check the error field explicitly instead of falling through the
+  // yet", so check the error field explicitly instead of falling through the
   // `campaignStats.length > 0` empty-state branch below.
   const hasError = Boolean(campaignsError)
 

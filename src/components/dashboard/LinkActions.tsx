@@ -2,15 +2,18 @@
 
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Pencil, QrCode, Power, Trash2 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { ChartColumn, Pencil, QrCode, Power, Trash2 } from 'lucide-react'
+import { isResourceDropRow } from '@/lib/linkRows'
+import { cn } from '@/lib/utils'
 import type { Database } from '@/types/database'
 import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
 
 // The dialogs only matter after a click, yet they were statically imported and
-// mounted for every row — react-qr-code alone is ~51KB of table bundle. Loading
+// mounted for every row: react-qr-code alone is ~51KB of table bundle. Loading
 // them via next/dynamic and mounting on first open keeps that JS out of the
 // initial links-page chunk entirely.
 const EditLinkDialog = dynamic(
@@ -26,9 +29,16 @@ const QRCodeDialog = dynamic(
   { ssr: false, loading: () => null },
 )
 
-type Link = Database['public']['Tables']['links']['Row']
+type LinkRow = Database['public']['Tables']['links']['Row']
 
-export function LinkActions({ link }: { link: Link }) {
+export function LinkActions({
+  link,
+  touch = false,
+}: {
+  link: LinkRow
+  /** Phone cards: 40px buttons a thumb can hit. Table rows keep 24px ones. */
+  touch?: boolean
+}) {
   const router = useRouter()
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -40,7 +50,20 @@ export function LinkActions({ link }: { link: Link }) {
   const [qrMounted, setQrMounted] = useState(false)
   const [toggling, setToggling] = useState(false)
 
+  // The Resource Drop route redirects without reading its row, so Edit,
+  // Deactivate and Delete would change nothing a visitor sees, and Delete
+  // would erase the click history. Activate stays for a row that is already
+  // inactive, because an inactive row drops every click it gets.
+  const managed = isResourceDropRow(link.short_code)
+  const showToggle = !managed || !link.is_active
+
+  const buttonClass = touch ? 'size-10' : undefined
+  const iconClass = touch ? 'size-4' : 'size-3.5'
+
   async function setActive(nextActive: boolean) {
+    // Loaded on first use: the table is mostly read, and supabase-js is about
+    // 47 KB (brotli) of the links page otherwise.
+    const { createClient } = await import('@/lib/supabase/client')
     const supabase = createClient()
     const { error } = await supabase
       .from('links')
@@ -64,7 +87,8 @@ export function LinkActions({ link }: { link: Link }) {
 
       if (wasActive) {
         // Deactivating a live link is easy to trigger by accident (small icon,
-        // no confirm step) — give it a lightweight undo instead of a blocking dialog.
+        // no confirm step), so give it a lightweight undo instead of a
+        // blocking dialog.
         toast.success('Link deactivated', {
           action: {
             label: 'Undo',
@@ -102,20 +126,34 @@ export function LinkActions({ link }: { link: Link }) {
 
   return (
     <>
-      {/* No Copy button here — the row's TickerChip (LinksTable short-code cell)
+      {/* No Copy button here: the row's TickerChip (LinksTable short-code cell)
           is the single copy affordance, with the fill flash + Check morph. */}
-      <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={() => {
-            setEditMounted(true)
-            setEditOpen(true)
-          }}
-          aria-label="Edit link"
+      <div className={cn('flex items-center', touch ? 'gap-2' : 'gap-1')}>
+        {/* A real link rather than a Button, so it can open in a new tab. No
+            prefetch: twenty rows would each fetch a dynamic page that the
+            owner opens for one link at most. */}
+        <Link
+          href={`/dashboard/links/${link.id}`}
+          prefetch={false}
+          aria-label="View stats"
+          className={cn(buttonVariants({ variant: 'ghost', size: 'icon-xs' }), buttonClass)}
         >
-          <Pencil className="size-3.5" />
-        </Button>
+          <ChartColumn className={iconClass} />
+        </Link>
+        {!managed && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => {
+              setEditMounted(true)
+              setEditOpen(true)
+            }}
+            aria-label="Edit link"
+            className={buttonClass}
+          >
+            <Pencil className={iconClass} />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon-xs"
@@ -124,31 +162,39 @@ export function LinkActions({ link }: { link: Link }) {
             setQrOpen(true)
           }}
           aria-label="Show QR code"
+          className={buttonClass}
         >
-          <QrCode className="size-3.5" />
+          <QrCode className={iconClass} />
         </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={handleToggleActive}
-          disabled={toggling}
-          aria-label={link.is_active ? 'Deactivate link' : 'Activate link'}
-          className={link.is_active ? 'text-primary-text hover:text-primary-text/80' : 'text-muted-foreground'}
-        >
-          <Power className="size-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={() => {
-            setDeleteMounted(true)
-            setDeleteOpen(true)
-          }}
-          aria-label="Delete link"
-          className="text-destructive hover:text-destructive"
-        >
-          <Trash2 className="size-3.5" />
-        </Button>
+        {showToggle && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={handleToggleActive}
+            disabled={toggling}
+            aria-label={link.is_active ? 'Deactivate link' : 'Activate link'}
+            className={cn(
+              link.is_active ? 'text-primary-text hover:text-primary-text/80' : 'text-muted-foreground',
+              buttonClass,
+            )}
+          >
+            <Power className={iconClass} />
+          </Button>
+        )}
+        {!managed && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => {
+              setDeleteMounted(true)
+              setDeleteOpen(true)
+            }}
+            aria-label="Delete link"
+            className={cn('text-destructive hover:text-destructive', buttonClass)}
+          >
+            <Trash2 className={iconClass} />
+          </Button>
+        )}
       </div>
 
       {editMounted && (
