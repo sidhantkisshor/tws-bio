@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { isResourceDropRow } from '@/lib/linkRows'
 import type { Database } from '@/types/database'
-import { getShortUrl } from '@/lib/utils'
+import { formatCount, getShortUrl } from '@/lib/utils'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -62,7 +62,7 @@ export function DeleteLinkDialog({
       onOpenChange(false)
       router.refresh()
     } catch {
-      toast.error('Failed to delete link')
+      toast.error('Could not delete the link. Try again.')
     } finally {
       setDeleting(false)
     }
@@ -75,10 +75,9 @@ export function DeleteLinkDialog({
           <AlertDialogTitle>Delete this link?</AlertDialogTitle>
           <AlertDialogDescription>
             This deletes{' '}
-            <span className="font-mono wrap-break-word text-foreground">
-              {displayUrl}
-            </span>{' '}
-            and its click history. This cannot be undone.
+            <span className="font-mono [overflow-wrap:anywhere] text-ink">{displayUrl}</span>{' '}
+            and its click history ({formatCount(link.total_clicks ?? 0, 'click')}). Anyone who
+            opens it after this gets a not found page. This cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

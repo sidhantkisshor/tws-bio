@@ -8,6 +8,8 @@ export interface BarListItem {
   href?: string
   /** Short code shown before the label, e.g. an ISO country code. */
   code?: string
+  /** A line under the bar in tertiary text, e.g. the hosts in a platform group. */
+  sub?: string
 }
 
 interface BarListProps {
@@ -19,66 +21,70 @@ interface BarListProps {
   /** Set the label in the mono voice (short codes). */
   mono?: boolean
   emptyMessage?: string
+  className?: string
 }
 
 /**
  * One ranked list for every breakdown (links, referrers, countries, browsers,
- * devices). Each row is its own track with a quiet green tint for the bar, so
- * the label, the count and the share are all readable without hovering, long
- * labels truncate with a title, and green stays a signal instead of a block of
- * solid fills. A server component: no recharts, no client JS.
+ * devices). Each row is a label with its count and share, then a slate bar
+ * with no background track (its length is the share of the largest row), then
+ * an optional line in tertiary text. Counts and shares are tabular and
+ * right-aligned. A server component: no client JS.
  */
-export function BarList({ items, label, total, mono, emptyMessage }: BarListProps) {
+export function BarList({ items, label, total, mono, emptyMessage, className }: BarListProps) {
   const rows = items.filter((item) => item.value > 0)
 
   if (rows.length === 0) {
     return (
-      <p className="py-10 text-center text-sm text-muted-foreground">
-        {emptyMessage ?? 'No clicks in this period'}
+      <p className="py-6 text-sm text-text-2">
+        {emptyMessage ?? 'No clicks in this period.'}
       </p>
     )
   }
 
-  // One code column for the whole list, so labels line up even when a row (an
-  // 'Unknown' country) has no code.
   const hasCode = rows.some((r) => r.code)
   const max = Math.max(...rows.map((r) => r.value))
   const denominator = total && total > 0 ? total : rows.reduce((sum, r) => sum + r.value, 0)
 
   return (
-    <ol aria-label={label} className="flex flex-col gap-1">
+    <ol aria-label={label} className={cn('flex flex-col', className)}>
       {rows.map((item) => {
-        const pct = (item.value / denominator) * 100
+        const share = item.value / denominator
         const rowClass = cn(
-          'relative flex h-9 items-center gap-3 overflow-hidden rounded-md px-3 text-sm text-foreground',
+          'block py-2 pb-2.5 text-sm text-ink',
           item.href &&
-            'h-11 outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:h-9',
+            '-mx-2 min-h-11 rounded-ctl px-2 outline-none transition-colors duration-[120ms] hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-focus',
         )
         const content = (
           <>
+            <span className="grid grid-cols-[minmax(0,1fr)_72px_60px] items-baseline gap-2">
+              <span className="flex min-w-0 items-baseline gap-2">
+                {hasCode && (
+                  <span className="w-7 shrink-0 font-mono text-xs text-text-3">{item.code}</span>
+                )}
+                <span
+                  title={item.label}
+                  className={cn('min-w-0 truncate font-medium', mono && 'font-mono font-normal text-[13.5px]')}
+                >
+                  {item.label}
+                </span>
+              </span>
+              <span className="text-right tabular-nums">
+                {item.value.toLocaleString('en-US')}
+                <span className="sr-only"> clicks</span>
+              </span>
+              <span className="text-right tabular-nums text-text-2">
+                {share > 0 && share < 0.001 ? '<0.1' : (share * 100).toFixed(1)}%
+              </span>
+            </span>
             <span
               aria-hidden
-              className="absolute inset-y-0 left-0 rounded-md bg-primary-text/15"
-              style={{ width: `${Math.max((item.value / max) * 100, 1.5)}%` }}
+              className="mt-1.5 block h-1.5 bg-bar"
+              style={{ width: `${Math.max((item.value / max) * 100, 0.75)}%` }}
             />
-            {hasCode && (
-              <span className="relative w-7 shrink-0 font-mono text-xs text-muted-foreground">
-                {item.code}
-              </span>
+            {item.sub && (
+              <span className="mt-1 block text-[12.5px] leading-snug text-text-3">{item.sub}</span>
             )}
-            <span
-              title={item.label}
-              className={cn('relative min-w-0 flex-1 truncate', mono && 'font-mono')}
-            >
-              {item.label}
-            </span>
-            <span className="relative w-16 shrink-0 text-right font-mono tabular-nums">
-              {item.value.toLocaleString('en-US')}
-              <span className="sr-only"> clicks</span>
-            </span>
-            <span className="relative w-10 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
-              {pct < 1 ? '<1' : Math.round(pct)}%
-            </span>
           </>
         )
         return (

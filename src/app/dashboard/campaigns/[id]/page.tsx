@@ -1,32 +1,84 @@
-import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
-import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
+import { redirect, notFound } from 'next/navigation'
+import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
 import {
-  getClicksOverTimeResult,
-  getTopReferrersResult,
-  getDeviceBreakdownResult,
-  getCountryBreakdownResult,
+  dayKey,
   getBrowserBreakdownResult,
+  getClicksOverTimeResult,
+  getCountryBreakdownResult,
+  getDeviceBreakdownResult,
   getTotalClicksResult,
   isUuid,
   parseTimeRange,
   priorWindowTotal,
   rangeWindow,
   zeroFillDays,
+  type DailyClicks,
 } from '@/lib/analytics'
-import { AlertTriangle } from 'lucide-react'
-import { LazyClicksOverTimeChart } from '@/components/charts/lazy'
-import { BarList, countryItems, namedItems } from '@/components/charts/BarList'
-import { plural } from '@/lib/utils'
-import { TimeRangePicker } from '@/components/TimeRangePicker'
-import { TrendChip, computeTrend } from '@/components/dashboard/StatCard'
+import { getLinkClickWindowsResult, getReferrerRowsResult } from '@/lib/insights'
+import { groupByPlatform, type PlatformGroup } from '@/lib/sources'
+import { computeMovers, topGainers } from '@/lib/movers'
+import { destinationKind } from '@/lib/destinationKind'
+import { formatShare, formatSignedCount } from '@/lib/ledgerFormat'
+import { cn, plural } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button-variants'
-import { PageHeader } from '@/components/dashboard/PageHeader'
+import { PageHeader, Section } from '@/components/dashboard/PageHeader'
+import { KpiRow, StatCell, computeTrend } from '@/components/dashboard/StatCard'
+import { BarChart, ChartLegend, shortDay } from '@/components/charts/BarChart'
+import { BarList, countryItems, namedItems } from '@/components/charts/BarList'
+import { SourcesPanel } from '@/components/dashboard/SourcesPanel'
+import { TimeRangePicker } from '@/components/TimeRangePicker'
 import { displayUrl } from '@/components/dashboard/displayUrl'
-import { Card, CardAction, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 // What an empty campaign's stats are, without asking the database.
 const NO_ROWS = { data: [], error: false }
+
+function InlineError({ children, retryHref }: { children: React.ReactNode; retryHref: string }) {
+  return (
+    <p role="status" className="py-4 text-sm text-text-2">
+      {children}{' '}
+      <Link
+        href={retryHref}
+        className="focus-ring rounded-ctl text-accent-text underline decoration-accent-text/40 underline-offset-[3px] hover:decoration-current"
+      >
+        Try again
+      </Link>
+    </p>
+  )
+}
+
+/** "+1,475" in teal, "(486)" in red, "New" when there was nothing before. */
+function Change({ current, prior }: { current: number; prior: number }) {
+  if (prior === 0 && current > 0) return <span className="font-medium text-text-2">New</span>
+  const delta = current - prior
+  return (
+    <span className={cn('font-bold', delta > 0 ? 'text-pos' : delta < 0 ? 'text-neg' : 'text-text-3')}>
+      {formatSignedCount(delta)}
+    </span>
+  )
+}
+
+function platformName(group: PlatformGroup): string {
+  if (group.key === 'none') return 'No referrer'
+  if (group.key === 'tws') return 'tws.bio itself'
+  if (group.key === 'app') return 'Android apps'
+  return group.label
+}
+
+function busiest(days: DailyClicks[]): DailyClicks | null {
+  let best: DailyClicks | null = null
+  for (const d of days) if (d.clicks > 0 && (!best || d.clicks > best.clicks)) best = d
+  return best
+}
 
 export default async function CampaignDetailPage({
   params,
@@ -47,6 +99,8 @@ export default async function CampaignDetailPage({
   const { range: rangeParam } = await searchParams
   const timeRange = parseTimeRange(rangeParam)
   const { since, priorSince, days } = rangeWindow(timeRange)
+  const sinceIso = since?.toISOString() ?? null
+  const retryHref = `/dashboard/campaigns/${id}?range=${timeRange}`
 
   // Wave 1: the links query needs only the id, not the campaign row, so the
   // two run together. notFound() still keys on the campaign row alone.
@@ -59,7 +113,7 @@ export default async function CampaignDetailPage({
       .maybeSingle(),
     supabase
       .from('links')
-      .select('id, short_code, original_url, total_clicks')
+      .select('id, short_code, original_url, total_clicks, created_at')
       .eq('campaign_id', id)
       .eq('user_id', user.id)
       .order('total_clicks', { ascending: false }),
@@ -73,67 +127,96 @@ export default async function CampaignDetailPage({
 
   // A failed links query must not read as "No links in this campaign yet".
   const linksError = Boolean(linksResult.error)
-  if (linksResult.error) {
-    console.error('[campaign-detail] links query:', linksResult.error)
-  }
+  if (linksResult.error) console.error('[campaign-detail] links query:', linksResult.error)
   const campaignLinks = linksResult.data ?? []
   const linkIds = campaignLinks.map((l) => l.id)
 
-  // Wave 2: the stats RPCs and the prior-window count. Skipped when there is
-  // nothing to count: an empty campaign, or a failed links query (which
-  // renders the error card).
-  const filter = { timeRange, linkIds, since: since?.toISOString() ?? null }
+  // Wave 2: the stats RPCs, skipped when there is nothing to count (an empty
+  // campaign, or a failed links query).
+  const filter = { timeRange, linkIds, since: sinceIso }
   const [
-    clicksOverTimeResult,
+    seriesResult,
+    totalResult,
+    combinedResult,
     referrersResult,
     devicesResult,
     countriesResult,
     browsersResult,
-    totalClicksResult,
-    combinedClicksResult,
+    windowsResult,
   ] =
     linkIds.length > 0
       ? await Promise.all([
-          getClicksOverTimeResult(filter),
-          getTopReferrersResult(filter),
+          // The current and prior windows in one series.
+          getClicksOverTimeResult({ ...filter, since: priorSince?.toISOString() ?? sinceIso }),
+          getTotalClicksResult(filter),
+          // The current and prior windows in one count, with the link ids in
+          // the RPC's POST body. 'all' has no prior window.
+          priorSince ? getTotalClicksResult({ ...filter, since: priorSince.toISOString() }) : null,
+          getReferrerRowsResult({ linkIds, since: sinceIso }),
           getDeviceBreakdownResult(filter),
           getCountryBreakdownResult(filter),
           getBrowserBreakdownResult(filter),
-          getTotalClicksResult(filter),
-          // The current and prior windows in one count, with the link ids in
-          // the RPC's POST body. A GET with every id in its URL breaks past a
-          // few hundred links. 'all' has no prior window.
-          priorSince ? getTotalClicksResult({ ...filter, since: priorSince.toISOString() }) : null,
+          since && priorSince ? getLinkClickWindowsResult({ linkIds, priorSince, since }) : null,
         ])
-      : ([NO_ROWS, NO_ROWS, NO_ROWS, NO_ROWS, NO_ROWS, { data: 0, error: false }, null] as const)
+      : ([NO_ROWS, { data: 0, error: false }, null, NO_ROWS, NO_ROWS, NO_ROWS, NO_ROWS, null] as const)
 
-  // A failed query must never masquerade as "0 clicks" or "0 links", so
-  // render the same destructive-tinted error state link detail uses.
-  const statsError =
-    linksError ||
-    clicksOverTimeResult.error ||
-    referrersResult.error ||
-    devicesResult.error ||
-    countriesResult.error ||
-    browsersResult.error ||
-    totalClicksResult.error
+  const totalError = totalResult.error
+  const totalClicks = totalResult.data
+  const priorClicks = priorWindowTotal(combinedResult, totalResult)
+  const clicksTrend = priorClicks !== null ? computeTrend(totalClicks, priorClicks) : null
 
-  // Empty days count as 0, so the line does not slope across them.
-  const clicksOverTime = zeroFillDays(clicksOverTimeResult.data, since, days)
-  const referrers = referrersResult.data
-  const devices = devicesResult.data
-  const countries = countriesResult.data
-  const browsers = browsersResult.data
-  const totalClicks = totalClicksResult.data
+  let current: DailyClicks[]
+  let prior: DailyClicks[] | null = null
+  if (priorSince && days !== null) {
+    const both = zeroFillDays(seriesResult.data, priorSince, days * 2)
+    prior = both.slice(0, days)
+    current = both.slice(days)
+  } else {
+    current = zeroFillDays(seriesResult.data, null, null)
+  }
+  const peak = seriesResult.error ? null : busiest(current)
+  const priorPeak = prior ? busiest(prior) : null
+  const peakTrend = peak && prior ? computeTrend(peak.clicks, priorPeak?.clicks ?? 0) : null
 
-  // Hidden for all time, for an empty campaign and whenever a count failed,
-  // so the chip never compares against a fake zero baseline.
-  const priorClicks = priorWindowTotal(combinedClicksResult, totalClicksResult)
-  const periodTrend = priorClicks !== null ? computeTrend(totalClicks, priorClicks) : null
+  const groups = referrersResult.error ? [] : groupByPlatform(referrersResult.data)
+  const topGroup = groups[0] && groups[0].count > 0 ? groups[0] : null
+
+  const windows = windowsResult && !windowsResult.error ? windowsResult.data : null
+  // Clicks per link in the window: the windows RPC for a bounded range, the
+  // all-time total for 'all'. null when that count failed.
+  const windowClicks = (l: (typeof campaignLinks)[number]): number | null =>
+    days === null ? (l.total_clicks ?? 0) : windows ? (windows.current[l.id] ?? 0) : null
+  const rows = campaignLinks
+    .map((l) => ({ link: l, clicks: windowClicks(l) }))
+    .sort((a, b) => (b.clicks ?? 0) - (a.clicks ?? 0) || (b.link.total_clicks ?? 0) - (a.link.total_clicks ?? 0))
+  const clickedLinks = rows.filter((r) => (r.clicks ?? 0) > 0).length
+  const priorClickedLinks = windows ? Object.values(windows.prior).filter((n) => n > 0).length : null
+
+  // Chart marks: launch days of the links that gained most, inside the window.
+  const inWindow = new Set(current.map((d) => d.date))
+  const byId = new Map(campaignLinks.map((l) => [l.id, l]))
+  const marks = windows
+    ? topGainers(computeMovers(windows.current, windows.prior), 20)
+        .map((m) => byId.get(m.linkId))
+        .filter((l): l is (typeof campaignLinks)[number] => Boolean(l?.created_at))
+        .map((l) => ({ code: l.short_code, date: dayKey(new Date(l.created_at as string)) }))
+        .filter((m) => inWindow.has(m.date))
+        .slice(0, 2)
+        .map((m) => ({
+          date: m.date,
+          label: `${m.code} went live, ${shortDay(m.date)}`,
+          shortLabel: `${m.code}, ${shortDay(m.date)}`,
+        }))
+    : []
 
   // What the links have collected since they were made, for the empty-period
   // explanation below.
   const allTimeClicks = campaignLinks.reduce((sum, l) => sum + (l.total_clicks || 0), 0)
+  const windowLabel = days !== null ? `Last ${days} days` : 'All time'
+  const hasLinks = !linksError && campaignLinks.length > 0
+  const noClicks = hasLinks && !totalError && totalClicks === 0
+  const rowsKnown = rows.every((r) => r.clicks !== null)
+  const showChange = days !== null && windows !== null
 
   return (
     <div>
@@ -141,197 +224,265 @@ export default async function CampaignDetailPage({
         title={campaign.name}
         description={campaign.description}
         backHref="/dashboard/campaigns"
-        backLabel="Back to campaigns"
+        backLabel="Campaigns"
         actions={<TimeRangePicker current={timeRange} basePath={`/dashboard/campaigns/${id}`} />}
-        actionsClassName="w-full sm:w-auto"
       />
 
-      <div className="flex flex-col gap-6">
-        {statsError ? (
-          <Card className="bg-card border-border">
-            <CardContent className="flex flex-col items-center text-center gap-4 py-12">
-              <div className="rounded-full bg-destructive/10 p-3">
-                <AlertTriangle className="size-6 text-destructive" />
-              </div>
-              <div>
-                <p className="text-foreground font-medium">Couldn&apos;t load campaign statistics</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Something went wrong. Please try again.
-                </p>
-              </div>
-              <Link
-                href={`/dashboard/campaigns/${id}?range=${timeRange}`}
-                className={buttonVariants({ variant: 'outline' })}
-              >
-                Try again
-              </Link>
-            </CardContent>
-          </Card>
-        ) : totalClicks === 0 ? (
-          // One explanation and one next step, in place of five empty cards.
-          <Card className="bg-card border-border">
-            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-              <p className="font-medium text-foreground">
-                {days !== null ? `No clicks in the last ${days} days` : 'No clicks yet'}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {allTimeClicks > 0
-                  ? `${plural(allTimeClicks, 'click')} before this period.`
-                  : 'Clicks show up here as soon as someone opens a short link.'}
-              </p>
-              {allTimeClicks > 0 && timeRange !== 'all' && (
-                <Link
-                  href={`/dashboard/campaigns/${id}?range=all`}
-                  className={buttonVariants({ variant: 'outline' })}
-                >
-                  View all time
-                </Link>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            <Card className="bg-card border-border">
-              <CardHeader className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-                <div>
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {days !== null ? `Clicks, last ${days} days` : 'Clicks, all time'}
-                  </CardTitle>
-                  <p className="mt-1 font-mono text-3xl tracking-tight tabular-nums text-foreground">
-                    {totalClicks.toLocaleString('en-US')}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                  {periodTrend && days !== null && (
-                    <span className="inline-flex items-center gap-1.5">
-                      <TrendChip trend={periodTrend} />
-                      vs prior {days} days
-                    </span>
-                  )}
-                  <span>
-                    <span className="font-mono tabular-nums text-foreground">
-                      {linkIds.length.toLocaleString('en-US')}
-                    </span>{' '}
-                    {linkIds.length === 1 ? 'link' : 'links'}
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <LazyClicksOverTimeChart data={clicksOverTime} />
-              </CardContent>
-            </Card>
-
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <CardTitle>Referrers</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <BarList
-                    items={referrers.map((r) => ({ label: r.name, value: r.clicks }))}
-                    label="Referrers by clicks"
-                    total={totalClicks}
-                  />
-                </CardContent>
-              </Card>
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <CardTitle>Countries</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <BarList
-                    items={countryItems(countries)}
-                    label="Countries by clicks"
-                    total={totalClicks}
-                  />
-                </CardContent>
-              </Card>
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <CardTitle>Browsers</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <BarList
-                    items={namedItems(browsers.slice(0, 8))}
-                    label="Browsers by clicks"
-                    total={totalClicks}
-                  />
-                </CardContent>
-              </Card>
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <CardTitle>Devices</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <BarList
-                    items={namedItems(devices)}
-                    label="Devices by clicks"
-                    total={totalClicks}
-                  />
-                </CardContent>
-              </Card>
+      {linksError ? (
+        <div className="rule-open">
+          <InlineError retryHref={retryHref}>This campaign&apos;s links could not load.</InlineError>
+        </div>
+      ) : !hasLinks ? (
+        <div className="rule-open flex flex-col items-start gap-3 py-6">
+          <p className="text-sm text-text-2">
+            No links in this campaign yet. Pick it when you create or edit a link.
+          </p>
+          <Link href="/dashboard/create" className={buttonVariants({ variant: 'outline' })}>
+            Create a link
+          </Link>
+        </div>
+      ) : (
+        <>
+          {totalError ? (
+            <div className="rule-open mb-10">
+              <InlineError retryHref={retryHref}>Click totals could not load.</InlineError>
             </div>
-          </>
-        )}
+          ) : (
+            <KpiRow label={windowLabel} className="mb-9 md:mb-10">
+              <StatCell
+                title={days !== null ? `Clicks, last ${days} days` : 'Clicks, all time'}
+                value={totalClicks}
+                trend={clicksTrend}
+                prior={priorClicks}
+              />
+              <StatCell
+                title="Links that got clicks"
+                value={rowsKnown ? clickedLinks : '---'}
+                unit={`of ${campaignLinks.length.toLocaleString('en-US')}`}
+                trend={
+                  rowsKnown && priorClickedLinks !== null
+                    ? computeTrend(clickedLinks, priorClickedLinks)
+                    : null
+                }
+                prior={rowsKnown ? priorClickedLinks : null}
+                deltaFormat="count"
+              />
+              <StatCell
+                title={peak ? `Busiest day, ${shortDay(peak.date)}` : 'Busiest day'}
+                value={peak ? peak.clicks : seriesResult.error ? '---' : 0}
+                trend={peakTrend}
+                prior={peak && prior ? (priorPeak?.clicks ?? 0) : null}
+                deltaFormat="count"
+              />
+              <StatCell
+                title={topGroup ? `Top platform, ${platformName(topGroup)}` : 'Top platform'}
+                value={topGroup ? formatShare(topGroup.share) : '---'}
+                unit={
+                  topGroup ? (
+                    <span className="hidden md:inline">{plural(topGroup.count, 'click')}</span>
+                  ) : undefined
+                }
+              />
+            </KpiRow>
+          )}
 
-        {/* The links list is real data whenever its own query worked, so it
-            stays under a stats error card. */}
-        {!linksError && (
-          <Card className="bg-card border-border gap-0 pb-0">
-            <CardHeader className="border-b border-border">
-              <CardTitle>Links in Campaign</CardTitle>
-              {/* The rows count every click a link has had, not this range, so
-                  they will not add up to the total above. */}
-              <CardAction className="self-center text-xs text-muted-foreground">
-                All-time clicks
-              </CardAction>
-            </CardHeader>
-            {campaignLinks.length > 0 ? (
-              <div className="divide-y divide-border">
-                {campaignLinks.map((link) => {
-                  const clicks = link.total_clicks || 0
-                  return (
-                    <Link
-                      key={link.id}
-                      href={`/dashboard/links/${link.id}`}
-                      className="block px-4 py-3 outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                    >
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="min-w-0">
-                          <span className="block truncate font-mono text-sm text-foreground">
-                            tws.bio/{link.short_code}
-                          </span>
-                          <p
-                            className="truncate text-xs text-muted-foreground"
-                            title={link.original_url}
-                          >
-                            {displayUrl(link.original_url)}
-                          </p>
-                        </div>
-                        <span className="shrink-0 text-sm text-muted-foreground">
-                          <span className="font-mono tabular-nums text-foreground">
-                            {clicks.toLocaleString('en-US')}
-                          </span>{' '}
-                          {clicks === 1 ? 'click' : 'clicks'}
-                        </span>
-                      </div>
-                    </Link>
-                  )
-                })}
-              </div>
-            ) : (
-              <CardContent>
-                <div className="flex flex-col items-center text-center gap-4 py-12">
-                  <p className="text-muted-foreground">No links in this campaign yet.</p>
-                  <Link href="/dashboard/create" className={buttonVariants()}>
-                    Create Link
-                  </Link>
-                </div>
-              </CardContent>
+          <div
+            className={cn(
+              'grid gap-9 md:gap-12',
+              !noClicks && 'lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]',
             )}
-          </Card>
-        )}
-      </div>
+          >
+            <div className="flex min-w-0 flex-col gap-10">
+              <Section
+                title="Clicks per day"
+                actions={
+                  !noClicks && !seriesResult.error ? (
+                    <ChartLegend
+                      currentLabel={windowLabel}
+                      priorLabel={days !== null ? `${days} days before` : undefined}
+                      showPrior={prior !== null}
+                    />
+                  ) : undefined
+                }
+              >
+                {noClicks ? (
+                  <div className="flex flex-col items-start gap-3 py-4">
+                    <p className="text-sm text-text-2">
+                      {days !== null ? `No clicks in the last ${days} days.` : 'No clicks yet.'}{' '}
+                      {allTimeClicks > 0
+                        ? `${plural(allTimeClicks, 'click')} before this period.`
+                        : 'Clicks show up here as soon as someone opens a short link.'}
+                    </p>
+                    {allTimeClicks > 0 && timeRange !== 'all' && (
+                      <Link
+                        href={`/dashboard/campaigns/${id}?range=all`}
+                        className={buttonVariants({ variant: 'outline' })}
+                      >
+                        View all time
+                      </Link>
+                    )}
+                  </div>
+                ) : (
+                  <BarChart
+                    data={current}
+                    prior={prior ?? undefined}
+                    marks={marks}
+                    error={seriesResult.error}
+                    label={`Clicks per day, ${campaign.name}`}
+                    priorLabel={days !== null ? `${days} days before` : undefined}
+                  />
+                )}
+              </Section>
+              {!noClicks && (
+                <Section title="Devices" level={3} caption={windowLabel}>
+                  {devicesResult.error ? (
+                    <InlineError retryHref={retryHref}>Devices could not load.</InlineError>
+                  ) : (
+                    <BarList
+                      items={namedItems(devicesResult.data)}
+                      label="Devices by clicks"
+                      total={totalClicks || undefined}
+                    />
+                  )}
+                </Section>
+              )}
+            </div>
+
+            {!noClicks && (
+              <SourcesPanel
+                groups={groups}
+                windowLabel={windowLabel}
+                error={referrersResult.error}
+                limit={8}
+                emptyText={days !== null ? `No clicks in the last ${days} days.` : 'No clicks yet.'}
+              />
+            )}
+          </div>
+        </>
+      )}
+
+      {/* The links list is real data whenever its own query worked, so it
+          stays under any stats error. */}
+      {hasLinks && (
+        <Section
+          title="Links in this campaign"
+          caption={plural(campaignLinks.length, 'link')}
+          className="mt-9 md:mt-12"
+        >
+          {days !== null && !windows && (
+            <InlineError retryHref={retryHref}>Clicks per link for this period could not load.</InlineError>
+          )}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Link</TableHead>
+                <TableHead className="hidden md:table-cell">Goes to</TableHead>
+                <TableHead className="text-right">
+                  {days !== null ? `Clicks, ${days}d` : 'Clicks'}
+                </TableHead>
+                {showChange && <TableHead className="text-right">Change</TableHead>}
+                {days !== null && (
+                  <TableHead className="hidden text-right sm:table-cell">All time</TableHead>
+                )}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map(({ link, clicks }) => {
+                const kind = destinationKind(link.original_url)
+                return (
+                  <TableRow key={link.id}>
+                    <TableCell className="relative w-full max-w-0 md:w-auto md:max-w-none">
+                      <Link
+                        href={`/dashboard/links/${link.id}`}
+                        className="block truncate font-mono text-[13.5px] text-ink outline-none after:absolute after:inset-0 after:content-[''] focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-focus"
+                      >
+                        tws.bio/{link.short_code}
+                      </Link>
+                      <span
+                        className="mt-0.5 block truncate text-[13px] text-text-3 md:hidden"
+                        title={link.original_url}
+                      >
+                        {displayUrl(link.original_url)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden w-full max-w-0 md:table-cell">
+                      <span className="block truncate text-text-2" title={link.original_url}>
+                        {displayUrl(link.original_url)}
+                      </span>
+                      {kind && <span className="mt-0.5 block text-xs text-text-3">{kind}</span>}
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {clicks === null ? '---' : clicks.toLocaleString('en-US')}
+                    </TableCell>
+                    {showChange && (
+                      <TableCell className="text-right text-[13px] tabular-nums">
+                        <Change current={windows.current[link.id] ?? 0} prior={windows.prior[link.id] ?? 0} />
+                      </TableCell>
+                    )}
+                    {days !== null && (
+                      <TableCell className="hidden text-right text-text-2 tabular-nums sm:table-cell">
+                        {(link.total_clicks ?? 0).toLocaleString('en-US')}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell className="text-[13px] text-text-2">
+                  All {plural(campaignLinks.length, 'link')}
+                </TableCell>
+                <TableCell className="hidden md:table-cell" />
+                <TableCell className="text-right tabular-nums">
+                  {rowsKnown ? (
+                    <span className="rule-total inline-block pb-1">
+                      {rows.reduce((s, r) => s + (r.clicks ?? 0), 0).toLocaleString('en-US')}
+                    </span>
+                  ) : (
+                    '---'
+                  )}
+                </TableCell>
+                {showChange && <TableCell />}
+                {days !== null && (
+                  <TableCell className="hidden text-right tabular-nums sm:table-cell">
+                    <span className="rule-total inline-block pb-1">
+                      {allTimeClicks.toLocaleString('en-US')}
+                    </span>
+                  </TableCell>
+                )}
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </Section>
+      )}
+
+      {hasLinks && !noClicks && (
+        <div className="mt-9 grid gap-9 md:mt-12 md:gap-12 lg:grid-cols-2">
+          <Section title="Countries" caption={windowLabel}>
+            {countriesResult.error ? (
+              <InlineError retryHref={retryHref}>Countries could not load.</InlineError>
+            ) : (
+              <BarList
+                items={countryItems(countriesResult.data)}
+                label="Countries by clicks"
+                total={totalClicks || undefined}
+              />
+            )}
+          </Section>
+          <Section title="Browsers" caption={windowLabel}>
+            {browsersResult.error ? (
+              <InlineError retryHref={retryHref}>Browsers could not load.</InlineError>
+            ) : (
+              <BarList
+                items={namedItems(browsersResult.data.slice(0, 8))}
+                label="Browsers by clicks"
+                total={totalClicks || undefined}
+              />
+            )}
+          </Section>
+        </div>
+      )}
     </div>
   )
 }

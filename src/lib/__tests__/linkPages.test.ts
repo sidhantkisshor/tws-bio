@@ -108,7 +108,7 @@ describe('brandPageHtml', () => {
 
   it('adds nothing to the head when headHtml is absent', () => {
     const html = brandPageHtml({ title: 'T', cardHtml: '<p>x</p>' })
-    expect(html).toContain('<meta name="theme-color" content="#0a0a0a">\n<title>T</title>')
+    expect(html).toContain('<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131819">\n<title>T</title>')
   })
 })
 

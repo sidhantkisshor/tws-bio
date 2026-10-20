@@ -1,57 +1,25 @@
 import type { ReactNode } from 'react'
-import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card'
-import { dmSerif } from '@/app/fonts'
-
-interface AuthShellProps {
-  title: string
-  description?: string
-  children: ReactNode
-}
+import { PublicNav } from '@/components/PublicNav'
+import { Navbar } from '@/components/Navbar'
+import { Footer } from '@/components/Footer'
 
 /**
- * Shared chrome for /login and /signup: brand wordmark, low-opacity hero glow,
- * and the auth card. Both pages render through this shell so they cannot drift.
+ * Shared frame for /login and /signup: the public masthead, one narrow column
+ * for the panel, and the footer. Both pages render through this frame so they
+ * cannot drift. The Navbar island shows a signed-in visitor a Dashboard
+ * link; an anonymous visitor never downloads supabase-js (useAuth reads the
+ * session cookie first).
  */
-export function AuthShell({ title, description, children }: AuthShellProps) {
+export function AuthShell({ children }: { children: ReactNode }) {
   return (
-    <div
-      className={`relative min-h-screen flex items-center justify-center overflow-hidden py-12 px-4 sm:px-6 lg:px-8 ${dmSerif.variable}`}
-    >
-      {/* Brand glow behind the card: same token as the home hero, dimmed. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1/2 top-1/2 h-[480px] w-[640px] -translate-x-1/2 -translate-y-1/2 opacity-15"
-        style={{ background: 'var(--gradient-hero)' }}
-      />
-
-      <div className="relative max-w-md w-full space-y-6">
-        <div className="text-center">
-          <Link
-            href="/"
-            className="relative inline-flex items-center gap-2 rounded-md text-3xl font-bold tracking-tight text-foreground focus-ring after:absolute after:-inset-2 after:content-['']"
-          >
-            {/* Same tick bar as Wordmark; the serif 'bio' is this page's one display moment. */}
-            <span aria-hidden className="h-[0.85em] w-0.5 bg-primary-text" />
-            <span>
-              tws.<span className="font-[family-name:var(--font-dm-serif)] italic text-primary-text">bio</span>
-            </span>
-          </Link>
-        </div>
-
-        <Card className="w-full bg-card border-border">
-          <CardHeader>
-            <h1
-              data-slot="card-title"
-              className="font-heading text-2xl leading-snug font-semibold tracking-tight"
-            >
-              {title}
-            </h1>
-            {description && <CardDescription>{description}</CardDescription>}
-          </CardHeader>
-          <CardContent>{children}</CardContent>
-        </Card>
-      </div>
+    <div className="flex min-h-dvh flex-col bg-page">
+      <PublicNav>
+        <Navbar />
+      </PublicNav>
+      <main className="mx-auto w-full max-w-[460px] flex-1 px-4 pt-10 pb-12 sm:pt-16 md:pt-[88px] md:pb-[88px]">
+        {children}
+      </main>
+      <Footer />
     </div>
   )
 }

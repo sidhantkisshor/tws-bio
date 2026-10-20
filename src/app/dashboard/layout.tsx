@@ -1,6 +1,6 @@
 import { getAuthenticatedUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { DashboardSidebar } from '@/components/dashboard/DashboardSidebar'
+import { DashboardMasthead } from '@/components/dashboard/DashboardMasthead'
 import { Toaster } from '@/components/ui/sonner'
 
 export default async function DashboardLayout({
@@ -18,17 +18,16 @@ export default async function DashboardLayout({
 
   return (
     <>
-      <div className="min-h-screen bg-background flex">
-        <DashboardSidebar userEmail={user.email || ''} />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto pt-14 md:pt-0">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {children}
-          </div>
+      <div className="min-h-screen bg-page text-ink">
+        <DashboardMasthead userEmail={user.email || ''} />
+        {/* Content: max width 1280, gutters 40 on desktop and 16 on phones.
+            overflow-x-clip keeps a wide child from scrolling the page
+            sideways; tables that need it scroll inside themselves. */}
+        <main className="mx-auto max-w-[1280px] overflow-x-clip px-4 pb-14 md:px-10">
+          {children}
         </main>
       </div>
-      {/* Every dashboard action toasts (copy, edit, delete, export, create).
-          Outside the flex row so sonner's always-rendered section is not a
-          flex item. */}
+      {/* Every dashboard action can toast (edit, delete, export, create). */}
       <Toaster />
     </>
   )

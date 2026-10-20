@@ -22,7 +22,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { TickerChip } from '@/components/TickerChip'
+import { AttributionPreview } from '@/components/dashboard/AttributionPreview'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -32,6 +32,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+
+const SHORT_DOMAIN = process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'
 
 type Link = Database['public']['Tables']['links']['Row']
 type LinkUpdate = Database['public']['Tables']['links']['Update']
@@ -74,7 +76,7 @@ function errorId(field: LinkEditField) {
 function FieldError({ field, message }: { field: LinkEditField; message?: string }) {
   if (!message) return null
   return (
-    <p id={errorId(field)} role="alert" className="text-xs text-destructive">
+    <p id={errorId(field)} role="alert" className="text-[13px] text-neg">
       {message}
     </p>
   )
@@ -214,7 +216,7 @@ export function EditLinkDialog({
       onOpenChange(false)
       router.refresh()
     } catch {
-      toast.error('Failed to update link')
+      toast.error('Could not save the link. Try again.')
     } finally {
       setSaving(false)
     }
@@ -259,16 +261,18 @@ export function EditLinkDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex flex-col sm:max-w-md">
+      <DialogContent className="flex flex-col sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Edit Link</DialogTitle>
-          {/* The code is shown, not offered as a field: a read-only input was
-              the first thing in the dialog, so it took the focus ring and
-              looked like the field to edit. Focus now starts on Original URL. */}
-          <DialogDescription className="sr-only">
-            Update the settings for this short link.
+          <DialogTitle>Edit link</DialogTitle>
+          {/* The code is shown, not offered as a field: it cannot change, and
+              a read-only input first in the dialog took the focus ring and
+              looked like the field to edit. Focus starts on Destination. */}
+          <DialogDescription>
+            <span className="font-mono text-ink [overflow-wrap:anywhere]">
+              {SHORT_DOMAIN}/{link.short_code}
+            </span>
+            <span className="sr-only">. Change where it goes and its limits.</span>
           </DialogDescription>
-          <TickerChip code={link.short_code} copyable={false} className="self-start" />
         </DialogHeader>
 
         <form
@@ -284,7 +288,7 @@ export function EditLinkDialog({
               The bleed (-mx-4 px-4) keeps focus rings from clipping. */}
           <div className="-mx-4 grid min-h-0 content-start gap-4 overflow-y-auto px-4 py-2">
             <div className="grid gap-2">
-              <Label htmlFor={FIELD_IDS.originalUrl}>Original URL</Label>
+              <Label htmlFor={FIELD_IDS.originalUrl}>Destination</Label>
               <Input
                 {...inputProps('originalUrl')}
                 type="url"
@@ -324,7 +328,7 @@ export function EditLinkDialog({
                 </SelectContent>
               </Select>
               {campaigns.status === 'failed' && (
-                <p id="edit-campaign-hint" className="text-xs text-muted-foreground">
+                <p id="edit-campaign-hint" className="text-[13px] text-text-2">
                   Couldn&apos;t load your campaigns. Saving keeps the current one.
                 </p>
               )}
@@ -357,21 +361,25 @@ export function EditLinkDialog({
             )}
 
             <div className="grid gap-2">
-              <Label htmlFor={FIELD_IDS.expiresAt}>Expiration date (optional)</Label>
+              <Label htmlFor={FIELD_IDS.expiresAt}>
+                Expires <span className="font-normal text-text-3">optional</span>
+              </Label>
               <Input
                 {...inputProps('expiresAt', expiredUntouched ? 'edit-expires-at-note' : undefined)}
                 type="datetime-local"
               />
               <FieldError field="expiresAt" message={errors.expiresAt} />
               {expiredUntouched && (
-                <p id="edit-expires-at-note" className="text-xs text-muted-foreground">
+                <p id="edit-expires-at-note" className="text-[13px] text-text-2">
                   This date has passed, so the link is off. It stays off until you pick a later time or clear the date.
                 </p>
               )}
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor={FIELD_IDS.maxClicks}>Max clicks (optional)</Label>
+              <Label htmlFor={FIELD_IDS.maxClicks}>
+                Click limit <span className="font-normal text-text-3">optional</span>
+              </Label>
               {/* Text with a numeric keypad rather than type="number", so the
                   check sees exactly what was typed (no "1e3" or scroll-wheel
                   changes). */}
@@ -387,16 +395,29 @@ export function EditLinkDialog({
               />
               <FieldError field="maxClicks" message={errors.maxClicks} />
               {limitReachedUntouched && (
-                <p id="edit-max-clicks-note" className="text-xs text-muted-foreground">
+                <p id="edit-max-clicks-note" className="text-[13px] text-text-2">
                   The link has reached this limit, so it is off. It stays off until you raise the limit or clear it.
                 </p>
               )}
               {/* The redirect checks the count it read, and the click is
                   counted afterwards, so clicks in flight together can pass. */}
-              <p id="edit-max-clicks-hint" className="text-xs text-muted-foreground">
+              <p id="edit-max-clicks-hint" className="text-[13px] text-text-2">
                 Approximate: a burst of clicks at the same moment can pass the limit slightly.
               </p>
             </div>
+
+            {/* What GA4 receives, from the same functions the redirect runs,
+                so a new destination shows its tags before it is saved. Last, so
+                the fields come first. */}
+            <section
+              aria-labelledby="edit-attribution-title"
+              className="min-w-0 rounded-panel border border-rule bg-page p-4"
+            >
+              <h3 id="edit-attribution-title" className="type-label mb-2">
+                What GA4 receives
+              </h3>
+              <AttributionPreview shortCode={link.short_code} destination={fields.originalUrl} />
+            </section>
           </div>
 
           <DialogFooter>

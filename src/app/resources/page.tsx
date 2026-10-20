@@ -1,7 +1,7 @@
 import { PublicNav } from '@/components/PublicNav'
+import { Navbar } from '@/components/Navbar'
 import { Footer } from '@/components/Footer'
 import { resources } from '@/config/resources'
-import { dmSerif } from '@/app/fonts'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -21,53 +21,51 @@ function hostOf(url: string): string {
 
 export default function ResourcesPage() {
   return (
-    <div className={`min-h-screen bg-background flex flex-col ${dmSerif.variable}`}>
-      {/* The audience page: a server-only nav, so no auth client JS ships here. */}
-      <PublicNav />
+    <div className="flex min-h-dvh flex-col bg-page">
+      {/* The audience page. The Navbar island shows a signed-in visitor a
+          Dashboard link; anonymous visitors never download supabase-js. */}
+      <PublicNav>
+        <Navbar />
+      </PublicNav>
 
-      <main className="flex-1 w-full max-w-[44rem] mx-auto px-4 pt-28 pb-16">
-        <h1 className="text-3xl md:text-4xl font-bold text-foreground leading-tight">
-          Trading{' '}
-          <span className="font-[family-name:var(--font-dm-serif)] italic text-primary-text">
-            resources
-          </span>
-        </h1>
-        <p className="text-muted-foreground mt-3 mb-10">Tools, platforms, and links I use for trading.</p>
+      <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 pt-8 pb-12 md:px-10 md:pt-12 md:pb-20">
+        <div className="max-w-[720px]">
+          <h1 className="type-title text-ink">Trading resources</h1>
+          <p className="mt-2 text-[15px] leading-relaxed text-text-2">
+            Tools, platforms and links Sidhant uses for trading.
+          </p>
 
-        <div className="space-y-8">
-          {resources.map((group) => (
-            <section key={group.category}>
-              <h2 className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground mb-2">
-                {group.category}
-              </h2>
-              <div className="divide-y divide-border border border-border rounded-lg overflow-hidden transition-colors hover:border-primary/30">
-                {group.items.map((item) => (
-                  <a
-                    key={item.title}
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                  >
-                    <div className="min-w-0">
-                      <span className="text-sm font-medium text-foreground">{item.title}</span>
-                      <span className="sr-only"> (opens in a new tab)</span>
-                      {item.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
-                      )}
-                    </div>
-                    {/* The destination host is the trust signal: show it before the tap. */}
-                    <span className="flex shrink-0 items-center gap-1.5 font-mono text-xs text-muted-foreground">
-                      {hostOf(item.url)}
-                      <svg aria-hidden="true" className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </span>
-                  </a>
-                ))}
-              </div>
-            </section>
-          ))}
+          <div className="mt-8 grid gap-10 md:mt-10 md:gap-12">
+            {resources.map((group) => (
+              <section key={group.category} aria-label={group.category} className="rule-open pt-3.5">
+                <h2 className="type-h2 mb-3 text-ink">{group.category}</h2>
+                <ul>
+                  {group.items.map((item) => (
+                    <li key={item.title}>
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex flex-col gap-1 border-b border-rule py-3 focus-ring sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
+                      >
+                        <span className="min-w-0">
+                          <span className="text-[15px] font-medium text-ink transition-colors duration-150 group-hover:text-accent-text">
+                            {item.title}
+                          </span>
+                          <span className="sr-only"> (opens in a new tab)</span>
+                          {item.description && (
+                            <span className="mt-0.5 block text-[13px] text-text-3">{item.description}</span>
+                          )}
+                        </span>
+                        {/* The destination host is the trust signal: show it before the tap. */}
+                        <span className="shrink-0 font-mono text-[13px] text-text-2">{hostOf(item.url)}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
         </div>
       </main>
 

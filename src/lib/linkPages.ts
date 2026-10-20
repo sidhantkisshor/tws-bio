@@ -22,11 +22,24 @@ const DEAD_LINK_HEADERS = {
 // How long the lookup-failure page waits before it reloads itself.
 const RETRY_PAGE_SECONDS = 15
 
+// Day Book colors for the status pages, light and dark. They follow the
+// system setting only: these pages run no script, so the app's stored theme
+// choice cannot reach them. Values are the app's tokens (src/app/globals.css).
+const SHELL_COLORS = `:root{--page:#F3F0EA;--surface:#FBFAF7;--ink:#1E2528;--rule-strong:#2C3539;--text-2:#454D51;--text-3:#5E6569;--rule:#D9D2C5;--accent-fill:#9A5626;--accent-fill-hover:#87491D;--on-accent:#FFFFFF;--accent-text:#8F4F22;--focus:#9A5626}
+@media (prefers-color-scheme:dark){:root{--page:#131819;--surface:#1A2023;--ink:#EEE8DC;--rule-strong:#B4AEA3;--text-2:#B4AEA3;--text-3:#9A958C;--rule:#2F383C;--accent-fill:#D98A45;--accent-fill-hover:#E89A55;--on-accent:#131819;--accent-text:#E89A55;--focus:#E89A55}}`
+
+// System stacks only: the CSP (default-src 'none') blocks webfonts, and these
+// pages sit on the click path, so nothing is fetched.
+const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif"
+const SERIF = "'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,'Times New Roman',serif"
+
 /**
- * Branded dark shell shared by the deep-link interstitial and the dead-link
- * pages. The CSP (default-src 'none') blocks every external asset, so
- * everything is inline: system font stacks, pure-CSS spinner, no images or
- * webfonts. `headHtml` and the other slots take fixed markup only.
+ * Day Book shell shared by the deep-link interstitial and the dead-link
+ * pages: warm paper, slate ink, a 2px ink rule opening the message, a serif
+ * heading and one amber action. Light or dark follows prefers-color-scheme.
+ * The CSP (default-src 'none') blocks every external asset, so everything is
+ * inline: system font stacks, pure-CSS spinner, no images or webfonts.
+ * `headHtml` and the other slots take fixed markup only.
  */
 export function brandPageHtml(opts: {
   title: string
@@ -40,20 +53,27 @@ export function brandPageHtml(opts: {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="dark">
-<meta name="theme-color" content="#0a0a0a">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F3F0EA">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131819">
 ${opts.headHtml ?? ''}<title>${opts.title}</title>
 <style>
+${SHELL_COLORS}
 *{box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:20px;min-height:100vh;margin:0;padding:24px;background:#0a0a0a;color:#FAFAFA}
-.card{text-align:center;padding:32px 28px;background:#111111;border:1px solid #1f1f1f;border-radius:10px;max-width:400px;width:100%}
-.eyebrow{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:11px;font-weight:400;text-transform:uppercase;letter-spacing:0.14em;color:#999999;margin:0 0 8px}
-h1{font-size:22px;font-weight:600;margin:0 0 10px}
-p{color:#999999;font-size:14px;line-height:1.5;margin:0}
-.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-top:20px;padding:0 24px;background:#00802B;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:500;font-size:14px;transition:background-color 150ms}
-.btn:hover{background:#006E25}
-.btn:focus-visible{outline:2px solid #00B03B;outline-offset:2px}
-.wordmark{border-left:2px solid #00B03B;padding-left:8px;line-height:1.2;font-family:inherit;font-weight:600;letter-spacing:0;color:#999999}
+body{font-family:${SANS};display:flex;flex-direction:column;justify-content:center;align-items:center;gap:32px;min-height:100vh;margin:0;padding:40px 16px;background:var(--page);color:var(--ink);-webkit-font-smoothing:antialiased}
+.card{max-width:440px;width:100%;border-top:2px solid var(--rule-strong);padding-top:16px}
+.eyebrow{font-family:${SANS};font-size:11px;font-weight:700;line-height:1.3;text-transform:uppercase;letter-spacing:0.08em;font-variant-numeric:tabular-nums lining-nums;color:var(--text-3);margin:0 0 10px}
+h1{font-family:${SERIF};font-size:30px;line-height:1.1;font-weight:500;letter-spacing:-0.015em;margin:0 0 12px;text-wrap:balance}
+p{color:var(--text-2);font-size:15px;line-height:1.55;margin:0;text-wrap:pretty}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-top:24px;padding:0 18px;background:var(--accent-fill);color:var(--on-accent);text-decoration:none;border-radius:3px;font-weight:500;font-size:15px;transition:background-color 150ms}
+.btn:hover{background:var(--accent-fill-hover)}
+.btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.wordmark{max-width:440px;width:100%;margin:0;font-family:${SANS};font-size:14px;font-weight:700;letter-spacing:-0.01em;color:var(--text-3)}
+body .btn-link{display:flex;width:fit-content;align-items:center;min-height:44px;margin-top:8px;font-size:14px;color:var(--text-2);text-underline-offset:3px}
+body .btn-link:hover{color:var(--ink)}
+body .btn-link:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:3px}
+body .spin{border-color:var(--rule);border-top-color:var(--rule-strong)}
+@media (prefers-reduced-motion:reduce){*{transition-duration:0.01ms!important}}
 ${opts.extraCss ?? ''}
 </style>
 </head>
@@ -72,7 +92,7 @@ ${opts.footerScript ?? ''}
 const TRUSTED_HOME_URL = 'https://tradingwithsidhant.com'
 
 const ALT_LINK_CSS =
-  '.alt{margin:8px 0 0;font-size:13px}.alt a{display:inline-flex;align-items:center;min-height:44px;color:#999999;text-underline-offset:3px}.alt a:hover{color:#FAFAFA}.alt a:focus-visible{outline:2px solid #00B03B;outline-offset:2px;border-radius:4px}'
+  '.alt{margin:8px 0 0;font-size:14px}.alt a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent-text);text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:3px}.alt a:hover{text-decoration-color:currentColor}.alt a:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:3px}'
 
 /**
  * Split '404: LINK NOT FOUND' into the code (small mono label) and the reason

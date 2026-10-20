@@ -1,46 +1,56 @@
-import { Card, CardContent } from '@/components/ui/card'
-
 /**
- * Route-level Suspense fallback for /dashboard/create. Mirrors the real
- * page's shape (back chevron, heading, then the form card with its URL
- * row, two fields and the advanced-options toggle) so navigation gets a
- * form-shaped skeleton instead of the Overview-shaped /dashboard fallback.
+ * Route-level Suspense fallback for /dashboard/create. It has the real page's
+ * shape: the title and its line, the 2px rule, then the form fields on the
+ * left and the raised preview panel on the right (under the form on phones),
+ * so the layout does not jump when the page arrives. Static blocks, no motion.
  */
 export default function CreateLinkLoading() {
+  const field = (labelWidth: string) => (
+    <div className="grid gap-2">
+      <div className={`h-3.5 rounded-ctl bg-sunk ${labelWidth}`} />
+      <div className="h-11 w-full rounded-ctl border border-rule bg-surface sm:h-9" />
+      <div className="h-3 w-3/4 rounded-ctl bg-sunk" />
+    </div>
+  )
+
   return (
     <div aria-busy="true" aria-live="polite">
-      <div className="max-w-2xl">
-        {/* Back chevron + title (PageHeader) */}
-        <div className="mb-6 flex items-center gap-2">
-          <div className="-ml-2 flex size-11 shrink-0 items-center justify-center sm:size-10">
-            <div className="size-5 rounded bg-muted" />
-          </div>
-          <div className="h-8 w-36 rounded-md bg-muted" />
-        </div>
+      <span className="sr-only">Loading the new link form</span>
+      {/* PageHeader: title and description */}
+      <div className="pt-7 pb-4 md:pt-10 md:pb-6">
+        <div className="h-[33px] w-40 rounded-ctl bg-sunk md:h-[40px]" />
+        <div className="mt-3 h-4 w-64 max-w-full rounded-ctl bg-sunk" />
+      </div>
 
-        <Card className="bg-card border-border">
-          <CardContent className="space-y-4">
-            {/* Long URL + submit button */}
-            <div>
-              <div className="h-3.5 w-20 rounded bg-muted mb-2" />
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <div className="h-11 min-w-0 rounded-lg bg-muted/50 sm:h-9 sm:flex-1" />
-                <div className="h-11 w-full shrink-0 rounded-lg bg-muted sm:h-9 sm:w-24" />
-              </div>
+      <div className="@container">
+        <div className="rule-open grid gap-8 pt-5 @4xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] @4xl:gap-14 @4xl:pt-7">
+          <div className="grid max-w-[560px] content-start gap-[22px]">
+            {field('w-24')}
+            {field('w-28')}
+            <div className="grid gap-[22px] sm:grid-cols-2 sm:gap-4">
+              {field('w-24')}
+              {field('w-36')}
             </div>
-            {/* Custom short code / Campaign */}
-            {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i}>
-                <div className="h-3.5 w-44 rounded bg-muted mb-2" />
-                <div className="h-11 w-full rounded-lg bg-muted/50 sm:h-9" />
-              </div>
-            ))}
-            {/* Advanced options toggle */}
-            <div className="flex h-11 items-center sm:h-5">
-              <div className="h-4 w-56 max-w-full rounded bg-muted/50" />
+            <div className="flex h-11 items-center border-y border-rule sm:h-9">
+              <div className="h-3.5 w-48 rounded-ctl bg-sunk" />
             </div>
-          </CardContent>
-        </Card>
+            <div className="flex gap-3 pt-1">
+              <div className="h-11 flex-1 rounded-ctl bg-sunk sm:h-10 sm:w-28 sm:flex-none" />
+              <div className="h-11 flex-1 rounded-ctl border border-rule bg-surface sm:h-10 sm:w-24 sm:flex-none" />
+            </div>
+          </div>
+
+          <div className="self-start rounded-panel border border-rule bg-surface p-[18px] sm:p-6">
+            <div className="h-3 w-16 rounded-ctl bg-sunk" />
+            <div className="rule-total mt-2.5 mb-4 pb-4">
+              <div className="h-7 w-56 max-w-full rounded-ctl bg-sunk" />
+            </div>
+            <div className="grid gap-3">
+              <div className="h-3.5 w-full rounded-ctl bg-sunk" />
+              <div className="h-3.5 w-4/5 rounded-ctl bg-sunk" />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

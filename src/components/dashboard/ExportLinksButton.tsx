@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { applyLinkFilters, applyLinkSort, type LinkListParams } from '@/lib/linkFilters'
@@ -116,7 +115,7 @@ export function ExportLinksButton({
         )
       }
     } catch {
-      toast.error('Failed to export links')
+      toast.error('Could not export the links. Try again.')
     } finally {
       setExporting(false)
     }
@@ -138,8 +137,11 @@ export function ExportLinksButton({
           : undefined
       }
     >
-      {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
-      {hasMorePages ? `Export All (${totalCount.toLocaleString('en-US')})` : 'Export CSV'}
+      {exporting
+        ? 'Exporting...'
+        : hasMorePages
+          ? `Export all ${totalCount.toLocaleString('en-US')} as CSV`
+          : 'Export CSV'}
     </Button>
   )
 }
