@@ -1,7 +1,7 @@
 -- Migration 028: Limit direct link updates to the columns the dashboard edits
 -- (audit db-11, the verifier's corrected fix)
 --
--- NOT APPLIED as of 2026-10-19. Run the preflight below first, and apply this
+-- APPLIED to production on 2026-10-20 (preflight and verify passed). Run the preflight below first, and apply this
 -- file on its own, after 026: if the column list is wrong, a dashboard save
 -- fails, and rolling this back must not reopen the INSERT path.
 --

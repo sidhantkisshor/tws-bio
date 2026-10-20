@@ -1,6 +1,6 @@
 -- Migration 026: Drop the direct INSERT policy on links (audit db-11)
 --
--- NOT APPLIED as of 2026-10-19. Run the preflight below against the remote
+-- APPLIED to production on 2026-10-20 (preflight and verify passed). Run the preflight below against the remote
 -- database first: policy names on the remote have drifted before (CLAUDE.md).
 --
 -- What changes: drops "Users can create links" (001), the policy that lets a
