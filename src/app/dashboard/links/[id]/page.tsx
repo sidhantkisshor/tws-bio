@@ -125,7 +125,7 @@ export default async function LinkDetailPage({
               target="_blank"
               rel="noopener noreferrer"
               title={link.original_url}
-              className="group inline-flex max-w-full items-center gap-1 rounded-sm text-sm text-muted-foreground transition-colors hover:text-foreground focus-ring"
+              className="group inline-flex max-w-full items-center gap-1 min-h-11 rounded-sm text-sm text-muted-foreground transition-colors hover:text-foreground focus-ring sm:min-h-0"
             >
               <span className="truncate">{link.original_url}</span>
               <ExternalLink
@@ -141,12 +141,9 @@ export default async function LinkDetailPage({
         }
         backHref="/dashboard/links"
         backLabel="Back to links"
-        actions={
-          <div className="flex items-center gap-3">
-            <CopyShortLinkButton shortCode={link.short_code} />
-            <TimeRangePicker current={timeRange} basePath={`/dashboard/links/${id}`} />
-          </div>
-        }
+        titleAccessory={<CopyShortLinkButton shortCode={link.short_code} />}
+        actions={<TimeRangePicker current={timeRange} basePath={`/dashboard/links/${id}`} />}
+        actionsClassName="w-full sm:w-auto"
       />
 
       {statsError ? (

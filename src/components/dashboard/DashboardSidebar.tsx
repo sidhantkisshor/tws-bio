@@ -95,7 +95,7 @@ function SidebarContent({
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-5">
-        <Link href="/" className="inline-block rounded-md text-lg text-foreground focus-ring">
+        <Link href="/" className="relative inline-block rounded-md text-lg text-foreground focus-ring after:absolute after:-inset-2 after:content-['']">
           <Wordmark />
         </Link>
       </div>
@@ -146,7 +146,7 @@ export function DashboardSidebar({ userEmail }: { userEmail: string }) {
 
       {/* Mobile top bar + sheet */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between h-14 px-4 bg-card border-b border-border">
-        <Link href="/" className="rounded-md text-lg text-foreground focus-ring">
+        <Link href="/" className="relative rounded-md text-lg text-foreground focus-ring after:absolute after:-inset-2 after:content-['']">
           <Wordmark />
         </Link>
         <div className="flex items-center gap-1">

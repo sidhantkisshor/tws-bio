@@ -25,7 +25,7 @@ export default function ResourcesPage() {
       {/* The audience page: a server-only nav, so no auth client JS ships here. */}
       <PublicNav />
 
-      <main className="flex-1 w-full max-w-2xl mx-auto px-4 pt-28 pb-16">
+      <main className="flex-1 w-full max-w-[44rem] mx-auto px-4 pt-28 pb-16">
         <h1 className="text-3xl md:text-4xl font-bold text-foreground leading-tight">
           Trading{' '}
           <span className="font-[family-name:var(--font-dm-serif)] italic text-primary-text">
@@ -47,7 +47,7 @@ export default function ResourcesPage() {
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+                    className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                   >
                     <div className="min-w-0">
                       <span className="text-sm font-medium text-foreground">{item.title}</span>

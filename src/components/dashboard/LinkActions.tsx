@@ -136,7 +136,7 @@ export function LinkActions({
           href={`/dashboard/links/${link.id}`}
           prefetch={false}
           aria-label="View stats"
-          className={cn(buttonVariants({ variant: 'ghost', size: 'icon-xs' }), buttonClass)}
+          className={cn(buttonVariants({ variant: 'ghost', size: 'icon-xs' }), 'text-muted-foreground hover:text-foreground', buttonClass)}
         >
           <ChartColumn className={iconClass} />
         </Link>
@@ -149,7 +149,7 @@ export function LinkActions({
               setEditOpen(true)
             }}
             aria-label="Edit link"
-            className={buttonClass}
+            className={cn('text-muted-foreground hover:text-foreground', buttonClass)}
           >
             <Pencil className={iconClass} />
           </Button>
@@ -162,7 +162,7 @@ export function LinkActions({
             setQrOpen(true)
           }}
           aria-label="Show QR code"
-          className={buttonClass}
+          className={cn('text-muted-foreground hover:text-foreground', buttonClass)}
         >
           <QrCode className={iconClass} />
         </Button>

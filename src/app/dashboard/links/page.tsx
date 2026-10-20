@@ -152,7 +152,7 @@ export default async function LinksPage({
   const hasActiveFilters = Boolean(q || type !== 'all' || status !== 'all')
 
   return (
-    <div>
+    <div className="has-[[data-bulk-bar]]:pb-36 sm:has-[[data-bulk-bar]]:pb-20">
       {/* No Create Link here: the sidebar button (and the + in the phone top
           bar) is always on screen. Export is the only action this page owns. */}
       <PageHeader

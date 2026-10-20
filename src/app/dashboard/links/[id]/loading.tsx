@@ -30,15 +30,18 @@ export default function LinkDetailLoading() {
           </div>
           <div className="min-w-0">
             {/* Short link, destination URL, type and created date */}
-            <div className="h-8 w-56 max-w-full rounded-md bg-muted" />
+            <div className="flex items-center gap-1.5">
+              <div className="h-8 w-56 max-w-full rounded-md bg-muted" />
+              {/* Copy button */}
+              <div className="size-6 shrink-0 rounded bg-muted/50" />
+            </div>
             <div className="mt-1 h-4 w-80 max-w-full rounded bg-muted/50" />
             <div className="mt-2 h-5 w-40 rounded bg-muted/50" />
           </div>
         </div>
-        {/* Copy button and range picker */}
-        <div className="flex items-center gap-3">
-          <div className="size-6 rounded bg-muted/50" />
-          <div className="h-13 w-48 rounded-lg bg-muted sm:h-10" />
+        {/* Range picker */}
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className="h-13 w-full rounded-lg bg-muted sm:h-10 sm:w-48" />
         </div>
       </div>
 

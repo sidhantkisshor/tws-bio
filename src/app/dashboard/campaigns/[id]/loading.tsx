@@ -35,7 +35,7 @@ export default function CampaignDetailLoading() {
           </div>
         </div>
         {/* Range picker */}
-        <div className="h-13 w-48 rounded-lg bg-muted sm:h-10" />
+        <div className="h-13 w-full rounded-lg bg-muted sm:h-10 sm:w-48" />
       </div>
 
       <div className="flex flex-col gap-6">

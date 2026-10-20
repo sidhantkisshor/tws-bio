@@ -60,7 +60,7 @@ export default function HomePage() {
 
         {/* What it does: one spec strip in the form column, so the page keeps a
             single left edge. Plain copy for a private tool, no icon tiles. */}
-        <section aria-labelledby="spec-heading" className="max-w-2xl mx-auto px-4 pb-20">
+        <section aria-labelledby="spec-heading" className="max-w-[44rem] mx-auto px-4 pb-20">
           <h2
             id="spec-heading"
             className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground"

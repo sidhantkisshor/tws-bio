@@ -104,7 +104,7 @@ export function ClickChart({ data, error }: ClickChartProps) {
   return (
     <ChartContainer
       config={chartConfig}
-      className="h-64 w-full [&_.recharts-yAxis_.recharts-cartesian-axis-tick_text]:font-mono [&_.recharts-yAxis_.recharts-cartesian-axis-tick_text]:tabular-nums"
+      className="h-64 w-full [&_.recharts-yAxis-tick-labels_text]:font-mono [&_.recharts-yAxis-tick-labels_text]:tabular-nums"
     >
       <AreaChart data={data} margin={{ top: 5, right: 22, left: 0, bottom: 0 }}>
         <defs>

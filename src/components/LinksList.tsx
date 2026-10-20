@@ -88,8 +88,8 @@ export function LinksList({
         {links.map((link) => {
           const clicks = link.total_clicks ?? 0
           return (
-            <li key={link.id} className="flex items-center gap-4 px-4 py-3">
-              <div className="min-w-0 flex-1">
+            <li key={link.id} className="flex flex-col gap-1.5 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+              <div className="min-w-0 sm:flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
                   <TickerChip
                     code={link.short_code}
@@ -102,7 +102,7 @@ export function LinksList({
                   {link.original_url}
                 </p>
               </div>
-              <div className="shrink-0 text-right">
+              <div className="flex items-baseline gap-3 sm:block sm:shrink-0 sm:text-right">
                 <p className="font-mono text-sm tabular-nums text-foreground">
                   {clicks.toLocaleString('en-US')}
                   <span className="ml-1 text-[11px] text-muted-foreground">
@@ -110,7 +110,7 @@ export function LinksList({
                   </span>
                 </p>
                 {link.created_at && (
-                  <p className="mt-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+                  <p className="font-mono text-[11px] tabular-nums text-muted-foreground sm:mt-0.5">
                     {formatDate(link.created_at)}
                   </p>
                 )}

@@ -645,15 +645,15 @@ export function CreateLinkForm({ initialUser = null, onCreated, showHeader = tru
                       aria-labelledby="link-type-label"
                       value={linkType}
                       onValueChange={(val) => setLinkType(val as 'url' | 'deep_link')}
-                      className="flex gap-6"
+                      className="flex flex-col gap-0 sm:flex-row sm:gap-6"
                     >
                       <div className="flex items-center gap-2">
                         <RadioGroupItem value="url" id="type-url" className="border-muted-foreground/70" />
-                        <Label htmlFor="type-url" className="font-normal cursor-pointer">Regular URL</Label>
+                        <Label htmlFor="type-url" className="min-h-11 flex-1 font-normal cursor-pointer sm:min-h-0 sm:flex-none">Regular URL</Label>
                       </div>
                       <div className="flex items-center gap-2">
                         <RadioGroupItem value="deep_link" id="type-deep" className="border-muted-foreground/70" />
-                        <Label htmlFor="type-deep" className="font-normal cursor-pointer">Deep link (mobile app)</Label>
+                        <Label htmlFor="type-deep" className="min-h-11 flex-1 font-normal cursor-pointer sm:min-h-0 sm:flex-none">Deep link (mobile app)</Label>
                       </div>
                     </RadioGroup>
                   </div>

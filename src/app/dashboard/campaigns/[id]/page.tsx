@@ -142,6 +142,7 @@ export default async function CampaignDetailPage({
         backHref="/dashboard/campaigns"
         backLabel="Back to campaigns"
         actions={<TimeRangePicker current={timeRange} basePath={`/dashboard/campaigns/${id}`} />}
+        actionsClassName="w-full sm:w-auto"
       />
 
       <div className="flex flex-col gap-6">

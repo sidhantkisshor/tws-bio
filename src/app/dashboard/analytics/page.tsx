@@ -28,6 +28,7 @@ function AnalyticsHeader({ timeRange }: { timeRange: TimeRange }) {
     <PageHeader
       title="Analytics"
       actions={<TimeRangePicker current={timeRange} basePath="/dashboard/analytics" />}
+      actionsClassName="w-full sm:w-auto"
     />
   )
 }

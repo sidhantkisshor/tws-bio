@@ -299,7 +299,7 @@ export default async function DashboardPage() {
           <CardTitle>Recent Links</CardTitle>
           <Link
             href="/dashboard/links"
-            className="focus-ring rounded-sm text-sm text-primary-text hover:text-primary-text/80"
+            className="focus-ring relative rounded-sm text-sm text-primary-text hover:text-primary-text/80 after:absolute after:-inset-x-2 after:-inset-y-3 after:content-['']"
           >
             View all
           </Link>
@@ -344,7 +344,7 @@ export default async function DashboardPage() {
                     <div className="flex items-center gap-2">
                       <Link
                         href={`/dashboard/links/${link.id}`}
-                        className="focus-ring truncate rounded-sm font-mono text-sm text-foreground transition-colors hover:text-primary-text"
+                        className="focus-ring -my-3 truncate rounded-sm py-3 font-mono text-sm text-foreground transition-colors hover:text-primary-text md:my-0 md:py-0"
                       >
                         tws.bio/{link.short_code}
                       </Link>

@@ -124,7 +124,7 @@ export function QRCodeDialog({
           <DialogDescription>
             Scan this QR code to open the short link.
           </DialogDescription>
-          <TickerChip code={shortCode} className="self-start" />
+          <TickerChip code={shortCode} className="self-start" touchTarget />
         </DialogHeader>
 
         <div className="flex flex-col items-center gap-3 py-4">

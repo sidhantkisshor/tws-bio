@@ -213,10 +213,16 @@ export function LinksTable({
         <div
           role="region"
           aria-label="Bulk actions"
+          data-bulk-bar
           className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-xl flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border bg-popover px-4 py-2.5 shadow-overlay md:left-[calc(16rem+1rem)]"
         >
-          <span className="text-sm font-medium text-foreground">{selectedCount} selected</span>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="flex w-full items-center justify-between sm:w-auto sm:gap-3">
+            <span className="text-sm font-medium text-foreground">{selectedCount} selected</span>
+            <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())} disabled={bulkBusy}>
+              Cancel
+            </Button>
+          </div>
+          <div className="grid w-full grid-cols-3 gap-2 sm:ml-auto sm:flex sm:w-auto">
             <Button variant="outline" size="sm" onClick={() => bulkSetActive(true)} disabled={bulkBusy}>
               Activate
             </Button>
@@ -226,9 +232,6 @@ export function LinksTable({
             <Button variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)} disabled={bulkBusy}>
               <Trash2 className="size-3.5" />
               Delete
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())} disabled={bulkBusy}>
-              Cancel
             </Button>
           </div>
         </div>
@@ -362,9 +365,12 @@ export function LinksTable({
               <Link
                 href={`/dashboard/links/${link.id}`}
                 prefetch={false}
-                className="relative whitespace-nowrap rounded-sm font-mono tabular-nums transition-colors after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-[''] hover:text-foreground focus-ring"
+                className="relative whitespace-nowrap rounded-sm transition-colors after:absolute after:-inset-x-2 after:-inset-y-3 after:content-[''] hover:text-foreground focus-ring"
               >
-                {formatCount(link.total_clicks || 0, 'click')}
+                <span className="font-mono tabular-nums text-foreground">
+                  {(link.total_clicks || 0).toLocaleString('en-US')}
+                </span>{' '}
+                {link.total_clicks === 1 ? 'click' : 'clicks'}
                 <span className="sr-only">, view stats</span>
               </Link>
             </div>

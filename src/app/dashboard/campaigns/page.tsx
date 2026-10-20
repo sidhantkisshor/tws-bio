@@ -53,14 +53,7 @@ export default async function CampaignsPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Campaigns"
-        actions={
-          <Link href="/dashboard/create" className={buttonVariants()}>
-            Create Link
-          </Link>
-        }
-      />
+      <PageHeader title="Campaigns" />
 
       {hasError ? (
         <Card className="bg-card border-border">

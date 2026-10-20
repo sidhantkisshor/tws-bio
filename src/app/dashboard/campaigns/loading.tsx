@@ -12,8 +12,6 @@ export default function CampaignsLoading() {
       <span className="sr-only">Loading campaigns</span>
       <div className="flex items-center justify-between mb-6 gap-4">
         <div className="h-8 w-36 rounded-md bg-muted" />
-        {/* Create Link button */}
-        <div className="h-11 w-28 rounded-md bg-muted sm:h-9" />
       </div>
 
       {/* Campaign list card */}

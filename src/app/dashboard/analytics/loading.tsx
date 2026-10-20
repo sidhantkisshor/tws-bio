@@ -25,7 +25,7 @@ export default function AnalyticsLoading() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="h-8 w-32 rounded-md bg-muted" />
         {/* Range picker (TimeRangePicker's four tabs) */}
-        <div className="h-13 w-48 rounded-lg bg-muted sm:h-10" />
+        <div className="h-13 w-full rounded-lg bg-muted sm:h-10 sm:w-48" />
       </div>
 
       <div className="flex flex-col gap-6">
