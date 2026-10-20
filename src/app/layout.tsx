@@ -12,19 +12,17 @@ export const metadata: Metadata = {
   // Each page sets its own title ("Links", "Sign in"); the template adds the
   // site name. A page with no title gets plain "tws.bio".
   title: { default: "tws.bio", template: "%s - tws.bio" },
-  description: "Shorten your URLs with tws.bio, by Trading with Sidhant",
+  description: "The private link tool of Trading with Sidhant.",
   openGraph: {
-    title: "tws.bio: Short links, big impact",
-    description:
-      "Create short links with analytics and mobile deep linking, by Trading with Sidhant.",
+    title: "tws.bio: the link desk for Trading with Sidhant",
+    description: "The private link tool of Trading with Sidhant.",
     siteName: "tws.bio",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "tws.bio: Short links, big impact",
-    description:
-      "Create short links with analytics and mobile deep linking, by Trading with Sidhant.",
+    title: "tws.bio: the link desk for Trading with Sidhant",
+    description: "The private link tool of Trading with Sidhant.",
   },
 };
 
