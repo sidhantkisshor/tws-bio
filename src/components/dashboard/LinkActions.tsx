@@ -45,9 +45,18 @@ function isWebUrl(url: string): boolean {
  * then More (View stats, Duplicate, Open destination, Pause or Activate,
  * Delete). A Resource Drop row is managed by the Resource Drop Desk, so it
  * gets no Edit, Duplicate or Delete, and Pause only shows to undo an
- * inactive row.
+ * inactive row. `hideViewStats` drops View stats where the page already is
+ * the stats page (link detail).
  */
-export function LinkActions({ link, className }: { link: LinkRow; className?: string }) {
+export function LinkActions({
+  link,
+  className,
+  hideViewStats = false,
+}: {
+  link: LinkRow
+  className?: string
+  hideViewStats?: boolean
+}) {
   const router = useRouter()
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -65,6 +74,11 @@ export function LinkActions({ link, className }: { link: LinkRow; className?: st
   // inactive, because an inactive row drops every click it gets.
   const managed = isResourceDropRow(link.short_code)
   const showToggle = !managed || !link.is_active
+  const webDestination = isWebUrl(link.original_url)
+  // The separator splits the links above from the changes below, so it needs
+  // something on both sides.
+  const hasLinkItems = !hideViewStats || !managed || webDestination
+  const hasChangeItems = showToggle || !managed
 
   async function setActive(nextActive: boolean) {
     // Loaded on first use: the table is mostly read, and supabase-js is about
@@ -169,23 +183,25 @@ export function LinkActions({ link, className }: { link: LinkRow; className?: st
 
         <Menu.Root>
           <Menu.Trigger
-            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
+            className={buttonVariants({ variant: 'ghost', size: 'sm' })}
             aria-label={`More actions for ${link.short_code}`}
           >
             More
           </Menu.Trigger>
           <Menu.Portal>
             <Menu.Positioner side="bottom" align="end" sideOffset={4} className="z-50">
-              <Menu.Popup className="min-w-48 origin-(--transform-origin) rounded-panel border border-rule bg-surface p-1 text-ink shadow-overlay outline-none transition-[opacity,scale] duration-150 ease-out data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0">
+              <Menu.Popup className="min-w-48 origin-(--transform-origin) rounded-panel border border-edge bg-surface p-1 text-ink shadow-overlay outline-none transition-[opacity,scale] duration-150 ease-out data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0">
                 {/* No prefetch: twenty rows would each fetch a dynamic page
                     that the owner opens for one link at most. */}
-                <Menu.LinkItem
-                  className={MENU_ITEM}
-                  closeOnClick
-                  render={<NextLink href={`/dashboard/links/${link.id}`} prefetch={false} />}
-                >
-                  View stats
-                </Menu.LinkItem>
+                {!hideViewStats && (
+                  <Menu.LinkItem
+                    className={MENU_ITEM}
+                    closeOnClick
+                    render={<NextLink href={`/dashboard/links/${link.id}`} prefetch={false} />}
+                  >
+                    View stats
+                  </Menu.LinkItem>
+                )}
                 {!managed && (
                   <Menu.LinkItem
                     className={MENU_ITEM}
@@ -195,7 +211,7 @@ export function LinkActions({ link, className }: { link: LinkRow; className?: st
                     Duplicate
                   </Menu.LinkItem>
                 )}
-                {isWebUrl(link.original_url) && (
+                {webDestination && (
                   <Menu.LinkItem
                     className={MENU_ITEM}
                     closeOnClick
@@ -207,7 +223,7 @@ export function LinkActions({ link, className }: { link: LinkRow; className?: st
                     <span className="sr-only"> (opens in a new tab)</span>
                   </Menu.LinkItem>
                 )}
-                {(showToggle || !managed) && <div role="separator" className="my-1 h-px bg-rule" />}
+                {hasLinkItems && hasChangeItems && <div role="separator" className="my-1 h-px bg-rule" />}
                 {showToggle && (
                   <Menu.Item className={MENU_ITEM} disabled={toggling} onClick={handleToggleActive}>
                     {link.is_active ? 'Pause' : 'Activate'}

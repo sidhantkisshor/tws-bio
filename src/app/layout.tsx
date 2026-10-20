@@ -9,7 +9,9 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
-  title: "tws.bio - URL Shortener",
+  // Each page sets its own title ("Links", "Sign in"); the template adds the
+  // site name. A page with no title gets plain "tws.bio".
+  title: { default: "tws.bio", template: "%s - tws.bio" },
   description: "Shorten your URLs with tws.bio, by Trading with Sidhant",
   openGraph: {
     title: "tws.bio: Short links, big impact",

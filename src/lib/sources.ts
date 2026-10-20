@@ -22,6 +22,32 @@ export type PlatformKey =
   | 'none'
   | 'other'
 
+/**
+ * When the referrer host started being stored (migration 017, live on the
+ * morning of 15 Jul 2026, 08:00 UTC). Every click before it has a NULL
+ * referrer_domain whatever its real source, so get_referrer_breakdown would
+ * count all of them as "No referrer". Checked in production: no click from
+ * this moment on has a referrer URL but a NULL host.
+ */
+export const REFERRERS_RECORDED_SINCE = '2026-07-15T08:00:00.000Z'
+
+/**
+ * The start of the window the sources panel may cover: `since`, or
+ * REFERRERS_RECORDED_SINCE when `since` is earlier or null (all time).
+ * `clamped` says the panel covers less than the rest of the page.
+ */
+export function referrerWindowStart(since: string | Date | null | undefined): {
+  since: string
+  clamped: boolean
+} {
+  const floor = Date.parse(REFERRERS_RECORDED_SINCE)
+  const start = since ? new Date(since).getTime() : NaN
+  if (Number.isFinite(start) && start >= floor) {
+    return { since: new Date(start).toISOString(), clamped: false }
+  }
+  return { since: REFERRERS_RECORDED_SINCE, clamped: true }
+}
+
 export const NO_REFERRER_LABEL = 'No referrer (apps, chats, direct)'
 
 /** What `get_referrer_breakdown` calls a click with a NULL referrer_domain. */

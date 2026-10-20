@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { groupByPlatform, platformForReferrer } from '../sources'
+import { REFERRERS_RECORDED_SINCE, groupByPlatform, platformForReferrer, referrerWindowStart } from '../sources'
 
 describe('platformForReferrer', () => {
   it.each([
@@ -118,5 +118,25 @@ describe('groupByPlatform', () => {
     ])
     expect(out).toHaveLength(1)
     expect(out[0].count).toBe(5)
+  })
+})
+
+describe('referrerWindowStart', () => {
+  it('keeps a window that starts after referrers were recorded', () => {
+    expect(referrerWindowStart('2026-09-01T00:00:00.000Z')).toEqual({
+      since: '2026-09-01T00:00:00.000Z',
+      clamped: false,
+    })
+    expect(referrerWindowStart(new Date(REFERRERS_RECORDED_SINCE))).toEqual({
+      since: REFERRERS_RECORDED_SINCE,
+      clamped: false,
+    })
+  })
+
+  it('starts all time and earlier windows at the day referrers were first recorded', () => {
+    expect(referrerWindowStart(null)).toEqual({ since: REFERRERS_RECORDED_SINCE, clamped: true })
+    expect(referrerWindowStart(undefined)).toEqual({ since: REFERRERS_RECORDED_SINCE, clamped: true })
+    expect(referrerWindowStart('2026-07-01T00:00:00Z')).toEqual({ since: REFERRERS_RECORDED_SINCE, clamped: true })
+    expect(referrerWindowStart('not a date')).toEqual({ since: REFERRERS_RECORDED_SINCE, clamped: true })
   })
 })

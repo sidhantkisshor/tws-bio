@@ -39,10 +39,3 @@ export const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 })
 
-/**
- * Compatibility shim. DM Serif Display is gone; three files still put
- * `dmSerif.variable` on a wrapper and read `var(--font-dm-serif)`. That
- * variable now points at Newsreader (globals.css), so this object adds no
- * class and loads no font. Remove it once nothing imports it.
- */
-export const dmSerif = { variable: '', className: '' } as const

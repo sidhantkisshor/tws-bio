@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { linkHealthIssues, summarizeHealth, type HealthLink } from '../linkHealth'
+import { healthByLink, linkHealthIssues, sortIssues, summarizeHealth, type HealthLink } from '../linkHealth'
 
 const now = new Date('2026-10-20T06:00:00Z')
 const base: HealthLink = {
@@ -83,6 +83,13 @@ describe('linkHealthIssues', () => {
     ).toEqual([])
   })
 
+  it('does not flag quiet for a link that is off or expired', () => {
+    const quiet = { ...opts, clicksInLast30d: 0 }
+    expect(kinds({ is_active: false }, quiet)).toEqual(['inactive:low'])
+    expect(kinds({ expires_at: '2026-10-01T00:00:00Z' }, quiet)).toEqual(['expired:high'])
+    expect(kinds({ expires_at: '2026-10-25T00:00:00Z' }, quiet)).toEqual(['expiring_soon:medium', 'quiet:low'])
+  })
+
   it('can report several issues at once', () => {
     expect(kinds({ is_active: false, expires_at: '2026-10-01T00:00:00Z' })).toEqual([
       'expired:high',
@@ -98,5 +105,53 @@ describe('summarizeHealth', () => {
     expect(summarizeHealth({ a, b, c: [] })).toEqual({ high: 1, medium: 1, low: 1, links: 2 })
     expect(summarizeHealth(new Map([['a', a]]))).toEqual({ high: 1, medium: 0, low: 1, links: 1 })
     expect(summarizeHealth({})).toEqual({ high: 0, medium: 0, low: 0, links: 0 })
+  })
+})
+
+describe('sortIssues', () => {
+  it('puts the worst first and keeps the rule order on a tie', () => {
+    const issues = linkHealthIssues(
+      { ...base, is_active: false, max_clicks: 100, total_clicks: 95, original_url: 'https://example.com/x' },
+      opts,
+    )
+    expect(issues.map((i) => i.kind)).toEqual(['placeholder', 'near_cap', 'inactive'])
+    const shuffled = [issues[2], issues[1], issues[0]]
+    expect(sortIssues(shuffled).map((i) => i.kind)).toEqual(['placeholder', 'near_cap', 'inactive'])
+  })
+})
+
+describe('healthByLink', () => {
+  const links = [
+    { ...base, id: 'ok', short_code: 'ok' },
+    { ...base, id: 'off', short_code: 'off', is_active: false, total_clicks: 50 },
+    { ...base, id: 'old', short_code: 'old', is_active: false, expires_at: '2026-10-01T00:00:00Z', total_clicks: 5 },
+    { ...base, id: 'cap', short_code: 'cap', max_clicks: 10, total_clicks: 9 },
+    { ...base, id: 'sale', short_code: 'sale', expires_at: '2026-10-02T00:00:00Z', total_clicks: 900 },
+  ]
+
+  it('lists each link once with its issues worst first, ranked by worst issue then clicks', () => {
+    const out = healthByLink(links, {
+      now,
+      shortDomain: 'tws.bio',
+      clicksInLast30d: (l) => (l.id === 'ok' ? 5 : 0),
+    })
+    expect(out.map((e) => e.link.id)).toEqual(['old', 'sale', 'cap', 'off'])
+    expect(out.find((e) => e.link.id === 'old')?.issues.map((i) => i.kind)).toEqual(['expired', 'inactive'])
+    expect(out.find((e) => e.link.id === 'off')?.issues.map((i) => i.kind)).toEqual(['inactive'])
+    expect(out.find((e) => e.link.id === 'cap')?.issues.map((i) => i.kind)).toEqual(['near_cap', 'quiet'])
+    expect(out[0]).toMatchObject({ worst: 'high', clicks30: 0 })
+  })
+
+  it('uses the 30-day count to rank and skips quiet when the count is unknown', () => {
+    const recent: Record<string, number> = { off: 1, old: 2, cap: 3, sale: 40 }
+    const out = healthByLink(links, { now, shortDomain: 'tws.bio', clicksInLast30d: (l) => recent[l.id] })
+    expect(out.map((e) => e.link.id)).toEqual(['sale', 'old', 'cap', 'off'])
+    const unknown = healthByLink(links, { now, shortDomain: 'tws.bio' })
+    expect(unknown.flatMap((e) => e.issues.map((i) => i.kind))).not.toContain('quiet')
+    expect(unknown.find((e) => e.link.id === 'cap')?.clicks30).toBeNull()
+  })
+
+  it('returns nothing for healthy links', () => {
+    expect(healthByLink([base], { now, shortDomain: 'tws.bio', clicksInLast30d: () => 3 })).toEqual([])
   })
 })

@@ -4,13 +4,14 @@ import Link from 'next/link'
 import { useState, useTransition } from 'react'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { displayUrl } from '@/components/dashboard/displayUrl'
+import { fixLinkClass } from './styles'
 import { cn, formatCount } from '@/lib/utils'
 import type { DestinationStatus } from '@/lib/destinationCheck'
 import { checkDestinationsNow, type DestinationCheckResult, type DestinationCheckRow } from './actions'
 
 const SHORT_DOMAIN = process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'
 
-const ORDER: DestinationStatus[] = ['broken', 'timeout', 'error', 'redirect', 'blocked', 'ok']
+const ORDER: DestinationStatus[] = ['broken', 'timeout', 'error', 'redirect', 'blocked', 'skipped', 'ok']
 
 const FLAG: Record<DestinationStatus, string> = {
   broken: 'Broken',
@@ -18,6 +19,7 @@ const FLAG: Record<DestinationStatus, string> = {
   error: 'Failed',
   redirect: 'Redirects',
   blocked: 'Not checked',
+  skipped: 'Skipped',
   ok: 'OK',
 }
 
@@ -63,6 +65,8 @@ function detail(row: DestinationCheckRow): string {
       return row.finalUrl ? `Ends at ${displayUrl(row.finalUrl)}.` : 'Redirects, then loads.'
     case 'blocked':
       return 'Points at tws.bio or a private address, so it was not called.'
+    case 'skipped':
+      return 'Not checked: the check ran out of time first. Run it again to check it.'
     case 'ok':
       return row.httpStatus ? `Answered ${httpInWords(row.httpStatus)}.` : 'Answered.'
   }
@@ -94,12 +98,17 @@ function Flag({ status }: { status: DestinationStatus }) {
 }
 
 function Row({ row }: { row: DestinationCheckRow }) {
+  // Phones: the flag alone, then the short code with Open at the right, then
+  // the destination. From md up: one line, four columns.
   return (
     <li className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 gap-y-1.5 border-b border-rule py-3 last:border-b-0 md:grid-cols-[104px_minmax(0,14rem)_minmax(0,1fr)_auto]">
       <span className="col-span-2 md:col-span-1">
         <Flag status={row.status} />
       </span>
-      <span className="min-w-0 truncate font-mono text-[13.5px] text-ink" title={`${SHORT_DOMAIN}/${row.shortCode}`}>
+      <span
+        className="col-start-1 row-start-2 min-w-0 truncate font-mono text-[13.5px] text-ink md:col-start-auto md:row-start-auto"
+        title={`${SHORT_DOMAIN}/${row.shortCode}`}
+      >
         {SHORT_DOMAIN}/{row.shortCode}
       </span>
       <span className="col-span-2 row-start-3 min-w-0 text-sm text-text-2 md:col-span-1 md:row-start-auto">
@@ -108,11 +117,13 @@ function Row({ row }: { row: DestinationCheckRow }) {
         </span>
         <span className="block">{detail(row)}</span>
       </span>
+      {/* Nothing opens the Edit dialog from a URL, so this opens the link's
+          page, where Edit is. */}
       <Link
         href={`/dashboard/links/${row.id}`}
-        className="focus-ring row-start-2 justify-self-end rounded-[2px] text-sm text-accent-text underline decoration-accent-text/40 decoration-1 underline-offset-[3px] hover:decoration-current md:row-start-auto"
+        className={cn(fixLinkClass, 'col-start-2 row-start-2 justify-self-end md:col-start-auto md:row-start-auto')}
       >
-        Edit
+        Open
         <span className="sr-only">
           {' '}
           {SHORT_DOMAIN}/{row.shortCode}
@@ -149,7 +160,8 @@ export function DestinationCheck({ activeCount }: { activeCount: number }) {
     : []
   const shown = rows.filter((r) => r.status !== 'ok')
   const fine = rows.filter((r) => r.status === 'ok')
-  const counts = ORDER.map((s) => [s, rows.filter((r) => r.status === s).length] as const).filter(
+  const skipped = rows.filter((r) => r.status === 'skipped').length
+  const counts = ORDER.filter((s) => s !== 'skipped').map((s) => [s, rows.filter((r) => r.status === s).length] as const).filter(
     ([, n]) => n > 0,
   )
 
@@ -182,8 +194,11 @@ export function DestinationCheck({ activeCount }: { activeCount: number }) {
       {result?.ok && !pending && (
         <div className="mt-5">
           <p role="status" className="text-sm text-text-2">
-            Checked {formatCount(rows.length, 'link')} at {TIME.format(new Date(result.checkedAt))}:{' '}
+            Checked {formatCount(rows.length - skipped, 'link')} at {TIME.format(new Date(result.checkedAt))}
+            {counts.length > 0 && ': '}
             {counts.map(([s, n]) => `${n} ${s === 'ok' ? 'OK' : FLAG[s].toLowerCase()}`).join(', ')}.
+            {skipped > 0 &&
+              ` Ran out of time before the other ${formatCount(skipped, 'link')}: run the check again to reach them.`}
           </p>
           {shown.length > 0 && (
             <ul className="mt-3 border-t border-ink-2" aria-label="Destinations that need a look">

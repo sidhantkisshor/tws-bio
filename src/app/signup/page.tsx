@@ -5,7 +5,7 @@ import { buttonVariants } from '@/components/ui/button-variants'
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = {
-  title: 'Invite only - tws.bio',
+  title: 'Invite only',
   description: 'tws.bio has no public sign-up. Sidhant creates each account.',
 }
 

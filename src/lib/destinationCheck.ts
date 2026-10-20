@@ -6,13 +6,16 @@ import { isBlockedHost } from './utils'
 // Statuses:
 //  - ok: the first answer was 2xx.
 //  - redirect: the page answered 2xx after one or more redirects (finalUrl says where).
-//  - broken: the last answer was 4xx or 5xx.
+//  - broken: the last answer was 4xx or 5xx. A HEAD that gets 400, 403, 404,
+//    405 or 501 is asked again with GET first.
 //  - timeout: no answer within timeoutMs, for the whole chain.
 //  - blocked: the URL, or a redirect hop, points somewhere this checker will not call.
 //  - error: not http(s), no usable answer, a redirect without a Location, too many
 //    redirects, or a network failure.
+//  - skipped: checkDestinations' time budget ran out before this URL started,
+//    or while a shortened check of it was still waiting.
 
-export type DestinationStatus = 'ok' | 'redirect' | 'broken' | 'timeout' | 'blocked' | 'error'
+export type DestinationStatus = 'ok' | 'redirect' | 'broken' | 'timeout' | 'blocked' | 'error' | 'skipped'
 
 export interface DestinationResult {
   status: DestinationStatus
@@ -24,6 +27,8 @@ export interface DestinationResult {
 const USER_AGENT = 'tws.bio link checker'
 const MAX_REDIRECTS = 5
 const DEFAULT_TIMEOUT_MS = 6000
+/** HEAD answers that get one retry with GET before the link counts as broken. */
+const HEAD_RETRY_STATUSES = new Set([400, 403, 404, 405, 501])
 
 function defaultShortDomain(): string {
   return (process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio').toLowerCase().replace(/^www\./, '')
@@ -79,10 +84,15 @@ export async function checkDestination(
           headers: { 'User-Agent': USER_AGENT },
         })
 
+      // Many sites (x.com, open.spotify.com, some CDNs) refuse or mishandle
+      // HEAD, so these answers get one GET before the link counts as broken.
       let res = await request('HEAD')
-      if (res.status === 405 || res.status === 501 || res.status === 403) {
+      if (HEAD_RETRY_STATUSES.has(res.status)) {
+        await res.body?.cancel().catch(() => {})
         res = await request('GET')
       }
+      // Only the status and headers are read: free the body of a GET.
+      await res.body?.cancel().catch(() => {})
 
       if (res.status >= 300 && res.status < 400) {
         const location = res.headers.get('location')
@@ -112,18 +122,50 @@ export async function checkDestination(
   }
 }
 
+export interface CheckManyOptions {
+  timeoutMs?: number
+  fetchImpl?: typeof fetch
+  shortDomain?: string
+  /**
+   * Time budget for the whole batch, in ms. A URL that would start with less
+   * than MIN_START_MS of it left comes back 'skipped' (not called), and a
+   * URL that starts near the end gets only the time that is left. So the
+   * batch ends within the budget however many slow hosts it meets, and a
+   * caller with a hard limit (a Server Action's maxDuration) still gets
+   * every result it finished.
+   */
+  budgetMs?: number
+  /** The clock, for tests. Defaults to Date.now. */
+  now?: () => number
+}
+
+/** A check needs at least this long to tell a slow host from a dead one. */
+const MIN_START_MS = 1000
+
 /** Check many URLs, at most `concurrency` at a time. Results keep the input order. */
 export async function checkDestinations(
   urls: string[],
   concurrency = 6,
-  opts: { timeoutMs?: number; fetchImpl?: typeof fetch; shortDomain?: string } = {},
+  opts: CheckManyOptions = {},
 ): Promise<DestinationResult[]> {
+  const { budgetMs, now = Date.now, ...one } = opts
+  const timeoutMs = one.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  const deadline = budgetMs === undefined ? Infinity : now() + budgetMs
   const results = new Array<DestinationResult>(urls.length)
   let next = 0
   const worker = async () => {
     while (next < urls.length) {
       const i = next++
-      results[i] = await checkDestination(urls[i], opts)
+      const left = deadline - now()
+      if (left < Math.min(MIN_START_MS, timeoutMs)) {
+        results[i] = { status: 'skipped', ms: 0 }
+        continue
+      }
+      const cut = left < timeoutMs
+      const r = await checkDestination(urls[i], { ...one, timeoutMs: cut ? left : timeoutMs })
+      // A timeout on a shortened check says the budget ran out, not that the
+      // host is down: report it as not checked rather than as "No answer".
+      results[i] = cut && r.status === 'timeout' ? { status: 'skipped', ms: r.ms } : r
     }
   }
   const workers = Math.max(1, Math.min(Math.floor(concurrency) || 1, urls.length))

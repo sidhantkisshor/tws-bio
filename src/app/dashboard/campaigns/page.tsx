@@ -1,11 +1,12 @@
 import { redirect } from 'next/navigation'
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
 import { getClicksOverTimeResult, parseTimeRange, rangeWindow } from '@/lib/analytics'
 import { getLinkClickWindowsResult } from '@/lib/insights'
-import { formatSignedCount } from '@/lib/ledgerFormat'
-import { cn, formatDate } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button-variants'
+import { ChangeCount } from '@/components/dashboard/TopLinksTable'
 import { PageHeader } from '@/components/dashboard/PageHeader'
 import { TimeRangePicker } from '@/components/TimeRangePicker'
 import {
@@ -35,16 +36,8 @@ function InlineError({ children, retryHref }: { children: React.ReactNode; retry
   )
 }
 
-/** "+1,475" in teal, "(486)" in red, "New" when there was nothing before. */
-function Change({ current, prior }: { current: number; prior: number }) {
-  if (prior === 0 && current > 0) return <span className="font-medium text-text-2">New</span>
-  const delta = current - prior
-  return (
-    <span className={cn('font-bold', delta > 0 ? 'text-pos' : delta < 0 ? 'text-neg' : 'text-text-3')}>
-      {formatSignedCount(delta)}
-    </span>
-  )
-}
+// The root layout's template adds " - tws.bio".
+export const metadata: Metadata = { title: 'Campaigns' }
 
 export default async function CampaignsPage({
   searchParams,
@@ -168,11 +161,7 @@ export default async function CampaignsPage({
     <div>
       <PageHeader
         title="Campaigns"
-        description={
-          days !== null
-            ? `Clicks in the last ${days} days, with the change against the ${days} days before. Pick a campaign when you create or edit a link.`
-            : 'Clicks since each link was made. Pick a campaign when you create or edit a link.'
-        }
+        description="Group links into a campaign to see their clicks together. Pick a campaign when you create or edit a link."
         actions={<TimeRangePicker current={timeRange} basePath="/dashboard/campaigns" />}
       />
 
@@ -191,6 +180,11 @@ export default async function CampaignsPage({
         </div>
       ) : (
         <div className="rule-open pt-4">
+          <p className="mb-1 text-[13px] text-text-3">
+            {days !== null
+              ? `Clicks in the last ${days} days. Change is against the ${days} days before.`
+              : 'Clicks since each link was made.'}
+          </p>
           {days !== null && !windows && (
             <InlineError retryHref={retryHref}>Clicks for this period could not load.</InlineError>
           )}
@@ -199,9 +193,7 @@ export default async function CampaignsPage({
               <TableRow>
                 <TableHead>Campaign</TableHead>
                 <TableHead className="hidden text-right sm:table-cell">Links</TableHead>
-                <TableHead className="text-right">
-                  {days !== null ? `Clicks, ${days}d` : 'Clicks'}
-                </TableHead>
+                <TableHead className="text-right">Clicks</TableHead>
                 {showChange && <TableHead className="text-right">Change</TableHead>}
                 <TableHead className="hidden text-right md:table-cell">Last click</TableHead>
               </TableRow>
@@ -234,7 +226,7 @@ export default async function CampaignsPage({
                   {showChange && (
                     <TableCell className="text-right text-[13px] tabular-nums">
                       {c.clicks !== null && c.prior !== null ? (
-                        <Change current={c.clicks} prior={c.prior} />
+                        <ChangeCount current={c.clicks} prior={c.prior} />
                       ) : (
                         '---'
                       )}

@@ -1,7 +1,7 @@
 // Row rules for the dashboard Links table. Kept free of heavy imports, because
 // LinksTable loads this module on every visit to the links page.
 
-import { formatSignedPercent } from './ledgerFormat'
+import { formatPeriodChange, type ChangeTone } from './ledgerFormat'
 
 /**
  * True for a Resource Drop row (`r/{slug}`). The /r/[slug] route creates the
@@ -35,21 +35,15 @@ export function effectiveSelection(
 }
 
 /**
- * The Change column: clicks in the last 30 days against the 30 before, set
- * the way a statement sets it. A gain carries a plus sign and a loss sits in
- * parentheses, so the direction never depends on color alone. "New" when the
- * prior window had no clicks and this one has some; "0" when both are empty.
+ * The Change column ("Change %"): clicks in the last 30 days against the 30
+ * before, set the way a statement sets it. A gain carries a plus sign and a
+ * loss sits in parentheses, so the direction never depends on color alone.
+ * Digits are grouped, and a change of 100% or more drops the decimal
+ * ("+1,788%", "(100%)"). "New" when the prior window had no clicks and this
+ * one has some; "-" when both are empty. The shared formatPeriodChange.
  */
-export function formatChange(
-  current: number,
-  prior: number,
-): { text: string; tone: 'up' | 'down' | 'flat' | 'new' } {
-  if (prior <= 0) {
-    return current > 0 ? { text: 'New', tone: 'new' } : { text: '0', tone: 'flat' }
-  }
-  const text = formatSignedPercent((current - prior) / prior)
-  const tone = text.startsWith('+') ? 'up' : text.startsWith('(') ? 'down' : 'flat'
-  return { text, tone }
+export function formatChange(current: number, prior: number): { text: string; tone: ChangeTone } {
+  return formatPeriodChange(current, prior, 'percent')
 }
 
 /** The health issue a row shows as a badge. A type import only: the rules stay on the server. */

@@ -3,11 +3,19 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { applyLinkFilters, applyLinkSort, type LinkListParams } from '@/lib/linkFilters'
+import { applyLinkFilters, applyLinkSort, chunkIds, sortLinks, type LinkListParams } from '@/lib/linkFilters'
 import { getShortUrl } from '@/lib/utils'
 import type { Database } from '@/types/database'
 
 type LinkRow = Database['public']['Tables']['links']['Row']
+/** The columns the CSV holds. Pages pass rows with at least these. */
+export type ExportRow = Pick<
+  LinkRow,
+  'id' | 'short_code' | 'original_url' | 'link_type' | 'is_active' | 'total_clicks' | 'created_at'
+>
+const EXPORT_COLUMNS = 'id, short_code, original_url, link_type, is_active, total_clicks, created_at'
+// PostgREST returns at most this many rows per response (its max-rows).
+const PAGE_ROWS = 1000
 
 export type LinksExportFilters = LinkListParams
 
@@ -26,7 +34,7 @@ function csvEscape(value: string): string {
   return value
 }
 
-function linksToCsv(links: LinkRow[]): string {
+function linksToCsv(links: readonly ExportRow[]): string {
   const headers = ['Short Code', 'Short URL', 'Original URL', 'Type', 'Status', 'Total Clicks', 'Created At']
   const rows = links.map((link) => [
     link.short_code,
@@ -56,12 +64,16 @@ function downloadCsv(csv: string) {
 }
 
 // Re-runs the Links page's search/filter/sort against the `links` table
-// without the page-level `.range()` cap, so "Export All" exports every
-// matching link instead of just the page currently on screen. The page builds
-// its own queries with the same linkFilters helpers, so the CSV and the table
-// always pick the same rows. RLS is owner-only on `links`, and the explicit
+// without the page-level cap, so "Export All" exports every matching link
+// instead of just the page currently on screen. The page builds its own
+// queries with the same linkFilters helpers, so the CSV and the table always
+// pick the same rows. RLS is owner-only on `links`, and the explicit
 // `user_id` filter matches that same page's belt-and-braces scoping.
-async function fetchAllFilteredLinks(filters: LinksExportFilters): Promise<LinkRow[]> {
+//
+// PostgREST caps one response at 1000 rows, so the rows come in pages. A
+// chip's id list can be thousands long, too long for one request URL, so it
+// goes in chunks (chunkIds) and the merged rows are sorted again (sortLinks).
+async function fetchAllFilteredLinks(filters: LinksExportFilters): Promise<ExportRow[]> {
   // Loaded on first export, not with the page, so supabase-js stays out of
   // the Links page's initial bundle for an owner who only reads the table.
   const { createClient } = await import('@/lib/supabase/client')
@@ -71,14 +83,26 @@ async function fetchAllFilteredLinks(filters: LinksExportFilters): Promise<LinkR
   } = await supabase.auth.getUser()
   if (!user) return []
 
-  const query = applyLinkSort(
-    applyLinkFilters(supabase.from('links').select('*').eq('user_id', user.id), filters),
-    filters.sort
-  )
+  async function fetchAll(part: LinksExportFilters): Promise<ExportRow[]> {
+    const rows: ExportRow[] = []
+    while (rows.length < EXPORT_ROW_LIMIT) {
+      const from = rows.length
+      const to = Math.min(from + PAGE_ROWS, EXPORT_ROW_LIMIT) - 1
+      const query = applyLinkSort(
+        applyLinkFilters(supabase.from('links').select(EXPORT_COLUMNS).eq('user_id', user!.id), part),
+        part.sort
+      ).order('id', { ascending: true })
+      const { data, error } = await query.range(from, to)
+      if (error) throw error
+      rows.push(...(data ?? []))
+      if (!data || data.length < to - from + 1) break
+    }
+    return rows
+  }
 
-  const { data, error } = await query.range(0, EXPORT_ROW_LIMIT - 1)
-  if (error) throw error
-  return data ?? []
+  if (!filters.ids) return fetchAll(filters)
+  const parts = await Promise.all(chunkIds(filters.ids).map((ids) => fetchAll({ ...filters, ids })))
+  return sortLinks(parts.flat(), filters.sort).slice(0, EXPORT_ROW_LIMIT)
 }
 
 // Client-side CSV export: the links table is already server-rendered into
@@ -92,7 +116,7 @@ export function ExportLinksButton({
   totalCount,
   filters,
 }: {
-  links: LinkRow[]
+  links: readonly ExportRow[]
   totalCount: number
   filters: LinksExportFilters
 }) {

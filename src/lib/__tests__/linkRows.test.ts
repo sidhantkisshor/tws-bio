@@ -55,13 +55,18 @@ describe('formatChange', () => {
     expect(formatChange(796, 0)).toEqual({ text: 'New', tone: 'new' })
   })
 
-  it('reads 0 when both windows are empty and 0.0% for no change', () => {
-    expect(formatChange(0, 0)).toEqual({ text: '0', tone: 'flat' })
+  it('reads - when both windows are empty and 0.0% for no change', () => {
+    expect(formatChange(0, 0)).toEqual({ text: '-', tone: 'none' })
     expect(formatChange(50, 50)).toEqual({ text: '0.0%', tone: 'flat' })
   })
 
-  it('shows a full loss as (100.0%)', () => {
-    expect(formatChange(0, 12)).toEqual({ text: '(100.0%)', tone: 'down' })
+  it('drops the decimal at 100% or more, and groups digits', () => {
+    expect(formatChange(0, 12)).toEqual({ text: '(100%)', tone: 'down' })
+    expect(formatChange(151, 8)).toEqual({ text: '+1,788%', tone: 'up' })
+    expect(formatChange(244, 82)).toEqual({ text: '+198%', tone: 'up' })
+    // 99.96% rounds to 100.0 at one decimal, so it is set as 100%.
+    expect(formatChange(49_998, 25_000)).toEqual({ text: '+100%', tone: 'up' })
+    expect(formatChange(1999, 1000)).toEqual({ text: '+99.9%', tone: 'up' })
   })
 })
 

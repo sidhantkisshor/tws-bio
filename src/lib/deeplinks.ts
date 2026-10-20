@@ -33,12 +33,12 @@ function encodeIntentPart(part: string): string {
  * app when served as an HTTP redirect. Chromium (Chrome and in-app WebViews
  * like Instagram's) blocks JavaScript-initiated navigations to custom
  * schemes, but honors intent:// URIs reached via server redirect from a
- * user-initiated tap — with S.browser_fallback_url covering the
+ * user-initiated tap, with S.browser_fallback_url covering the
  * app-not-installed case.
  *
  * Anything that cannot be expressed as a well-formed authority-style intent
  * (opaque URIs like spotify:track:ID or geo:0,0, malformed schemes, output
- * that fails to parse) degrades to the plain web fallback URL — never an
+ * that fails to parse) degrades to the plain web fallback URL, never an
  * error, never a raw unlaunchable URI.
  */
 export function toAndroidLaunchUri(androidDeepLink: string, fallbackUrl: string): string {
@@ -91,7 +91,7 @@ export function toAndroidLaunchUri(androidDeepLink: string, fallbackUrl: string)
 
   // Opaque (no-authority) URIs like spotify:track:ID or geo:0,0?q=... can't
   // be expressed in the intent://<authority> form without corrupting their
-  // scheme-specific part — send those users to the web instead.
+  // scheme-specific part, so send those users to the web instead.
   if (!opaque.startsWith('//')) return fallbackUrl
   const rest = encodeIntentPart(opaque.slice(2))
 
@@ -291,7 +291,7 @@ function generateYouTubeDeepLinks(url: URL): DeepLinkConfig {
   }
   
   // For channels, playlists, etc. The youtube:// scheme mirrors the web URL
-  // structure and requires the full host — an empty authority (youtube:///...)
+  // structure and requires the full host: an empty authority (youtube:///...)
   // opens the app but cannot route to the target.
   return {
     ios: `youtube://www.youtube.com${url.pathname}${url.search}`,

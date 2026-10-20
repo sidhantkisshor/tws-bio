@@ -250,6 +250,83 @@ export function chipLinkIds(
     .map((link) => link.id)
 }
 
+/**
+ * Every filter of the Links page (search, type, status, chip, kind) run on
+ * one indexed link, the same way the database runs the column filters. The
+ * page uses it when a chip or a search needs the owner's links first: it then
+ * filters, counts and sorts the whole index itself and asks the database for
+ * the 20 rows of one page only, so no long id list goes into a request URL.
+ */
+export function matchesListFilters(
+  link: IndexedLink,
+  f: {
+    q: string
+    type: TypeFilter
+    status: StatusFilter
+    show: ShowFilter
+    kind: DestinationKind | null
+    campaignIds: ReadonlySet<string>
+  },
+  now: Date
+): boolean {
+  if (f.type === 'url' && link.link_type !== 'url' && link.link_type !== null) return false
+  if (f.type === 'deep_link' && link.link_type !== 'deep_link') return false
+  if (f.status === 'active' && link.is_active !== true) return false
+  if (f.status === 'inactive' && link.is_active === true) return false
+  if (f.kind && link.kind !== f.kind) return false
+  return matchesShow(link, f.show, now) && matchesSearch(link, f.q, f.campaignIds)
+}
+
+type SortableRow = { id: string; created_at: string | null; total_clicks: number | null }
+
+function compareNullable(a: number | null, b: number | null, ascending: boolean, nullsFirst: boolean) {
+  if (a === null || b === null) {
+    if (a === b) return 0
+    return (a === null) === nullsFirst ? -1 : 1
+  }
+  return ascending ? a - b : b - a
+}
+
+/**
+ * `applyLinkSort` in memory, with Postgres' null placement: created_at puts
+ * nulls first when descending and last when ascending (the default), the
+ * click sorts set it the way applyLinkSort asks. Ties go by id, so a page
+ * boundary never moves between two requests. Returns a new array.
+ */
+export function sortLinks<T extends SortableRow>(rows: readonly T[], sort: SortOption): T[] {
+  const time = (row: T) => {
+    const ms = row.created_at ? Date.parse(row.created_at) : NaN
+    return Number.isFinite(ms) ? ms : null
+  }
+  const compare = (a: T, b: T): number => {
+    switch (sort) {
+      case 'created_asc':
+        return compareNullable(time(a), time(b), true, false)
+      case 'clicks_desc':
+        return compareNullable(a.total_clicks, b.total_clicks, false, false)
+      case 'clicks_asc':
+        return compareNullable(a.total_clicks, b.total_clicks, true, true)
+      default:
+        return compareNullable(time(a), time(b), false, true)
+    }
+  }
+  return [...rows].sort((a, b) => compare(a, b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+}
+
+/**
+ * About 150 uuids per `.in('id', ...)`: each takes about 37 bytes of the
+ * request URL, so a chunk stays near 6 KB, well under the limits of the
+ * proxies in front of PostgREST.
+ */
+export const ID_CHUNK_SIZE = 150
+
+export function chunkIds(ids: readonly string[], size = ID_CHUNK_SIZE): string[][] {
+  const step = Math.max(1, Math.floor(size))
+  const out: string[][] = []
+  for (let i = 0; i < ids.length; i += step) out.push(ids.slice(i, i + step))
+  return out
+}
+
 // Per-row click trend on the Links page. The day keys come from
 // sparklineWindow in analytics.ts: IST dates, the same days
 // get_clicks_over_time buckets clicks into. It lives there, beside the one

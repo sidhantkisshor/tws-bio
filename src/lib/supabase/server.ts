@@ -34,8 +34,8 @@ export async function createClient() {
  * Returns the authenticated user for the current request, or null.
  *
  * `auth.getUser()` is a network round trip to the Supabase Auth server, and
- * the dashboard layout plus every dashboard page need the result — React
- * `cache()` memoizes it per request so one navigation pays for exactly one
+ * the dashboard layout plus every dashboard page need the result. React
+ * `cache()` memoizes it per request, so one navigation pays for exactly one
  * validation call instead of one per segment. Deliberately stays on
  * getUser() (not getSession()) since this feeds security-sensitive guards.
  */

@@ -9,7 +9,7 @@ export const config = {
   matcher: [
     /*
      * Allowlist: only routes that can use a refreshed Supabase session.
-     * /[shortCode] redirects — the hottest path in the app — never need one,
+     * /[shortCode] redirects (the hottest path in the app) never need one,
      * so short-link clicks skip the Supabase auth round trip entirely.
      */
     '/',

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type InputHTMLAttributes, type Ref } from 'react'
 import NextLink from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -59,10 +59,15 @@ export interface LedgerRow {
   issue: RowIssue | null
 }
 
-const checkboxClassName =
-  'size-4 cursor-pointer rounded-[2px] border-edge disabled:cursor-not-allowed disabled:opacity-40'
-// The native box takes the ink color: amber is only for the one action.
-const checkboxStyle = { accentColor: 'var(--ink-2)' }
+// The shared Day Book checkbox (`checkbox` utility in globals.css): a 3px box
+// on the edge color with a drawn ink tick, or a dash when indeterminate.
+function Checkbox({
+  className,
+  ref,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & { ref?: Ref<HTMLInputElement> }) {
+  return <input ref={ref} type="checkbox" className={cn('checkbox align-middle', className)} {...props} />
+}
 
 function RowCheckbox({
   link,
@@ -78,10 +83,8 @@ function RowCheckbox({
   if (isResourceDropRow(link.short_code)) {
     // Disabled rather than absent, so the rows stay aligned.
     return (
-      <input
-        type="checkbox"
+      <Checkbox
         className={className}
-        style={checkboxStyle}
         checked={false}
         disabled
         aria-label={`${link.short_code} is managed by Resource Drop and cannot be selected`}
@@ -89,10 +92,8 @@ function RowCheckbox({
     )
   }
   return (
-    <input
-      type="checkbox"
+    <Checkbox
       className={className}
-      style={checkboxStyle}
       checked={checked}
       onChange={onToggle}
       aria-label={`Select ${link.short_code}`}
@@ -166,6 +167,7 @@ function Change({ row }: { row: LedgerRow }) {
     return <span className="text-[13px] text-text-3">n/a</span>
   }
   const change = formatChange(row.clicks30, row.prior30)
+  if (change.tone === 'none') return <ChangeNone />
   return (
     <span
       className={cn(
@@ -178,6 +180,15 @@ function Change({ row }: { row: LedgerRow }) {
       title={`${row.clicks30.toLocaleString('en-US')} clicks in the last 30 days, ${row.prior30.toLocaleString('en-US')} in the 30 before`}
     >
       {change.text}
+    </span>
+  )
+}
+
+function ChangeNone() {
+  return (
+    <span className="text-[13px] text-text-3">
+      <span aria-hidden>-</span>
+      <span className="sr-only">No clicks in either period</span>
     </span>
   )
 }
@@ -327,10 +338,8 @@ export function LinksTable({
           <TableHeader>
             <TableRow>
               <TableHead className="w-6 pr-2">
-                <input
-                  type="checkbox"
-                  className={cn(checkboxClassName, 'relative top-[3px]')}
-                  style={checkboxStyle}
+                <Checkbox
+                  className="relative top-px"
                   checked={allSelected}
                   ref={(el) => {
                     // Some rows ticked, not all: show the dash, not an empty box.
@@ -348,7 +357,7 @@ export function LinksTable({
                 Clicks<span className="sr-only">, last 30 days</span>
               </TableHead>
               <TableHead className="text-right">
-                Change<span className="sr-only"> against the 30 days before</span>
+                Change %<span className="sr-only"> against the 30 days before</span>
               </TableHead>
               <TableHead className="hidden xl:table-cell">Last 14 days</TableHead>
               <TableHead>
@@ -366,7 +375,6 @@ export function LinksTable({
                       link={link}
                       checked={selected.has(link.id)}
                       onToggle={() => toggleOne(link.id)}
-                      className={checkboxClassName}
                     />
                   </TableCell>
                   <TableCell className="max-w-[320px] min-w-[264px] pl-2 whitespace-normal">
@@ -457,12 +465,11 @@ export function LinksTable({
                 <LinkActions link={link} className="-ml-2.5" />
                 {!drop && (
                   // The box stays 16px; the label is the 44px target.
-                  <label className="-mr-3 inline-flex size-11 shrink-0 items-center justify-center">
+                  <label className="-mr-3 inline-flex size-11 shrink-0 cursor-pointer items-center justify-center">
                     <RowCheckbox
                       link={link}
                       checked={selected.has(link.id)}
                       onToggle={() => toggleOne(link.id)}
-                      className={checkboxClassName}
                     />
                   </label>
                 )}
@@ -480,12 +487,12 @@ export function LinksTable({
       </ul>
 
       <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
+        <AlertDialogContent className="data-[size=default]:max-w-[calc(100%-2rem)] data-[size=default]:sm:max-w-sm">
+          <AlertDialogHeader className="place-items-start text-left">
             <AlertDialogTitle>
               Delete {formatCount(selectedCount, 'link')}?
             </AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-pretty">
               This deletes the selected {selectedCount === 1 ? 'link and its' : 'links and their'} click history. Anyone who opens {selectedCount === 1 ? 'it' : 'them'} after this gets a not found page. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>

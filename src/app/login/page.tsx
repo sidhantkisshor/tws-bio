@@ -4,7 +4,7 @@ import { SignInPanel } from '@/components/auth/SignInPanel'
 import { Toaster } from '@/components/ui/sonner'
 
 export const metadata: Metadata = {
-  title: 'Sign in - tws.bio',
+  title: 'Sign in',
   description: 'Sign in to tws.bio, the link tool of the Trading with Sidhant team.',
 }
 

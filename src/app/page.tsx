@@ -7,7 +7,8 @@ import { HomeInteractive } from '@/components/HomeInteractive'
 import { SignInPanel } from '@/components/auth/SignInPanel'
 
 export const metadata: Metadata = {
-  title: 'tws.bio - the link desk for Trading with Sidhant',
+  // Absolute: the root layout's "%s - tws.bio" template would repeat the name.
+  title: { absolute: 'tws.bio - the link desk for Trading with Sidhant' },
   description:
     'Every tws.bio link in a video, a post or a course email starts here. Find the YouTube channel, courses, tools, Telegram and the Hitpoint app.',
   openGraph: {
@@ -31,8 +32,10 @@ const DESTINATIONS: { name: string; href: string; shown: string; internal?: bool
   { name: 'Hitpoint app', href: 'https://hitpoint.app', shown: 'hitpoint.app' },
 ]
 
+// Each row is a link, so it reads as one at rest: the address is set in the
+// accent text color, and the whole row takes the hover tint.
 const ROW_CLASS =
-  'group flex flex-col gap-0.5 border-b border-rule py-3.5 text-ink transition-colors duration-150 focus-ring sm:flex-row sm:items-baseline sm:justify-between sm:gap-4'
+  'group flex flex-col gap-0.5 border-b border-rule py-3.5 text-ink transition-colors duration-150 hover:bg-hover focus-ring sm:flex-row sm:items-baseline sm:justify-between sm:gap-4'
 
 function DestinationRow({ name, href, shown, internal }: (typeof DESTINATIONS)[number]) {
   const inner = (
@@ -40,7 +43,9 @@ function DestinationRow({ name, href, shown, internal }: (typeof DESTINATIONS)[n
       <span className="text-[15px] font-medium transition-colors duration-150 group-hover:text-accent-text">
         {name}
       </span>
-      <span className="font-mono text-[13px] text-text-2 [overflow-wrap:anywhere] sm:text-right">{shown}</span>
+      <span className="font-mono text-[13px] text-accent-text underline decoration-accent-text/40 underline-offset-[3px] [overflow-wrap:anywhere] group-hover:decoration-current sm:text-right">
+        {shown}
+      </span>
     </>
   )
   return (

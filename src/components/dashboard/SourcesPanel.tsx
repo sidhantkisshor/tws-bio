@@ -1,6 +1,6 @@
 import type { PlatformGroup } from '@/lib/sources'
 import { sharesToHundred } from '@/lib/ledgerFormat'
-import { cn } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import { Section } from '@/components/dashboard/PageHeader'
 
 // "Where clicks come from", grouped by platform: the referrer hosts the
@@ -37,6 +37,12 @@ export interface SourcesPanelProps {
   groups: PlatformGroup[]
   /** The window the rows cover, e.g. "Last 90 days". Shown at the right of the title. */
   windowLabel?: string
+  /**
+   * Set when the window started before referrers were recorded
+   * (getReferrerRowsResult's `recordedSince`): the panel then covers only
+   * the clicks from this moment on and says so.
+   */
+  recordedSince?: string | null
   /** Section title. */
   title?: string
   /** The query failed: show an inline error. */
@@ -57,6 +63,7 @@ export interface SourcesPanelProps {
 export function SourcesPanel({
   groups,
   windowLabel,
+  recordedSince,
   title = 'Where clicks come from',
   error,
   limit,
@@ -140,14 +147,20 @@ export function SourcesPanel({
             <span className="rule-total pb-1 text-right tabular-nums">{fmt(allTotal)}</span>
             <span className="rule-total pb-1 text-right tabular-nums">100.0%</span>
           </div>
+          {recordedSince && (
+            <p className="mt-3 text-[12.5px] leading-snug text-text-3">
+              Sources are complete only from {formatDate(recordedSince)}, so older clicks are left out.
+            </p>
+          )}
         </>
       )
     }
   }
 
+  const label = recordedSince ? `Since ${formatDate(recordedSince)}` : windowLabel
   if (bare) return <div className={cn('min-w-0', className)}>{body}</div>
   return (
-    <Section title={title} caption={windowLabel ? `${windowLabel}, grouped by platform` : 'Grouped by platform'} className={className}>
+    <Section title={title} caption={label ? `${label}, grouped by platform` : 'Grouped by platform'} className={className}>
       {body}
     </Section>
   )

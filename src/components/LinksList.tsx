@@ -7,6 +7,8 @@ import { getAnonLinkIds, type HomeLink } from '@/hooks/useLinks'
 import { destinationKind } from '@/lib/destinationKind'
 import { formatDate, getShortUrl } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { TypeBadge } from '@/components/dashboard/TypeBadge'
+import { splitDisplayUrl } from '@/components/dashboard/displayUrl'
 
 const SHORT_DOMAIN = process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'
 
@@ -84,6 +86,7 @@ function CopyButton({ code }: { code: string }) {
 function LinkRow({ link }: { link: HomeLink }) {
   const clicks = link.total_clicks ?? 0
   const kind = destinationKind(link.original_url)
+  const { host, rest } = splitDisplayUrl(link.original_url)
   return (
     <li className={`border-b border-rule py-3 transition-colors duration-[120ms] hover:bg-hover md:py-2.5 ${COLS}`}>
       <div className="flex min-w-0 items-baseline justify-between gap-4 md:block">
@@ -97,9 +100,7 @@ function LinkRow({ link }: { link: HomeLink }) {
           >
             {SHORT_DOMAIN}/{link.short_code}
           </a>
-          {link.link_type === 'deep_link' && (
-            <span className="rounded-ctl border border-rule px-1.5 text-xs leading-5 text-text-2">Opens app</span>
-          )}
+          {link.link_type === 'deep_link' && <TypeBadge type={link.link_type} />}
         </span>
         {/* Phone: the count sits on the code line. */}
         <span className="shrink-0 text-[15px] tabular-nums text-ink md:hidden">
@@ -108,10 +109,13 @@ function LinkRow({ link }: { link: HomeLink }) {
         </span>
       </div>
       <div className="mt-1 min-w-0 md:mt-0">
-        <p className="truncate font-mono text-[13px] text-text-2" title={link.original_url}>
-          {link.original_url}
+        {/* Same two-tone destination as the dashboard tables: host in ink,
+            the rest in tertiary text, no scheme or www. */}
+        <p className="truncate text-sm text-ink" title={link.original_url}>
+          {host}
+          <span className="text-text-3">{rest}</span>
         </p>
-        {kind && <p className="text-[13px] text-text-3">{kind}</p>}
+        {kind && <p className="mt-0.5 text-[12px] text-text-3">{kind}</p>}
       </div>
       <div className="mt-1 flex items-center justify-between gap-4 md:contents">
         <span className="text-[13px] tabular-nums text-text-2 md:text-sm">
@@ -131,8 +135,9 @@ function LinkRow({ link }: { link: HomeLink }) {
 /**
  * The owner's recent links on the home page, as a ledger: column heads over a
  * 1px ink rule, a hairline between rows, clicks right-aligned in tabular
- * figures, short codes and destinations in mono. Anonymous visitors only see
- * it when this browser holds links made before migration 019.
+ * figures, short codes in mono and destinations as host plus path.
+ * Anonymous visitors only see it when this browser holds links made before
+ * migration 019.
  */
 export function LinksList({
   user,

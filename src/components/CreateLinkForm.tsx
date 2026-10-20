@@ -7,7 +7,17 @@ import { ChevronRight } from 'lucide-react'
 import { cn, formatDate, generateShortCode, isValidUrl, getShortUrl, normalizeUrl } from '@/lib/utils'
 import { isSafeUrl } from '@/lib/redirectSafety'
 import { isReservedShortCode } from '@/lib/shortCodes'
-import { checkLinkEdit } from '@/lib/linkEdit'
+import {
+  CLICK_LIMIT_HINT,
+  CLICK_LIMIT_LABEL,
+  CLICK_LIMIT_PLACEHOLDER,
+  EXPIRY_INCOMPLETE_ERROR,
+  EXPIRY_LABEL,
+  EXPIRY_PAST_ERROR,
+  checkLinkEdit,
+  endOfIstDay,
+  expiryHint,
+} from '@/lib/linkEdit'
 import { destinationKind, type DestinationKind } from '@/lib/destinationKind'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
@@ -72,7 +82,6 @@ const SHORT_HOST = SHORT_DOMAIN.toLowerCase().replace(/^www\./, '')
 
 const COPIED_MS = 1600
 const AVAILABILITY_DEBOUNCE_MS = 400
-const DAY_MS = 86_400_000
 
 // "Stops working on" is a day in India time, the zone the dashboard files
 // days in. IST has no daylight saving, so a fixed offset is exact.
@@ -83,11 +92,6 @@ const IST_DATE = new Intl.DateTimeFormat('en-CA', {
   day: '2-digit',
 })
 
-/** The instant a link set to stop on `day` (YYYY-MM-DD) stops: midnight IST after it. */
-function endOfIstDay(day: string): number {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return Number.NaN
-  return Date.parse(`${day}T00:00:00+05:30`) + DAY_MS
-}
 
 // What the destination field says under itself when no app link applies.
 const KIND_PHRASE: Record<DestinationKind, string> = {
@@ -400,8 +404,8 @@ export function CreateLinkForm({
     let expiresAt: string | null = null
     if (expiresOn) {
       const end = endOfIstDay(expiresOn)
-      if (Number.isNaN(end)) errors.expiresOn = 'Enter a full date, or clear it.'
-      else if (end <= Date.now()) errors.expiresOn = 'Pick today or a later day, or clear the date.'
+      if (Number.isNaN(end)) errors.expiresOn = EXPIRY_INCOMPLETE_ERROR
+      else if (end <= Date.now()) errors.expiresOn = EXPIRY_PAST_ERROR
       else expiresAt = new Date(end).toISOString()
     }
     let clickLimit: number | null = null
@@ -507,8 +511,14 @@ export function CreateLinkForm({
       if (clickLimit != null) patch.max_clicks = clickLimit
       let patchFailed = false
       if (Object.keys(patch).length > 0) {
-        const { error: patchError } = await supabase.from('links').update(patch).eq('id', data.id)
-        if (patchError) patchFailed = true
+        // RLS that filters the row out gives no error, just no row: ask for
+        // the id back so that case counts as a failed save too.
+        const { data: patched, error: patchError } = await supabase
+          .from('links')
+          .update(patch)
+          .eq('id', data.id)
+          .select('id')
+        if (patchError || !patched || patched.length === 0) patchFailed = true
       }
 
       let wasCopied = false
@@ -660,6 +670,7 @@ export function CreateLinkForm({
   const campaignName = (id: string | null) => (id ? (campaigns.find((c) => c.id === id)?.name ?? 'Saved') : null)
 
   const previewCode = createdLink ? createdLink.shortCode : code
+  const destinationValid = Boolean(candidate) && isValidUrl(candidate)
 
   const preview = (
     <aside
@@ -710,12 +721,15 @@ export function CreateLinkForm({
       </div>
       {createdLink ? (
         <AttributionPreview shortCode={createdLink.shortCode} destination={createdLink.destination} />
-      ) : code ? (
+      ) : destinationValid ? (
+        // Most links use a random code, so the tags show as soon as the
+        // destination is valid. With no code typed, utm_campaign reads
+        // "the short code (set on save)".
         <AttributionPreview shortCode={code} destination={candidate} />
       ) : (
         <p className="text-sm leading-relaxed text-text-2">
-          With no short link typed, a random 6-character code is picked when you save. Type one to see
-          the tags GA4 receives for each platform.
+          Enter the destination to see the tags GA4 receives for each platform. With no short link
+          typed, a random 6-character code is picked when you save.
         </p>
       )}
       {createdLink && (
@@ -947,7 +961,7 @@ export function CreateLinkForm({
               </div>
               <div className="grid min-w-0 content-start gap-2">
                 <Label htmlFor="expires">
-                  Stops working on <span className="font-normal text-text-3">optional</span>
+                  {EXPIRY_LABEL} <span className="font-normal text-text-3">optional</span>
                 </Label>
                 <Input
                   id="expires"
@@ -968,7 +982,7 @@ export function CreateLinkForm({
                   </p>
                 ) : (
                   <p id="expires-hint" className={cn(helpText, 'text-text-2')}>
-                    {expiresOn ? 'It stops at the end of that day, India time.' : 'Empty: it never stops.'}
+                    {expiryHint(expiresOn)}
                   </p>
                 )}
               </div>
@@ -995,7 +1009,7 @@ export function CreateLinkForm({
                 <div id="advanced-options" className="grid gap-[22px] border-b border-rule pt-5 pb-6">
                   <div className="grid min-w-0 gap-2">
                     <Label htmlFor="max-clicks">
-                      Click limit <span className="font-normal text-text-3">optional</span>
+                      {CLICK_LIMIT_LABEL} <span className="font-normal text-text-3">optional</span>
                     </Label>
                     <Input
                       id="max-clicks"
@@ -1006,7 +1020,7 @@ export function CreateLinkForm({
                         setMaxClicks(e.target.value.replace(/[^\d]/g, ''))
                         clearFieldError('maxClicks')
                       }}
-                      placeholder="No limit"
+                      placeholder={CLICK_LIMIT_PLACEHOLDER}
                       className="tabular-nums sm:max-w-48"
                       aria-invalid={!!fieldErrors.maxClicks}
                       aria-describedby={fieldErrors.maxClicks ? 'max-clicks-error' : 'max-clicks-hint'}
@@ -1017,8 +1031,7 @@ export function CreateLinkForm({
                       </p>
                     ) : (
                       <p id="max-clicks-hint" className={cn(helpText, 'text-text-2')}>
-                        The link stops after this many clicks. Approximate: clicks at the same moment can pass it
-                        by a few.
+                        {CLICK_LIMIT_HINT}
                       </p>
                     )}
                   </div>

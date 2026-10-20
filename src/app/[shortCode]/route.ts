@@ -257,12 +257,12 @@ export async function GET(
         extraCss: `.spin{display:none}
 .spin-static{margin:0 0 14px;font-size:13px}
 @media (prefers-reduced-motion:no-preference){
-.spin{display:inline-block;width:16px;height:16px;border:2px solid #1f1f1f;border-top-color:#00B03B;border-radius:50%;animation:spin .8s linear infinite;margin:0 0 14px}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid var(--rule);border-top-color:var(--accent-fill);border-radius:50%;animation:spin .8s linear infinite;margin:0 0 14px}
 .spin-static{display:none}
 }
 @keyframes spin{to{transform:rotate(360deg)}}
-.btn-link{display:inline-block;margin-top:12px;color:#999999;font-size:13px;text-decoration:underline}
-.btn-link:hover{color:#FAFAFA}`,
+.btn-link{display:inline-block;margin-top:12px;color:var(--text-2);font-size:13px;text-decoration:underline}
+.btn-link:hover{color:var(--ink)}`,
         cardHtml: `<p class="eyebrow">Redirecting</p>
 <div class="spin" aria-hidden="true"></div>
 <p class="spin-static">One moment&hellip;</p>

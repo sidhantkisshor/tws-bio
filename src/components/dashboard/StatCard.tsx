@@ -159,8 +159,11 @@ export function StatCell({
   return (
     <div className={cn('min-w-0 py-4 pr-2', className)}>
       <p className="text-[13px] font-medium text-text-2">{title}</p>
-      <p className="type-figure rule-total mt-2.5 inline-block pb-1.5 text-ink">
-        {typeof value === 'number' ? formatNumber(value) : value}
+      {/* The double totals rule sits under the figure only, never the unit. */}
+      <p className="type-figure mt-2.5 text-ink">
+        <span className="rule-total inline-block pb-1.5">
+          {typeof value === 'number' ? formatNumber(value) : value}
+        </span>
         {unit && (
           <span className="ml-2 font-sans text-[15px] font-normal tracking-normal text-text-2">
             {unit}
@@ -225,8 +228,10 @@ export function StatCard({
         <p className="text-[13px] font-medium text-text-2">{title}</p>
         {icon && <span className="text-text-3 [&_svg]:size-4">{icon}</span>}
       </div>
-      <p className="type-figure rule-total mt-2.5 inline-block pb-1.5 text-ink">
-        {typeof value === 'number' ? formatNumber(value) : value}
+      <p className="type-figure mt-2.5 text-ink">
+        <span className="rule-total inline-block pb-1.5">
+          {typeof value === 'number' ? formatNumber(value) : value}
+        </span>
       </p>
       {trend && (
         <div className="mt-2.5 flex items-baseline gap-2">

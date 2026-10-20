@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
 import {
@@ -15,8 +16,7 @@ import {
 } from '@/lib/insights'
 import { computeMovers, topDecliners, topGainers } from '@/lib/movers'
 import { groupByPlatform } from '@/lib/sources'
-import { destinationKind } from '@/lib/destinationKind'
-import { formatNumber, formatShare, formatSignedCount, sharesToHundred } from '@/lib/ledgerFormat'
+import { formatNumber, formatShare, sharesToHundred } from '@/lib/ledgerFormat'
 import { SHORT_MONTHS, cn } from '@/lib/utils'
 import { PageHeader, Section } from '@/components/dashboard/PageHeader'
 import { KpiRow, StatCell, computeTrend } from '@/components/dashboard/StatCard'
@@ -26,22 +26,20 @@ import { Heatmap } from '@/components/charts/Heatmap'
 import { SourcesPanel } from '@/components/dashboard/SourcesPanel'
 import { NeedsALook } from '@/components/dashboard/NeedsALook'
 import { TopMovers, type MoverRow } from '@/components/dashboard/TopMovers'
-import { displayUrl } from '@/components/dashboard/displayUrl'
+import { TopLinksTable, type TopLinkRow } from '@/components/dashboard/TopLinksTable'
+import { ExportLinksButton } from '@/components/dashboard/ExportLinksButton'
 import { buttonVariants } from '@/components/ui/button-variants'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableFooter,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { CopyLinkButton } from '@/app/dashboard/health/CopyLinkButton'
-import { SHORT_DOMAIN, loadOwnerLinks, rankHealthIssues, type OwnerLink } from '@/app/dashboard/health/data'
+import { loadOwnerLinks, rankLinkHealth } from '@/app/dashboard/health/data'
+import { fixLinkClass } from '@/app/dashboard/health/styles'
 
-const textLink =
-  'focus-ring rounded-[2px] text-sm text-accent-text underline decoration-accent-text/40 decoration-1 underline-offset-[3px] transition-colors duration-150 hover:decoration-current'
+// The root layout's template adds " - tws.bio".
+export const metadata: Metadata = { title: 'Overview' }
+
+// The owner-links read selects every column the CSV holds (ExportRow).
+// Rows handed to the export button. More links than this and a click
+// re-reads every link in the browser, the same path the Links page uses.
+const EXPORT_INLINE_ROWS = 20
+const EXPORT_FILTERS = { q: '', type: 'all', status: 'all', sort: 'created_desc' } as const
 
 /** '2026-09-21' gives { d: 21, m: 'Sep', y: 2026 }. */
 function dayParts(key: string) {
@@ -123,110 +121,6 @@ function DevicesSplit({ rows, error }: { rows: { name: string; value: number }[]
   )
 }
 
-interface TopLinkRow {
-  link: OwnerLink
-  current: number
-  prior: number
-}
-
-function TopLinksTable({
-  rows,
-  total,
-  linkCount,
-}: {
-  rows: TopLinkRow[]
-  /** Clicks on every link in the window, for the share column. */
-  total: number
-  linkCount: number
-}) {
-  const topSum = rows.reduce((s, r) => s + r.current, 0)
-  return (
-    <Table className="table-fixed">
-      <TableHeader>
-        <TableRow>
-          <TableHead className="w-7 md:w-10">#</TableHead>
-          <TableHead className="w-auto">Link</TableHead>
-          <TableHead className="hidden w-[38%] md:table-cell">Goes to</TableHead>
-          <TableHead className="w-16 text-right md:w-24">Clicks</TableHead>
-          <TableHead className="w-[4.25rem] text-right md:w-24">Change</TableHead>
-          <TableHead className="hidden w-20 text-right md:table-cell">Share</TableHead>
-          <TableHead className="w-[4.25rem] md:w-24">
-            <span className="sr-only">Copy</span>
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((r, i) => {
-          const kind = destinationKind(r.link.original_url)
-          const delta = r.current - r.prior
-          return (
-            <TableRow key={r.link.id}>
-              <TableCell className="tabular-nums text-text-3">{i + 1}</TableCell>
-              <TableCell className="min-w-0">
-                <Link
-                  href={`/dashboard/links/${r.link.id}`}
-                  title={`${SHORT_DOMAIN}/${r.link.short_code}`}
-                  className="focus-ring -my-3 block truncate rounded-[2px] py-3 font-mono text-[13.5px] text-ink transition-colors duration-150 hover:text-accent-text"
-                >
-                  {/* Phones show the bare code so the change column still fits. */}
-                  <span className="hidden md:inline">{SHORT_DOMAIN}/</span>
-                  {r.link.short_code}
-                </Link>
-              </TableCell>
-              <TableCell className="hidden md:table-cell">
-                <span className="block truncate text-text-2" title={r.link.original_url}>
-                  {displayUrl(r.link.original_url)}
-                </span>
-                {kind && <span className="mt-0.5 block text-[12.5px] text-text-3">{kind}</span>}
-              </TableCell>
-              <TableCell className="text-right tabular-nums">{formatNumber(r.current)}</TableCell>
-              <TableCell className="text-right text-[13px] tabular-nums">
-                {r.prior === 0 ? (
-                  <span className="font-medium text-text-2">New</span>
-                ) : (
-                  <span
-                    className={cn(
-                      'font-bold',
-                      delta > 0 ? 'text-pos' : delta < 0 ? 'text-neg' : 'text-text-2',
-                    )}
-                  >
-                    {formatSignedCount(delta)}
-                  </span>
-                )}
-              </TableCell>
-              <TableCell className="hidden text-right tabular-nums text-text-2 md:table-cell">
-                {formatShare(total > 0 ? r.current / total : 0)}
-              </TableCell>
-              <TableCell className="py-1.5 text-right">
-                <CopyLinkButton shortCode={r.link.short_code} className="-mr-2 md:-mr-2.5" />
-              </TableCell>
-            </TableRow>
-          )
-        })}
-      </TableBody>
-      <TableFooter>
-        <TableRow>
-          <TableCell />
-          <TableCell className="font-bold">
-            Top {rows.length} of {formatNumber(linkCount)}
-          </TableCell>
-          <TableCell className="hidden md:table-cell" />
-          <TableCell className="text-right tabular-nums">
-            <span className="rule-total inline-block pb-1">{formatNumber(topSum)}</span>
-          </TableCell>
-          <TableCell />
-          <TableCell className="hidden text-right tabular-nums md:table-cell">
-            <span className="rule-total inline-block pb-1">
-              {formatShare(total > 0 ? topSum / total : 0)}
-            </span>
-          </TableCell>
-          <TableCell />
-        </TableRow>
-      </TableFooter>
-    </Table>
-  )
-}
-
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -259,7 +153,20 @@ export default async function DashboardPage({
     <PageHeader
       title="Overview"
       description={description}
-      actions={<TimeRangePicker current={range} basePath="/dashboard" />}
+      actions={
+        <>
+          {!linksError && links.length > 0 && (
+            <div className="hidden md:block">
+              <ExportLinksButton
+                links={links.slice(0, EXPORT_INLINE_ROWS)}
+                totalCount={links.length}
+                filters={EXPORT_FILTERS}
+              />
+            </div>
+          )}
+          <TimeRangePicker current={range} basePath="/dashboard" showAllTime={false} />
+        </>
+      }
     />
   )
 
@@ -301,10 +208,11 @@ export default async function DashboardPage({
   const w30 = windows30 ?? windows
   const clicks30 = linksError || w30.error ? null : w30.data.current
 
-  // Needs a look: the strip holds the top high and medium issues; quieter
-  // ones (turned off, no recent clicks) wait on the Health page.
-  const ranked = linksError ? [] : rankHealthIssues(links, clicks30, now)
-  const urgent = ranked.filter((r) => r.issue.severity !== 'low').slice(0, 3)
+  // Needs a look: one row per link, the top three whose worst issue is high
+  // or medium; quieter ones (turned off, no recent clicks) wait on the
+  // Health page.
+  const ranked = linksError ? [] : rankLinkHealth(links, clicks30, now)
+  const urgent = ranked.filter((r) => r.issues[0].severity !== 'low').slice(0, 3)
 
   // Clicks per day, this window and the one before.
   const currentDays = zeroFillDays(series.data, since, days)
@@ -380,13 +288,13 @@ export default async function DashboardPage({
       {linksError && (
         <p role="status" className="mb-4 border-t border-rule pt-4 text-sm text-text-2">
           Your links could not load, so the figures below are incomplete.{' '}
-          <Link href={`/dashboard?range=${range}`} className={textLink}>
+          <Link href={`/dashboard?range=${range}`} className={fixLinkClass}>
             Try again
           </Link>
         </p>
       )}
 
-      <NeedsALook items={urgent} total={ranked.length} />
+      <NeedsALook rows={urgent} total={ranked.length} />
 
       <KpiRow label={windowLabel} className="mb-2">
         <StatCell
@@ -452,6 +360,7 @@ export default async function DashboardPage({
         <SourcesPanel
           groups={groupByPlatform(referrers.data)}
           windowLabel={windowLabel}
+          recordedSince={referrers.recordedSince}
           error={linksError || referrers.error}
           emptyText={`No clicks in the last ${days} days.`}
         />
@@ -471,7 +380,7 @@ export default async function DashboardPage({
         title="Top links"
         caption={windowLabel}
         actions={
-          <Link href="/dashboard/links" className={textLink}>
+          <Link href="/dashboard/links" className={fixLinkClass}>
             All {formatNumber(links.length)} links
           </Link>
         }

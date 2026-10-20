@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { buildHeatmap, type Heatmap } from '@/lib/heatmap'
+import { referrerWindowStart } from '@/lib/sources'
 
 // Server helpers for the insight RPCs of migration 030, in the style of
 // analytics.ts: each returns `{ data, error }` so a page can show an inline
@@ -98,6 +99,10 @@ export async function getLinkClickWindowsResult({
  * groupByPlatform takes them (`{ name, count }`; a NULL referrer is
  * "Direct"). Unlike getTopReferrersResult, which keeps the top 10, the sum
  * of these rows is the true total, so "All sources" is honest.
+ *
+ * Clicks from before the referrer host was stored (REFERRERS_RECORDED_SINCE)
+ * are left out: they would all count as "No referrer". `recordedSince` is set
+ * when that cut the window, so the panel can say which dates it covers.
  */
 export async function getReferrerRowsResult({
   linkIds,
@@ -105,17 +110,19 @@ export async function getReferrerRowsResult({
 }: {
   linkIds: string[]
   since: Since
-}): Promise<{ data: { name: string; count: number }[]; error: boolean }> {
-  if (linkIds.length === 0) return { data: [], error: false }
+}): Promise<{ data: { name: string; count: number }[]; error: boolean; recordedSince: string | null }> {
+  const window = referrerWindowStart(since)
+  const recordedSince = window.clamped ? window.since : null
+  if (linkIds.length === 0) return { data: [], error: false, recordedSince }
   const supabase = await createClient()
 
   const { data, error } = await supabase.rpc('get_referrer_breakdown', {
     p_link_ids: linkIds,
-    p_since: iso(since),
+    p_since: window.since,
   })
   if (error || !data) {
     console.error('[insights] getReferrerRows:', error)
-    return { data: [], error: true }
+    return { data: [], error: true, recordedSince }
   }
 
   return {
@@ -123,5 +130,6 @@ export async function getReferrerRowsResult({
       .map((row) => ({ name: row.name || 'Direct', count: Number(row.count) || 0 }))
       .sort((a, b) => b.count - a.count),
     error: false,
+    recordedSince,
   }
 }

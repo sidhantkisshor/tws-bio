@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
@@ -22,8 +23,8 @@ import {
 } from '@/lib/insights'
 import { groupByPlatform, type PlatformGroup } from '@/lib/sources'
 import { computeMovers, topGainers } from '@/lib/movers'
-import { formatShare, formatSignedCount } from '@/lib/ledgerFormat'
-import { cn, plural } from '@/lib/utils'
+import { formatNumber, formatShare } from '@/lib/ledgerFormat'
+import { plural } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { PageHeader, Section } from '@/components/dashboard/PageHeader'
 import { KpiRow, StatCell, computeTrend } from '@/components/dashboard/StatCard'
@@ -32,7 +33,8 @@ import { Heatmap } from '@/components/charts/Heatmap'
 import { BarList, countryItems, namedItems } from '@/components/charts/BarList'
 import { SourcesPanel } from '@/components/dashboard/SourcesPanel'
 import { TimeRangePicker } from '@/components/TimeRangePicker'
-import { displayUrl } from '@/components/dashboard/displayUrl'
+import { ChangeCount, TopLinksTable } from '@/components/dashboard/TopLinksTable'
+import { fixLinkClass } from '@/app/dashboard/health/styles'
 import {
   Table,
   TableBody,
@@ -42,6 +44,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+
+// The root layout's template adds " - tws.bio".
+export const metadata: Metadata = { title: 'Analytics' }
 
 function AnalyticsHeader({ timeRange, days }: { timeRange: TimeRange; days: number | null }) {
   return (
@@ -68,17 +73,6 @@ function InlineError({ children, retryHref }: { children: React.ReactNode; retry
         Try again
       </Link>
     </p>
-  )
-}
-
-/** "+1,475" in teal, "(486)" in red, "New" when there was nothing before. */
-function Change({ current, prior }: { current: number; prior: number }) {
-  if (prior === 0 && current > 0) return <span className="font-medium text-text-2">New</span>
-  const delta = current - prior
-  return (
-    <span className={cn('font-bold', delta > 0 ? 'text-pos' : delta < 0 ? 'text-neg' : 'text-text-3')}>
-      {formatSignedCount(delta)}
-    </span>
   )
 }
 
@@ -264,7 +258,9 @@ export default async function AnalyticsPage({
   const peakTrend = peak && prior ? computeTrend(peak.clicks, priorPeak?.clicks ?? 0) : null
 
   const groups = referrersResult.error ? [] : groupByPlatform(referrersResult.data)
-  const topGroup = groups[0] && groups[0].count > 0 ? groups[0] : null
+  // The top source is a place a click came from, so the no-referrer group
+  // (chats, apps, typed links) is never picked.
+  const topGroup = groups.find((g) => g.key !== 'none' && g.count > 0) ?? null
 
   // Per-link counts in this window and the one before (bounded ranges only).
   const windows = windowsResult && !windowsResult.error ? windowsResult.data : null
@@ -297,8 +293,11 @@ export default async function AnalyticsPage({
     .map((l) => ({ link: l, clicks: rangedClicks(l) }))
     .filter((r) => r.clicks > 0)
     .sort((a, b) => b.clicks - a.clicks)
-  const topLinks = ranked.slice(0, 10)
-  const topSum = topLinks.reduce((s, r) => s + r.clicks, 0)
+  const topLinks = ranked.slice(0, 10).map((r) => ({
+    link: r.link,
+    current: r.clicks,
+    prior: windows ? (windows.prior[r.link.id] ?? 0) : null,
+  }))
 
   // Campaigns: the links in each, their clicks in the window and the change.
   const campaigns = campaignsResult.data ?? []
@@ -379,7 +378,7 @@ export default async function AnalyticsPage({
             deltaFormat="count"
           />
           <StatCell
-            title={topGroup ? `Top platform, ${platformName(topGroup)}` : 'Top platform'}
+            title={topGroup ? `Top source, ${platformName(topGroup)}` : 'Top source'}
             value={topGroup ? formatShare(topGroup.share) : '---'}
             unit={
               topGroup ? (
@@ -418,6 +417,7 @@ export default async function AnalyticsPage({
         <SourcesPanel
           groups={groups}
           windowLabel={windowLabel}
+          recordedSince={referrersResult.recordedSince}
           error={referrersResult.error}
           limit={10}
         />
@@ -472,11 +472,8 @@ export default async function AnalyticsPage({
         title="Top links"
         caption={windowLabel}
         actions={
-          <Link
-            href="/dashboard/links"
-            className="focus-ring rounded-ctl text-[13px] text-accent-text underline decoration-accent-text/40 underline-offset-[3px] hover:decoration-current"
-          >
-            All links
+          <Link href="/dashboard/links" className={fixLinkClass}>
+            All {formatNumber(userLinks.length)} links
           </Link>
         }
         className="mt-9 md:mt-12"
@@ -484,66 +481,12 @@ export default async function AnalyticsPage({
         {topLinks.length === 0 ? (
           <p className="py-4 text-sm text-text-2">No link had clicks in this period.</p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-8">#</TableHead>
-                <TableHead>Link</TableHead>
-                <TableHead className="hidden md:table-cell">Goes to</TableHead>
-                <TableHead className="text-right">Clicks</TableHead>
-                {windows && <TableHead className="text-right">Change</TableHead>}
-                <TableHead className="hidden text-right sm:table-cell">Share</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {topLinks.map(({ link, clicks }, i) => (
-                <TableRow key={link.id}>
-                  <TableCell className="w-8 py-2.5 text-text-3 tabular-nums">{i + 1}</TableCell>
-                  <TableCell className="w-full max-w-0 py-2.5 md:w-auto md:max-w-none">
-                    <Link
-                      href={`/dashboard/links/${link.id}`}
-                      className="focus-ring block truncate rounded-ctl font-mono text-[13.5px] text-ink transition-colors duration-150 hover:text-accent-text"
-                    >
-                      tws.bio/{link.short_code}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="hidden w-full max-w-0 py-2.5 md:table-cell">
-                    <span className="block truncate text-text-2" title={link.original_url}>
-                      {displayUrl(link.original_url)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-2.5 text-right font-medium tabular-nums">
-                    {clicks.toLocaleString('en-US')}
-                  </TableCell>
-                  {windows && (
-                    <TableCell className="py-2.5 text-right text-[13px] tabular-nums">
-                      <Change current={windows.current[link.id] ?? 0} prior={windows.prior[link.id] ?? 0} />
-                    </TableCell>
-                  )}
-                  <TableCell className="hidden py-2.5 text-right text-text-2 tabular-nums sm:table-cell">
-                    {shareOf(clicks)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-            <TableFooter>
-              <TableRow>
-                <TableCell colSpan={2} className="text-[13px] text-text-2 md:hidden">
-                  Top {topLinks.length} of {ranked.length}
-                </TableCell>
-                <TableCell colSpan={3} className="hidden pl-0 text-[13px] text-text-2 md:table-cell">
-                  Top {topLinks.length} of {ranked.length} links with clicks
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  <span className="rule-total inline-block pb-1">{topSum.toLocaleString('en-US')}</span>
-                </TableCell>
-                {windows && <TableCell />}
-                <TableCell className="hidden text-right tabular-nums sm:table-cell">
-                  <span className="rule-total inline-block pb-1">{shareOf(topSum)}</span>
-                </TableCell>
-              </TableRow>
-            </TableFooter>
-          </Table>
+          <TopLinksTable
+            rows={topLinks}
+            total={totalClicks}
+            linkCount={userLinks.length}
+            showChange={windows !== null}
+          />
         )}
       </Section>
 
@@ -583,7 +526,7 @@ export default async function AnalyticsPage({
                     </TableCell>
                     {windows && (
                       <TableCell className="py-2.5 text-right text-[13px] tabular-nums">
-                        <Change current={c.clicks} prior={c.prior ?? 0} />
+                        <ChangeCount current={c.clicks} prior={c.prior ?? 0} />
                       </TableCell>
                     )}
                     <TableCell className="hidden py-2.5 text-right text-text-2 tabular-nums sm:table-cell">
@@ -602,7 +545,7 @@ export default async function AnalyticsPage({
                     </TableCell>
                     {windows && (
                       <TableCell className="py-2.5 text-right text-[13px] tabular-nums">
-                        <Change current={looseRow.clicks} prior={looseRow.prior ?? 0} />
+                        <ChangeCount current={looseRow.clicks} prior={looseRow.prior ?? 0} />
                       </TableCell>
                     )}
                     <TableCell className="hidden py-2.5 text-right text-text-2 tabular-nums sm:table-cell">

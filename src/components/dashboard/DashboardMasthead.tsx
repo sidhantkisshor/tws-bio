@@ -36,7 +36,7 @@ function AccountMenu({ email }: { email: string }) {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner side="bottom" align="end" sideOffset={8} className="z-50">
-          <Popover.Popup className="w-[min(280px,calc(100vw-2rem))] origin-(--transform-origin) rounded-panel border border-rule bg-surface p-4 text-ink shadow-overlay outline-none transition-[opacity,scale] duration-150 ease-out data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0">
+          <Popover.Popup className="w-[min(280px,calc(100vw-2rem))] origin-(--transform-origin) rounded-panel border border-edge bg-surface p-4 text-ink shadow-overlay outline-none transition-[opacity,scale] duration-150 ease-out data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0">
             <Popover.Title className="type-label">Signed in as</Popover.Title>
             <p className="mt-1 truncate text-sm font-medium" title={email}>
               {email}

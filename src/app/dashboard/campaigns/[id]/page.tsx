@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
@@ -19,9 +20,10 @@ import { getLinkClickWindowsResult, getReferrerRowsResult } from '@/lib/insights
 import { groupByPlatform, type PlatformGroup } from '@/lib/sources'
 import { computeMovers, topGainers } from '@/lib/movers'
 import { destinationKind } from '@/lib/destinationKind'
-import { formatShare, formatSignedCount } from '@/lib/ledgerFormat'
+import { formatShare } from '@/lib/ledgerFormat'
 import { cn, plural } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button-variants'
+import { ChangeCount } from '@/components/dashboard/TopLinksTable'
 import { PageHeader, Section } from '@/components/dashboard/PageHeader'
 import { KpiRow, StatCell, computeTrend } from '@/components/dashboard/StatCard'
 import { BarChart, ChartLegend, shortDay } from '@/components/charts/BarChart'
@@ -40,7 +42,7 @@ import {
 } from '@/components/ui/table'
 
 // What an empty campaign's stats are, without asking the database.
-const NO_ROWS = { data: [], error: false }
+const NO_ROWS = { data: [], error: false, recordedSince: null }
 
 function InlineError({ children, retryHref }: { children: React.ReactNode; retryHref: string }) {
   return (
@@ -56,17 +58,6 @@ function InlineError({ children, retryHref }: { children: React.ReactNode; retry
   )
 }
 
-/** "+1,475" in teal, "(486)" in red, "New" when there was nothing before. */
-function Change({ current, prior }: { current: number; prior: number }) {
-  if (prior === 0 && current > 0) return <span className="font-medium text-text-2">New</span>
-  const delta = current - prior
-  return (
-    <span className={cn('font-bold', delta > 0 ? 'text-pos' : delta < 0 ? 'text-neg' : 'text-text-3')}>
-      {formatSignedCount(delta)}
-    </span>
-  )
-}
-
 function platformName(group: PlatformGroup): string {
   if (group.key === 'none') return 'No referrer'
   if (group.key === 'tws') return 'tws.bio itself'
@@ -79,6 +70,9 @@ function busiest(days: DailyClicks[]): DailyClicks | null {
   for (const d of days) if (d.clicks > 0 && (!best || d.clicks > best.clicks)) best = d
   return best
 }
+
+// The root layout's template adds " - tws.bio".
+export const metadata: Metadata = { title: 'Campaign' }
 
 export default async function CampaignDetailPage({
   params,
@@ -179,7 +173,9 @@ export default async function CampaignDetailPage({
   const peakTrend = peak && prior ? computeTrend(peak.clicks, priorPeak?.clicks ?? 0) : null
 
   const groups = referrersResult.error ? [] : groupByPlatform(referrersResult.data)
-  const topGroup = groups[0] && groups[0].count > 0 ? groups[0] : null
+  // The top source is a place a click came from, so the no-referrer group
+  // (chats, apps, typed links) is never picked.
+  const topGroup = groups.find((g) => g.key !== 'none' && g.count > 0) ?? null
 
   const windows = windowsResult && !windowsResult.error ? windowsResult.data : null
   // Clicks per link in the window: the windows RPC for a bounded range, the
@@ -275,7 +271,7 @@ export default async function CampaignDetailPage({
                 deltaFormat="count"
               />
               <StatCell
-                title={topGroup ? `Top platform, ${platformName(topGroup)}` : 'Top platform'}
+                title={topGroup ? `Top source, ${platformName(topGroup)}` : 'Top source'}
                 value={topGroup ? formatShare(topGroup.share) : '---'}
                 unit={
                   topGroup ? (
@@ -352,6 +348,7 @@ export default async function CampaignDetailPage({
               <SourcesPanel
                 groups={groups}
                 windowLabel={windowLabel}
+                recordedSince={referrersResult.recordedSince}
                 error={referrersResult.error}
                 limit={8}
                 emptyText={days !== null ? `No clicks in the last ${days} days.` : 'No clicks yet.'}
@@ -366,7 +363,7 @@ export default async function CampaignDetailPage({
       {hasLinks && (
         <Section
           title="Links in this campaign"
-          caption={plural(campaignLinks.length, 'link')}
+          caption={`${plural(campaignLinks.length, 'link')}. Clicks: ${windowLabel.toLowerCase()}`}
           className="mt-9 md:mt-12"
         >
           {days !== null && !windows && (
@@ -377,9 +374,7 @@ export default async function CampaignDetailPage({
               <TableRow>
                 <TableHead>Link</TableHead>
                 <TableHead className="hidden md:table-cell">Goes to</TableHead>
-                <TableHead className="text-right">
-                  {days !== null ? `Clicks, ${days}d` : 'Clicks'}
-                </TableHead>
+                <TableHead className="text-right">Clicks</TableHead>
                 {showChange && <TableHead className="text-right">Change</TableHead>}
                 {days !== null && (
                   <TableHead className="hidden text-right sm:table-cell">All time</TableHead>
@@ -416,7 +411,7 @@ export default async function CampaignDetailPage({
                     </TableCell>
                     {showChange && (
                       <TableCell className="text-right text-[13px] tabular-nums">
-                        <Change current={windows.current[link.id] ?? 0} prior={windows.prior[link.id] ?? 0} />
+                        <ChangeCount current={windows.current[link.id] ?? 0} prior={windows.prior[link.id] ?? 0} />
                       </TableCell>
                     )}
                     {days !== null && (

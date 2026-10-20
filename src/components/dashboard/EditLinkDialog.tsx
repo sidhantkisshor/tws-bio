@@ -4,9 +4,15 @@ import { useState, useEffect, type ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
-import { toDateTimeLocalValue } from '@/lib/datetime'
 import {
+  CLICK_LIMIT_HINT,
+  CLICK_LIMIT_LABEL,
+  CLICK_LIMIT_PLACEHOLDER,
+  EXPIRY_INCOMPLETE_ERROR,
+  EXPIRY_LABEL,
   checkLinkEdit,
+  expiryDayOf,
+  expiryHint,
   type LinkEditErrors,
   type LinkEditField,
   type LinkEditFields,
@@ -64,7 +70,7 @@ function fieldsFromLink(link: Link): LinkEditFields {
     iosDeepLink: link.ios_deep_link || '',
     androidDeepLink: link.android_deep_link || '',
     fallbackUrl: link.fallback_url || '',
-    expiresAt: toDateTimeLocalValue(link.expires_at),
+    expiresAt: expiryDayOf(link.expires_at),
     maxClicks: link.max_clicks != null ? String(link.max_clicks) : '',
   }
 }
@@ -175,11 +181,11 @@ export function EditLinkDialog({
       now: new Date(),
     })
     const nextErrors = { ...check.errors }
-    // A date-time input that is only part filled reports an empty value, which
+    // A date input that is only part filled reports an empty value, which
     // would read as "no expiry". The browser flags it as badInput.
     const expiryInput = document.getElementById(FIELD_IDS.expiresAt) as HTMLInputElement | null
     if (expiryInput?.validity.badInput) {
-      nextErrors.expiresAt = 'Enter a full date and time, or clear it.'
+      nextErrors.expiresAt = EXPIRY_INCOMPLETE_ERROR
     }
 
     // Show what will be saved (https:// added, spaces trimmed), valid or not.
@@ -244,7 +250,7 @@ export function EditLinkDialog({
   const expiredUntouched =
     link.expires_at !== null &&
     new Date(link.expires_at).getTime() < Date.now() &&
-    fields.expiresAt === toDateTimeLocalValue(link.expires_at)
+    fields.expiresAt === expiryDayOf(link.expires_at)
   const limitReachedUntouched =
     !!link.max_clicks &&
     (link.total_clicks ?? 0) >= link.max_clicks &&
@@ -261,7 +267,10 @@ export function EditLinkDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex flex-col sm:max-w-lg">
+      {/* One scroller: the dialog itself. The footer sticks to its bottom
+          edge, so Save stays in reach on a phone and the fields scroll
+          under it. The footer's own padding is the dialog's bottom padding. */}
+      <DialogContent className="pb-0 sm:max-w-lg sm:pb-0">
         <DialogHeader>
           <DialogTitle>Edit link</DialogTitle>
           {/* The code is shown, not offered as a field: it cannot change, and
@@ -281,12 +290,9 @@ export function EditLinkDialog({
             e.preventDefault()
             void handleSave()
           }}
-          className="flex min-h-0 flex-col gap-4"
+          className="grid gap-4"
         >
-          {/* The fields scroll and the footer does not: a deep link's fields
-              are taller than a phone screen, and Save must stay in reach.
-              The bleed (-mx-4 px-4) keeps focus rings from clipping. */}
-          <div className="-mx-4 grid min-h-0 content-start gap-4 overflow-y-auto px-4 py-2">
+          <div className="grid content-start gap-4 pt-1">
             <div className="grid gap-2">
               <Label htmlFor={FIELD_IDS.originalUrl}>Destination</Label>
               <Input
@@ -362,23 +368,34 @@ export function EditLinkDialog({
 
             <div className="grid gap-2">
               <Label htmlFor={FIELD_IDS.expiresAt}>
-                Expires <span className="font-normal text-text-3">optional</span>
+                {EXPIRY_LABEL} <span className="font-normal text-text-3">optional</span>
               </Label>
+              {/* A day in India time, the same control as Create. An existing
+                  expiry keeps its own time while its day is unchanged. */}
               <Input
-                {...inputProps('expiresAt', expiredUntouched ? 'edit-expires-at-note' : undefined)}
-                type="datetime-local"
+                {...inputProps(
+                  'expiresAt',
+                  expiredUntouched ? 'edit-expires-at-note edit-expires-at-hint' : 'edit-expires-at-hint',
+                )}
+                type="date"
+                className="tabular-nums"
               />
               <FieldError field="expiresAt" message={errors.expiresAt} />
               {expiredUntouched && (
                 <p id="edit-expires-at-note" className="text-[13px] text-text-2">
-                  This date has passed, so the link is off. It stays off until you pick a later time or clear the date.
+                  This date has passed, so the link is off. It stays off until you pick a later day or clear the date.
+                </p>
+              )}
+              {!errors.expiresAt && (
+                <p id="edit-expires-at-hint" className="text-[13px] text-text-2">
+                  {expiryHint(fields.expiresAt, link.expires_at)}
                 </p>
               )}
             </div>
 
             <div className="grid gap-2">
               <Label htmlFor={FIELD_IDS.maxClicks}>
-                Click limit <span className="font-normal text-text-3">optional</span>
+                {CLICK_LIMIT_LABEL} <span className="font-normal text-text-3">optional</span>
               </Label>
               {/* Text with a numeric keypad rather than type="number", so the
                   check sees exactly what was typed (no "1e3" or scroll-wheel
@@ -391,7 +408,8 @@ export function EditLinkDialog({
                 type="text"
                 inputMode="numeric"
                 autoComplete="off"
-                placeholder="Unlimited"
+                placeholder={CLICK_LIMIT_PLACEHOLDER}
+                className="tabular-nums sm:max-w-48"
               />
               <FieldError field="maxClicks" message={errors.maxClicks} />
               {limitReachedUntouched && (
@@ -402,17 +420,15 @@ export function EditLinkDialog({
               {/* The redirect checks the count it read, and the click is
                   counted afterwards, so clicks in flight together can pass. */}
               <p id="edit-max-clicks-hint" className="text-[13px] text-text-2">
-                Approximate: a burst of clicks at the same moment can pass the limit slightly.
+                {CLICK_LIMIT_HINT}
               </p>
             </div>
 
             {/* What GA4 receives, from the same functions the redirect runs,
                 so a new destination shows its tags before it is saved. Last, so
-                the fields come first. */}
-            <section
-              aria-labelledby="edit-attribution-title"
-              className="min-w-0 rounded-panel border border-rule bg-page p-4"
-            >
+                the fields come first. A ruled section like the Create
+                preview, not a box inside the dialog. */}
+            <section aria-labelledby="edit-attribution-title" className="rule-open mt-2 min-w-0 pt-4">
               <h3 id="edit-attribution-title" className="type-label mb-2">
                 What GA4 receives
               </h3>
@@ -420,7 +436,7 @@ export function EditLinkDialog({
             </section>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 z-10 -mx-5 bg-surface px-5 pb-5 sm:-mx-6 sm:px-6 sm:pb-6">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>

@@ -1,3 +1,5 @@
+import type { Metadata } from 'next'
+import { cache } from 'react'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
@@ -21,13 +23,14 @@ import {
   getReferrerRowsResult,
 } from '@/lib/insights'
 import { groupByPlatform, type PlatformGroup } from '@/lib/sources'
-import { linkHealthIssues, type HealthIssue } from '@/lib/linkHealth'
+import { linkHealthIssues, sortIssues, type HealthIssue } from '@/lib/linkHealth'
 import { destinationKind } from '@/lib/destinationKind'
 import { formatShare } from '@/lib/ledgerFormat'
 import { isResourceDropRow } from '@/lib/linkRows'
 import { cn, formatDate, plural } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { Badge } from '@/components/ui/badge'
+import { TypeBadge } from '@/components/dashboard/TypeBadge'
 import { PageHeader, Section } from '@/components/dashboard/PageHeader'
 import { KpiRow, StatCell, computeTrend } from '@/components/dashboard/StatCard'
 import { BarChart, ChartLegend, shortDay } from '@/components/charts/BarChart'
@@ -40,6 +43,28 @@ import { TimeRangePicker } from '@/components/TimeRangePicker'
 import { displayUrl } from '@/components/dashboard/displayUrl'
 
 const SHORT_DOMAIN = process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'
+
+// The owner's link row. Cached per request, so the tab title and the page
+// share one query.
+const getOwnLink = cache(async (id: string, userId: string) => {
+  const supabase = await createClient()
+  return supabase.from('links').select('*').eq('id', id).eq('user_id', userId).maybeSingle()
+})
+
+// The root layout's template adds " - tws.bio".
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}): Promise<Metadata> {
+  const fallback = { title: 'Link' }
+  const { id } = await params
+  if (!isUuid(id)) return fallback
+  const user = await getAuthenticatedUser()
+  if (!user) return fallback
+  const { data } = await getOwnLink(id, user.id)
+  return data ? { title: `${SHORT_DOMAIN}/${data.short_code}` } : fallback
+}
 
 // The word in the flag box of each "Needs a look" line.
 const FLAG: Record<HealthIssue['kind'], string> = {
@@ -63,8 +88,6 @@ const FIX: Partial<Record<HealthIssue['kind'], string>> = {
   near_cap: 'Raise the click limit with Edit if it should keep working.',
   inactive: 'Turn it back on from More, then Activate.',
 }
-
-const SEVERITY_ORDER = { high: 0, medium: 1, low: 2 } as const
 
 function platformName(group: PlatformGroup): string {
   if (group.key === 'none') return 'No referrer'
@@ -148,7 +171,7 @@ export default async function LinkDetailPage({
     heatmapResult,
     last30Result,
   ] = await Promise.all([
-    supabase.from('links').select('*').eq('id', id).eq('user_id', user.id).maybeSingle(),
+    getOwnLink(id, user.id),
     supabase.from('campaigns').select('id, name').eq('user_id', user.id),
     // The current and prior windows in one series: split below into the bars
     // and the dotted prior line.
@@ -207,7 +230,9 @@ export default async function LinkDetailPage({
     peak && prior && !seriesResult.error ? computeTrend(peak.clicks, priorPeak?.clicks ?? 0) : null
 
   const groups = referrersResult.error ? [] : groupByPlatform(referrersResult.data)
-  const topGroup = groups[0] && groups[0].count > 0 ? groups[0] : null
+  // The top source is a place a click came from, so the no-referrer group
+  // (chats, apps, typed links) is never picked.
+  const topGroup = groups.find((g) => g.key !== 'none' && g.count > 0) ?? null
 
   // The day the link went live, marked on the chart when it is in view.
   const createdKey = link.created_at ? dayKey(new Date(link.created_at)) : null
@@ -222,11 +247,14 @@ export default async function LinkDetailPage({
         ]
       : []
 
-  const issues = linkHealthIssues(link, {
-    now,
-    shortDomain: SHORT_DOMAIN,
-    clicksInLast30d: last30Result.error ? undefined : (last30Result.data.current[id] ?? 0),
-  }).sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])
+  // Worst first, the same order as the Health page.
+  const issues = sortIssues(
+    linkHealthIssues(link, {
+      now,
+      shortDomain: SHORT_DOMAIN,
+      clicksInLast30d: last30Result.error ? undefined : (last30Result.data.current[id] ?? 0),
+    }),
+  )
 
   const windowLabel = days !== null ? `Last ${days} days` : 'All time'
   const noClicks = !totalError && totalClicks === 0
@@ -242,7 +270,7 @@ export default async function LinkDetailPage({
         }
         // The link's own actions sit beside it: Copy, QR, Edit, then More
         // (Duplicate, Open destination, Pause, Delete).
-        titleAccessory={<LinkActions link={link} className="-ml-1 self-center" />}
+        titleAccessory={<LinkActions link={link} className="-ml-1 self-center" hideViewStats />}
         backHref="/dashboard/links"
         backLabel="Links"
         description={
@@ -262,7 +290,7 @@ export default async function LinkDetailPage({
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-text-3">
               {kind && <span>{kind}</span>}
               <span>Created {formatDate(link.created_at)}</span>
-              {link.link_type === 'deep_link' && <Badge>Opens the app</Badge>}
+              {link.link_type === 'deep_link' && <TypeBadge type={link.link_type} />}
               {managed && <Badge>Resource Drop</Badge>}
               {campaign && (
                 <Link
@@ -329,7 +357,7 @@ export default async function LinkDetailPage({
             deltaFormat="count"
           />
           <StatCell
-            title={topGroup ? `Top platform, ${platformName(topGroup)}` : 'Top platform'}
+            title={topGroup ? `Top source, ${platformName(topGroup)}` : 'Top source'}
             value={topGroup ? formatShare(topGroup.share) : '---'}
             unit={
               topGroup ? (
@@ -406,6 +434,7 @@ export default async function LinkDetailPage({
           <SourcesPanel
             groups={groups}
             windowLabel={windowLabel}
+            recordedSince={referrersResult.recordedSince}
             error={referrersResult.error}
             limit={8}
             emptyText={days !== null ? `No clicks in the last ${days} days.` : 'No clicks yet.'}
@@ -490,8 +519,10 @@ export default async function LinkDetailPage({
       </div>
 
       <div className="mt-9 grid gap-9 md:mt-12 md:gap-12 lg:grid-cols-2">
+        {/* Countries and Browsers side by side from xl up, What GA4 receives
+            beside them, so the two columns end close together. */}
         {!noClicks && (
-          <div className="flex min-w-0 flex-col gap-10">
+          <div className="grid min-w-0 gap-10 xl:grid-cols-2 xl:gap-8">
             <Section title="Countries" caption={windowLabel}>
               {countriesResult.error ? (
                 <InlineError retryHref={retryHref}>Countries could not load.</InlineError>
@@ -503,7 +534,7 @@ export default async function LinkDetailPage({
                 />
               )}
             </Section>
-            <Section title="Browsers" level={3} caption={windowLabel}>
+            <Section title="Browsers" caption={windowLabel}>
               {browsersResult.error ? (
                 <InlineError retryHref={retryHref}>Browsers could not load.</InlineError>
               ) : (

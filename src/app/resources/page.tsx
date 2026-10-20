@@ -5,7 +5,7 @@ import { resources } from '@/config/resources'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Resources - tws.bio',
+  title: 'Resources',
   description: 'Trading tools, platforms, and resources curated by @tradingwithsidhant',
 }
 

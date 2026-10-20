@@ -15,8 +15,8 @@
   --font-heading: var(--font-newsreader), Georgia, "Times New Roman", serif;
   --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* Depth comes from rules, not shadows. Only floating layers (menus,
-     dialogs, toasts) get a soft shadow so they lift off the page. */
+  /* Depth comes from rules, not shadows. Floating layers (menus, dialogs,
+     toasts) get their edge from a border plus a 1px contact shadow, no blur. */
   --shadow-overlay: var(--overlay-shadow);
   --shadow-raised: none;
   --animate-tick-fill: tick-fill 320ms ease-out;
@@ -136,7 +136,7 @@
   --hm4: #525C60;
   --hm5: #2C3539;
   --focus: #9A5626;
-  --overlay-shadow: 0 10px 30px rgb(30 37 40 / 0.12), 0 1px 3px rgb(30 37 40 / 0.10);
+  --overlay-shadow: 0 1px 0 rgb(30 37 40 / 0.08);
 
   /* shadcn names */
   --background: var(--page);
@@ -174,14 +174,9 @@
   --sidebar-border: var(--rule);
   --sidebar-ring: var(--focus);
 
-  /* The glow is gone. Pages that still read this get no image. */
-  --gradient-hero: none;
   /* Fill flash on create and copy: a neutral wash, then nothing (amber is
      kept for actions). */
   --tick-flash: var(--hm1);
-
-  /* Pre-change name of the serif accent, now Newsreader (see fonts.ts). */
-  --font-dm-serif: var(--font-newsreader), Georgia, serif;
 }
 
 :root[data-theme="dark"] {
@@ -215,7 +210,7 @@
   --hm4: #ABA99F;
   --hm5: #E2DBCD;
   --focus: #E89A55;
-  --overlay-shadow: 0 10px 30px rgb(0 0 0 / 0.45), 0 1px 3px rgb(0 0 0 / 0.35);
+  --overlay-shadow: 0 1px 0 rgb(0 0 0 / 0.4);
 }
 
 /* Same dark values, for a dark system with JavaScript off. Keep in step with
@@ -252,7 +247,7 @@
     --hm4: #ABA99F;
     --hm5: #E2DBCD;
     --focus: #E89A55;
-    --overlay-shadow: 0 10px 30px rgb(0 0 0 / 0.45), 0 1px 3px rgb(0 0 0 / 0.35);
+    --overlay-shadow: 0 1px 0 rgb(0 0 0 / 0.4);
   }
 }
 
@@ -312,6 +307,63 @@
   &:focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
+  }
+}
+
+/* A themed checkbox: put `checkbox` on an <input type="checkbox">. A 16px
+   square with a 3px radius and the edge border on the surface; checked, it
+   draws an ink tick (a clip-path shape, so it follows the theme), and
+   indeterminate draws an ink dash. Keyboard focus is the 2px accent ring.
+   Give it a 44px hit area on phones from the wrapping label. */
+@utility checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  background-color: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 150ms ease-out, background-color 150ms ease-out;
+  &::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    background-color: var(--ink);
+    clip-path: polygon(14% 44%, 0 58%, 38% 96%, 100% 22%, 86% 8%, 38% 68%);
+    transform: scale(0);
+    transition: transform 120ms ease-out;
+  }
+  &:hover {
+    border-color: var(--ink-2);
+  }
+  &:checked,
+  &:indeterminate {
+    border-color: var(--ink-2);
+  }
+  &:checked::before {
+    transform: scale(1);
+  }
+  &:indeterminate::before {
+    clip-path: inset(40% 10% 40% 10%);
+    transform: scale(1);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  &:disabled {
+    cursor: not-allowed;
+    border-color: var(--rule);
+    background-color: var(--sunk);
+  }
+  &:disabled::before {
+    background-color: var(--text-3);
   }
 }
 

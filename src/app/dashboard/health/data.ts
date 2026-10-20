@@ -1,9 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
-import { linkHealthIssues, type HealthIssue } from '@/lib/linkHealth'
+import { healthByLink, type HealthIssue, type HealthLink, type LinkHealth } from '@/lib/linkHealth'
 
-// Server-side helpers shared by the Overview page ("Needs a look") and the
-// Health page: one paginated read of every link the owner has, and the rule
+// Server-side helpers shared by the Overview page ("Needs a look"), the
+// Health page and the Links page's chips: one paginated read of every link the owner has, and the rule
 // issues ranked the same way on both pages.
 
 export type OwnerLink = Pick<
@@ -18,10 +18,11 @@ export type OwnerLink = Pick<
   | 'total_clicks'
   | 'is_active'
   | 'created_at'
+  | 'campaign_id'
 >
 
 const OWNER_LINK_COLUMNS =
-  'id, short_code, original_url, fallback_url, link_type, expires_at, max_clicks, total_clicks, is_active, created_at'
+  'id, short_code, original_url, fallback_url, link_type, expires_at, max_clicks, total_clicks, is_active, created_at, campaign_id'
 
 export const SHORT_DOMAIN = process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'
 
@@ -67,42 +68,48 @@ export async function loadOwnerLinks(
   return { data: rows, error: false }
 }
 
-export interface RankedIssue {
-  link: OwnerLink
-  issue: HealthIssue
-  /** Clicks in the last 30 days, or null when that count did not load. */
-  clicks30: number | null
-}
-
-const SEVERITY_RANK: Record<HealthIssue['severity'], number> = { high: 0, medium: 1, low: 2 }
+/** One link with its rule issues, worst first (`issues[0]` is the worst). */
+export type LinkHealthRow<L extends HealthLink = OwnerLink> = LinkHealth<L>
 
 /**
- * Rule issues for every link, ranked by severity, then by clicks in the last
- * 30 days (the links people still use first), then by short code. Pass
- * `clicks30` as null when the click windows failed to load: the "quiet" rule
- * is then skipped, so a failed query never flags every link as quiet.
+ * Rule issues grouped per link (linkHealth's `healthByLink`): one row per
+ * link that has any, ranked by its worst issue, then by clicks in the last 30
+ * days, then by short code. Pass `clicks30` as null when the click windows
+ * failed to load: the "quiet" rule is then skipped, so a failed query never
+ * flags every link as quiet.
  */
-export function rankHealthIssues(
-  links: OwnerLink[],
+export function rankLinkHealth<L extends HealthLink & { id: string }>(
+  links: L[],
   clicks30: Record<string, number> | null,
   now: Date,
-): RankedIssue[] {
-  const out: RankedIssue[] = []
-  for (const link of links) {
-    const recent = clicks30 ? (clicks30[link.id] ?? 0) : null
-    const issues = linkHealthIssues(link, {
-      now,
-      shortDomain: SHORT_DOMAIN,
-      clicksInLast30d: recent ?? undefined,
-    })
-    for (const issue of issues) out.push({ link, issue, clicks30: recent })
+): LinkHealthRow<L>[] {
+  return healthByLink(links, {
+    now,
+    shortDomain: SHORT_DOMAIN,
+    clicksInLast30d: (link) => (clicks30 ? (clicks30[link.id] ?? 0) : undefined),
+  })
+}
+
+/** The other issues of a row in a few words, for "Also turned off." */
+export function issueShort(kind: HealthIssue['kind']): string {
+  switch (kind) {
+    case 'placeholder':
+      return 'placeholder destination'
+    case 'loop':
+      return 'points at a tws.bio link'
+    case 'expired':
+      return 'expired'
+    case 'expiring_soon':
+      return 'expires soon'
+    case 'at_cap':
+      return 'click limit reached'
+    case 'near_cap':
+      return 'near its click limit'
+    case 'inactive':
+      return 'turned off'
+    case 'quiet':
+      return 'no clicks in 30 days'
   }
-  return out.sort(
-    (a, b) =>
-      SEVERITY_RANK[a.issue.severity] - SEVERITY_RANK[b.issue.severity] ||
-      (b.clicks30 ?? b.link.total_clicks ?? 0) - (a.clicks30 ?? a.link.total_clicks ?? 0) ||
-      a.link.short_code.localeCompare(b.link.short_code),
-  )
 }
 
 /** The one-word flag shown beside an issue. Words, never color alone. */

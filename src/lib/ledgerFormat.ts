@@ -25,15 +25,53 @@ export function formatSignedCount(delta: number, maximumFractionDigits = 0): str
 
 /**
  * A change as a fraction (0.124 = 12.4%) to "+12.4%", "(20.6%)" or "0.0%".
- * `digits` is the number of decimals (default 1).
+ * `digits` is the number of decimals (default 1). At 100% and above the
+ * decimals are dropped and the digits grouped: 17.875 gives "+1,788%".
  */
 export function formatSignedPercent(fraction: number, digits = 1): string {
   const pct = fraction * 100
   const factor = 10 ** digits
-  const rounded = Math.round(pct * factor) / factor
+  let rounded = Math.round(pct * factor) / factor
+  let places = digits
+  if (Math.abs(rounded) >= 100) {
+    rounded = Math.round(pct)
+    places = 0
+  }
   if (rounded === 0) return `${(0).toFixed(digits)}%`
-  const abs = Math.abs(rounded).toFixed(digits)
+  const abs = Math.abs(rounded).toLocaleString('en-US', {
+    minimumFractionDigits: places,
+    maximumFractionDigits: places,
+  })
   return rounded > 0 ? `+${abs}%` : `(${abs}%)`
+}
+
+/** What a change cell shows when both periods are empty: nothing to compare. */
+export const NO_CHANGE = '-'
+
+export type ChangeTone = 'up' | 'down' | 'flat' | 'new' | 'none'
+
+/**
+ * One change cell, current period against the prior one. `unit` "percent"
+ * gives "+12.4%" (use it under a "Change %" head), "count" gives "+416"
+ * (under a "Change" head). 0 vs 0 gives "-" (tone "none"). A percent with
+ * an empty prior period gives "New"; a count just gives the gain.
+ */
+export function formatPeriodChange(
+  current: number,
+  prior: number,
+  unit: 'percent' | 'count' = 'percent',
+): { text: string; tone: ChangeTone } {
+  const cur = Math.max(0, current)
+  const pre = Math.max(0, prior)
+  if (cur === 0 && pre === 0) return { text: NO_CHANGE, tone: 'none' }
+  if (unit === 'count') {
+    const text = formatSignedCount(cur - pre)
+    return { text, tone: direction(cur - pre) }
+  }
+  if (pre === 0) return { text: 'New', tone: 'new' }
+  const text = formatSignedPercent((cur - pre) / pre)
+  const tone = text.startsWith('+') ? 'up' : text.startsWith('(') ? 'down' : 'flat'
+  return { text, tone }
 }
 
 /** A share as a fraction (0.463) to "46.3%". */

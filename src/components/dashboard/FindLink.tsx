@@ -21,10 +21,19 @@ interface Result {
   original_url: string
 }
 
+const MAX_QUERY_CHARS = 32
+
+/**
+ * Host, path and query, with no protocol or "www.". The query is kept (cut to
+ * 32 characters) so two links to the same page with different params look
+ * different; the row's CSS truncation handles the rest.
+ */
 function hostAndPath(url: string): string {
   try {
     const u = new URL(url)
-    return `${u.hostname.replace(/^www\./, '')}${u.pathname === '/' ? '' : u.pathname}`
+    const query =
+      u.search.length > MAX_QUERY_CHARS + 1 ? `${u.search.slice(0, MAX_QUERY_CHARS + 1)}…` : u.search
+    return `${u.hostname.replace(/^www\./, '')}${u.pathname === '/' ? '' : u.pathname}${query}`
   } catch {
     return url
   }
@@ -176,11 +185,12 @@ export function FindLink({ className }: { className?: string }) {
           onFocus={() => setOpen(true)}
           onBlur={() => setOpen(false)}
           onKeyDown={onKeyDown}
-          className="h-9 w-[220px] rounded-ctl border border-edge bg-surface pr-8 pl-3 text-sm text-ink transition-[border-color] duration-150 outline-none placeholder:text-text-3 focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus [&::-webkit-search-cancel-button]:hidden"
+          className="peer h-9 w-[220px] rounded-ctl border border-edge bg-surface pr-8 pl-3 text-sm text-ink transition-[border-color] duration-150 outline-none placeholder:text-text-3 focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus [&::-webkit-search-cancel-button]:hidden"
         />
+        {/* The "/" hint goes away once the field has focus or text. */}
         <kbd
           aria-hidden
-          className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 rounded-[2px] border border-rule px-1.5 font-mono text-[11px] leading-[18px] text-text-3"
+          className="pointer-events-none absolute peer-focus:hidden peer-[:not(:placeholder-shown)]:hidden top-1/2 right-2 -translate-y-1/2 rounded-[2px] border border-rule px-1.5 font-mono text-[11px] leading-[18px] text-text-3"
         >
           /
         </kbd>

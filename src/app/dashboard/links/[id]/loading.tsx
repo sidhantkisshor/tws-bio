@@ -2,7 +2,7 @@
 // back link, the short link with its destination, meta line and actions, the
 // range control, the KPI row, then the ruled sections (clicks per day with
 // devices beside where clicks come from, best time to post beside link
-// settings, countries and browsers beside what GA4 receives). Opening a link
+// settings, countries and browsers side by side beside what GA4 receives). Opening a link
 // or switching its range keeps the same shape.
 
 function Bar({ className }: { className: string }) {
@@ -96,9 +96,9 @@ export default function LinkDetailLoading() {
       </div>
 
       <div className="mt-9 grid gap-9 md:mt-12 md:gap-12 lg:grid-cols-2">
-        <div className="flex min-w-0 flex-col gap-10">
+        <div className="grid min-w-0 gap-10 xl:grid-cols-2 xl:gap-8">
           <SectionSkeleton rows={5} />
-          <SectionSkeleton rows={4} level={3} />
+          <SectionSkeleton rows={5} />
         </div>
         <SectionSkeleton rows={6} />
       </div>

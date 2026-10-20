@@ -1,6 +1,14 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { toDateTimeLocalValue } from '@/lib/datetime'
-import { checkLinkEdit, type LinkEditContext, type LinkEditFields } from '@/lib/linkEdit'
+import { describe, expect, it } from 'vitest'
+import {
+  EXPIRY_HINT_DAY,
+  EXPIRY_HINT_EMPTY,
+  checkLinkEdit,
+  endOfIstDay,
+  expiryDayOf,
+  expiryHint,
+  type LinkEditContext,
+  type LinkEditFields,
+} from '@/lib/linkEdit'
 
 const blank: LinkEditFields = {
   originalUrl: 'https://example.com/page',
@@ -81,60 +89,81 @@ describe('app deep links', () => {
   })
 })
 
-describe('expiry for a viewer in India (UTC+5:30)', () => {
-  const originalTz = process.env.TZ
+describe('expiry, a day in India time', () => {
+  // NOW is 17:30 on 19 Oct in India.
 
-  beforeAll(() => {
-    process.env.TZ = 'Asia/Kolkata'
-  })
-
-  afterAll(() => {
-    process.env.TZ = originalTz
-  })
-
-  it('saves the wall-clock time the viewer picked as the right instant', () => {
-    const result = check({ expiresAt: '2026-10-20T18:00' })
+  it('saves a picked day as the end of that day, India time', () => {
+    const result = check({ expiresAt: '2026-10-20' })
     expect(result.errors).toEqual({})
-    expect(result.update.expires_at).toBe('2026-10-20T12:30:00.000Z')
+    // Midnight IST after 20 Oct is 18:30 UTC on 20 Oct.
+    expect(result.update.expires_at).toBe('2026-10-20T18:30:00.000Z')
   })
 
-  it('rejects a time in the past, or now', () => {
-    // NOW is 17:30 in India.
-    expect(check({ expiresAt: '2026-10-19T17:00' }).errors.expiresAt).toMatch(/in the future/)
-    expect(check({ expiresAt: '2026-10-19T17:30' }).errors.expiresAt).toMatch(/in the future/)
-    expect(check({ expiresAt: '2026-10-19T17:31' }).errors.expiresAt).toBeUndefined()
+  it('accepts today, and rejects a day that has ended', () => {
+    expect(check({ expiresAt: '2026-10-19' }).errors.expiresAt).toBeUndefined()
+    expect(check({ expiresAt: '2026-10-18' }).errors.expiresAt).toMatch(/today or a later day/)
   })
 
-  it('writes an untouched stored expiry back exactly', () => {
+  it('rejects a part-filled date', () => {
+    expect(check({ expiresAt: '2026-10' }).errors.expiresAt).toMatch(/full date/)
+  })
+
+  it('writes an untouched stored expiry back exactly, time included', () => {
+    // 11:45 IST on 1 Nov: not the end of a day.
     const stored = '2026-11-01T06:15:42+00:00'
-    const result = check({ expiresAt: '2026-11-01T11:45' }, { storedExpiresAt: stored })
+    const result = check({ expiresAt: '2026-11-01' }, { storedExpiresAt: stored })
+    expect(result.errors).toEqual({})
     expect(result.update.expires_at).toBe(stored)
   })
 
   it('writes an untouched expiry back even once it has passed', () => {
     const stored = '2026-10-01T06:15:42+00:00'
-    const result = check({ expiresAt: toDateTimeLocalValue(stored) }, { storedExpiresAt: stored })
+    const result = check({ expiresAt: expiryDayOf(stored) }, { storedExpiresAt: stored })
     expect(result.errors).toEqual({})
     expect(result.update.expires_at).toBe(stored)
   })
 
-  it('still rejects a new past time when the link has a stored expiry', () => {
-    // Stored in the past, changed to another past time.
-    const past = check({ expiresAt: '2026-10-02T10:00' }, { storedExpiresAt: '2026-10-01T06:15:42+00:00' })
-    expect(past.errors.expiresAt).toMatch(/in the future/)
-    // Stored in the future, changed to a past time (NOW is 17:30 in India).
-    const future = check({ expiresAt: '2026-10-19T17:00' }, { storedExpiresAt: '2026-11-01T06:15:42+00:00' })
-    expect(future.errors.expiresAt).toMatch(/in the future/)
+  it('still rejects a new past day when the link has a stored expiry', () => {
+    const past = check({ expiresAt: '2026-10-02' }, { storedExpiresAt: '2026-10-01T06:15:42+00:00' })
+    expect(past.errors.expiresAt).toMatch(/today or a later day/)
+    const future = check({ expiresAt: '2026-10-18' }, { storedExpiresAt: '2026-11-01T06:15:42+00:00' })
+    expect(future.errors.expiresAt).toMatch(/today or a later day/)
   })
 
-  it('takes a new future time in place of a stored expiry that has passed', () => {
-    const result = check({ expiresAt: '2026-10-20T18:00' }, { storedExpiresAt: '2026-10-01T06:15:42+00:00' })
+  it('takes a new day in place of a stored expiry, at the end of that day', () => {
+    const result = check({ expiresAt: '2026-11-02' }, { storedExpiresAt: '2026-11-01T06:15:42+00:00' })
     expect(result.errors).toEqual({})
-    expect(result.update.expires_at).toBe('2026-10-20T12:30:00.000Z')
+    expect(result.update.expires_at).toBe('2026-11-02T18:30:00.000Z')
   })
 
   it('treats an empty field as no expiry', () => {
     expect(check({ expiresAt: '' }).update.expires_at).toBeNull()
+  })
+})
+
+describe('expiryDayOf and expiryHint', () => {
+  it('shows a midnight IST expiry (what Create saves) as the day before', () => {
+    expect(expiryDayOf('2026-10-20T18:30:00.000Z')).toBe('2026-10-20')
+    expect(expiryDayOf(new Date(endOfIstDay('2026-12-31')).toISOString())).toBe('2026-12-31')
+  })
+
+  it('shows a mid-day expiry as its own IST day', () => {
+    expect(expiryDayOf('2026-11-01T06:15:42+00:00')).toBe('2026-11-01')
+    // 20:00 UTC is 01:30 the next day in India.
+    expect(expiryDayOf('2026-11-01T20:00:00Z')).toBe('2026-11-02')
+  })
+
+  it('is empty for no expiry or a bad value', () => {
+    expect(expiryDayOf(null)).toBe('')
+    expect(expiryDayOf('not a date')).toBe('')
+  })
+
+  it('names the stored time while the day is unchanged', () => {
+    const stored = '2026-11-01T06:15:42+00:00'
+    expect(expiryHint('2026-11-01', stored)).toBe('It stops at 11:45 AM that day, India time.')
+    expect(expiryHint('2026-11-02', stored)).toBe(EXPIRY_HINT_DAY)
+    expect(expiryHint('2026-10-20', '2026-10-20T18:30:00.000Z')).toBe(EXPIRY_HINT_DAY)
+    expect(expiryHint('', stored)).toBe(EXPIRY_HINT_EMPTY)
   })
 })
 
@@ -203,7 +232,7 @@ describe('a link that has expired and reached its limit', () => {
     const result = check(
       {
         originalUrl: 'https://example.com/new-page',
-        expiresAt: toDateTimeLocalValue(storedExpiresAt),
+        expiresAt: expiryDayOf(storedExpiresAt),
         maxClicks: '57',
       },
       { storedExpiresAt, storedMaxClicks: 57, totalClicks: 60 },

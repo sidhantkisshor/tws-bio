@@ -23,6 +23,11 @@ export type DestinationCheckResult =
   | { ok: true; checkedAt: string; rows: DestinationCheckRow[] }
   | { ok: false; error: string }
 
+// The page's maxDuration is 60 s. The checks get 45 s of it, so the session
+// check, the links read and the reply always fit: a URL the budget does not
+// reach comes back 'skipped' instead of the whole run being cut off.
+const CHECK_BUDGET_MS = 45_000
+
 export async function checkDestinationsNow(): Promise<DestinationCheckResult> {
   const user = await getAuthenticatedUser()
   if (!user) return { ok: false, error: 'Your session ended. Sign in again, then run the check.' }
@@ -31,9 +36,14 @@ export async function checkDestinationsNow(): Promise<DestinationCheckResult> {
   const links = await loadOwnerLinks(supabase, user.id, { activeOnly: true })
   if (links.error) return { ok: false, error: 'Your links could not load. Try again in a minute.' }
 
-  // Many links can share a destination: ask each address once.
-  const urls = [...new Set(links.data.map((l) => l.original_url))]
-  const results = await checkDestinations(urls, 10, { timeoutMs: 5000, shortDomain: SHORT_DOMAIN })
+  // Many links can share a destination: ask each address once. Shuffled, so a
+  // second run after a 'skipped' result reaches other addresses first.
+  const urls = shuffle([...new Set(links.data.map((l) => l.original_url))])
+  const results = await checkDestinations(urls, 10, {
+    timeoutMs: 5000,
+    shortDomain: SHORT_DOMAIN,
+    budgetMs: CHECK_BUDGET_MS,
+  })
   const byUrl = new Map(urls.map((u, i) => [u, results[i]]))
 
   const rows: DestinationCheckRow[] = links.data.map((l) => {
@@ -49,4 +59,12 @@ export async function checkDestinationsNow(): Promise<DestinationCheckResult> {
     }
   })
   return { ok: true, checkedAt: new Date().toISOString(), rows }
+}
+
+function shuffle<T>(items: T[]): T[] {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[items[i], items[j]] = [items[j], items[i]]
+  }
+  return items
 }

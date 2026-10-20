@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
 import {
@@ -7,10 +8,12 @@ import {
   chipLinkIds,
   fillDailyClicks,
   kindSlug,
+  matchesListFilters,
   matchesSearch,
   matchingCampaignIds,
   parseKind,
   parseShow,
+  sortLinks,
   type IndexedLink,
   type LinkListParams,
   type ShowFilter,
@@ -24,6 +27,7 @@ import { linkHealthIssues } from '@/lib/linkHealth'
 import { destinationKind, type DestinationKind } from '@/lib/destinationKind'
 import { isResourceDropRow, rowIssue } from '@/lib/linkRows'
 import { isReservedShortCode } from '@/lib/shortCodes'
+import { loadOwnerLinks } from '@/app/dashboard/health/data'
 import { ExportLinksButton } from '@/components/dashboard/ExportLinksButton'
 import { LinksToolbar } from '@/components/dashboard/LinksToolbar'
 import { LinksTable, type LedgerRow } from '@/components/dashboard/LinksTable'
@@ -31,6 +35,9 @@ import { buttonVariants } from '@/components/ui/button-variants'
 import { PageHeader } from '@/components/dashboard/PageHeader'
 import { cn } from '@/lib/utils'
 import type { Database } from '@/types/database'
+
+// The root layout's template adds " - tws.bio".
+export const metadata: Metadata = { title: 'Links' }
 
 type LinkRow = Database['public']['Tables']['links']['Row']
 
@@ -45,13 +52,6 @@ const SHORT_DOMAIN = process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'
 // sites below.
 const LINK_COLUMNS =
   'id, short_code, original_url, link_type, total_clicks, is_active, created_at, ios_deep_link, android_deep_link, fallback_url, expires_at, max_clicks, campaign_id'
-
-// Every link the owner has, with what the chip counts, Needs a look and the
-// destination kinds need. One light query; PostgREST's max-rows setting
-// (1000 by default) caps it, far above this account's link count.
-const INDEX_COLUMNS =
-  'id, short_code, original_url, fallback_url, link_type, is_active, expires_at, max_clicks, total_clicks, created_at, campaign_id'
-const INDEX_LIMIT = 5000
 
 // A custom code is lowercase letters, digits and hyphens. Only a search that
 // could be one gets the "Create tws.bio/<search>" action.
@@ -110,17 +110,15 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
   const state: ListState = { q, type, status, sort, show, kind }
   const now = new Date()
 
-  const indexQuery = supabase
-    .from('links')
-    .select(INDEX_COLUMNS)
-    .eq('user_id', user!.id)
-    .order('created_at', { ascending: false })
-    .range(0, INDEX_LIMIT - 1)
+  // Every link the owner has (paged past PostgREST's 1000-row cap), for the
+  // chip counts, Needs a look and the destination kinds.
+  const indexPromise = loadOwnerLinks(supabase, user!.id)
   const campaignsQuery = supabase.from('campaigns').select('id, name')
 
-  // Count (head-only) and one data page, through the same filter chain as
-  // ExportLinksButton's export-all query, so the page count, the rows and the
-  // CSV always agree. Only the data query needs an order.
+  // Without a search, chip or kind, the count (head-only) and one data page
+  // go through the same filter chain as ExportLinksButton's export-all
+  // query, so the page count, the rows and the CSV always agree. Only the
+  // data query needs an order.
   const requestedOffset = (requestedPage - 1) * PAGE_SIZE
   function pageQueries(filters: LinkListParams) {
     const dataQuery = applyLinkSort(
@@ -134,91 +132,94 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
     return { dataQuery, countQuery }
   }
 
-  // The search (campaign names), a chip or a kind needs the owner's links and
-  // campaigns first, to know which ids it stands for. Without them all four
-  // queries go out in one wave.
+  // A search (campaign names), a chip or a kind needs the owner's links and
+  // campaigns first. The page then filters, counts and sorts that whole
+  // index itself (matchesListFilters, sortLinks) and fetches only the rows
+  // of this page by id: a chip can stand for thousands of links, and a
+  // `.in('id', ...)` of all of them would not fit in a request URL. Without
+  // them all four queries go out in one wave.
   const needsIndexFirst = Boolean(q || show !== 'all' || kind)
   let filters: LinkListParams = { q, type, status, sort }
-  let indexResult: Awaited<typeof indexQuery>
+  let indexResult: Awaited<typeof indexPromise>
   let campaignsResult: Awaited<typeof campaignsQuery>
-  let pageResult: {
-    count: number | null
-    countError: unknown
-    data: LinkRow[] | null
-    dataError: unknown
-    dataQuery: ReturnType<typeof pageQueries>['dataQuery'] | null
-  }
+  let indexed: IndexedLink[] = []
+  let count = 0
+  let countError: unknown = null
+  let links: LinkRow[] | null = null
+  let linksError: unknown = null
+  // Clamp so an over-range ?page=9999 doesn't render the empty state.
+  const clampPage = (total: number) => Math.min(requestedPage, Math.max(1, Math.ceil(total / PAGE_SIZE)))
+  let page = requestedPage
 
   if (!needsIndexFirst) {
     const { dataQuery, countQuery } = pageQueries(filters)
     const [index, campaigns, countRes, dataRes] = await Promise.all([
-      indexQuery,
+      indexPromise,
       campaignsQuery,
       countQuery,
       dataQuery.range(requestedOffset, requestedOffset + PAGE_SIZE - 1),
     ])
     indexResult = index
     campaignsResult = campaigns
-    pageResult = {
-      count: countRes.count,
-      countError: countRes.error,
-      data: dataRes.data as LinkRow[] | null,
-      dataError: dataRes.error,
-      dataQuery,
+    indexed = toIndexed(index.data, now)
+    count = countRes.count ?? 0
+    countError = countRes.error
+    links = dataRes.data as LinkRow[] | null
+    linksError = dataRes.error
+    page = clampPage(count)
+    if (!countError && page !== requestedPage) {
+      // Rare path (hand-edited URL past the last page): refetch just the
+      // clamped page instead of showing the empty result of the over-range one.
+      const offset = (page - 1) * PAGE_SIZE
+      const clamped = await dataQuery.range(offset, offset + PAGE_SIZE - 1)
+      links = clamped.data as LinkRow[] | null
+      linksError = clamped.error
     }
   } else {
-    ;[indexResult, campaignsResult] = await Promise.all([indexQuery, campaignsQuery])
-    const indexed = indexResult.data ?? []
+    ;[indexResult, campaignsResult] = await Promise.all([indexPromise, campaignsQuery])
     const campaignIds = q ? matchingCampaignIds(campaignsResult.data ?? [], q) : []
-    const ids = indexResult.error
-      ? null
-      : chipLinkIds(toIndexed(indexed, now), show, kind, now)
-    filters = { q, type, status, sort, ids, campaignIds }
-    if (indexResult.error) {
-      pageResult = { count: null, countError: null, data: null, dataError: null, dataQuery: null }
-    } else if (ids && ids.length === 0) {
-      // Nothing matches the chip: no query to run.
-      pageResult = { count: 0, countError: null, data: [], dataError: null, dataQuery: null }
-    } else {
-      const { dataQuery, countQuery } = pageQueries(filters)
-      const [countRes, dataRes] = await Promise.all([
-        countQuery,
-        dataQuery.range(requestedOffset, requestedOffset + PAGE_SIZE - 1),
-      ])
-      pageResult = {
-        count: countRes.count,
-        countError: countRes.error,
-        data: dataRes.data as LinkRow[] | null,
-        dataError: dataRes.error,
-        dataQuery,
+    if (!indexResult.error) {
+      indexed = toIndexed(indexResult.data, now)
+      const listFilters = { q, type, status, show, kind, campaignIds: new Set(campaignIds) }
+      const matched = new Set(
+        indexed.filter((l) => matchesListFilters(l, listFilters, now)).map((l) => l.id)
+      )
+      const ordered = sortLinks(
+        indexResult.data.filter((row) => matched.has(row.id)),
+        sort
+      )
+      count = ordered.length
+      page = clampPage(count)
+      const offset = (page - 1) * PAGE_SIZE
+      const pageIds = ordered.slice(offset, offset + PAGE_SIZE).map((row) => row.id)
+      if (pageIds.length === 0) {
+        links = []
+      } else {
+        const res = await supabase
+          .from('links')
+          .select(LINK_COLUMNS)
+          .eq('user_id', user!.id)
+          .in('id', pageIds)
+        linksError = res.error
+        if (res.data) {
+          const byId = new Map((res.data as LinkRow[]).map((row) => [row.id, row]))
+          links = pageIds.flatMap((id) => byId.get(id) ?? [])
+        }
       }
+      // Export all: the chip's ids (null for a plain search), which the
+      // export fetches in chunks.
+      filters = { q, type, status, sort, ids: chipLinkIds(indexed, show, kind, now), campaignIds }
     }
-  }
-
-  const count = pageResult.count ?? 0
-  const totalPages = Math.ceil(count / PAGE_SIZE)
-  // Clamp so an over-range ?page=9999 doesn't render the empty state.
-  const page = Math.min(requestedPage, Math.max(1, totalPages))
-
-  let links = pageResult.data
-  let linksError = pageResult.dataError
-  if (!pageResult.countError && page !== requestedPage && pageResult.dataQuery) {
-    // Rare path (hand-edited URL past the last page): refetch just the
-    // clamped page instead of showing the empty result of the over-range one.
-    const offset = (page - 1) * PAGE_SIZE
-    const clamped = await pageResult.dataQuery.range(offset, offset + PAGE_SIZE - 1)
-    links = clamped.data as LinkRow[] | null
-    linksError = clamped.error
   }
 
   // A failed fetch must never render identically to "you have no links yet",
   // so check the error fields explicitly instead of falling through to the
   // empty state below.
-  const hasError = Boolean(indexResult.error || pageResult.countError || linksError)
+  const hasError = Boolean(indexResult.error || countError || linksError)
   if (hasError) {
     console.error('[links] query error:', {
       indexError: indexResult.error,
-      countError: pageResult.countError,
+      countError,
       linksError,
     })
   }
@@ -226,7 +227,6 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
     console.error('[links] campaigns query error:', campaignsResult.error)
   }
 
-  const indexed = toIndexed(indexResult.data ?? [], now)
   const campaignList = campaignsResult.data ?? []
   const campaignNames = new Map(campaignList.map((c) => [c.id, c.name]))
   const searchCampaigns = new Set(q ? matchingCampaignIds(campaignList, q) : [])
@@ -235,6 +235,7 @@ export default async function LinksPage({ searchParams }: { searchParams: Promis
     now
   )
   const liveCount = indexed.filter((l) => l.is_active).length
+  const totalPages = Math.ceil(count / PAGE_SIZE)
 
   const pageLinks = hasError ? [] : (links ?? [])
   const pageLinkIds = pageLinks.map((l) => l.id)
@@ -421,7 +422,7 @@ function toIndexed(
 }
 
 function PagerLink({ href, children }: { href: string | null; children: React.ReactNode }) {
-  const className = cn(buttonVariants({ variant: 'outline', size: 'sm' }))
+  const className = buttonVariants({ variant: 'outline', size: 'sm' })
   if (!href) {
     return (
       <span aria-disabled="true" className={cn(className, 'pointer-events-none border-rule text-text-3')}>
@@ -455,7 +456,8 @@ function NoMatch({ q, clearSearchHref }: { q: string; clearSearchHref: string })
         No links match &ldquo;{q}&rdquo;.{' '}
         {canCreate ? (
           <>
-            Clear the search or create {SHORT_DOMAIN}/{code}.
+            Clear the search or create{' '}
+            <span className="font-mono text-[14px] text-ink">{SHORT_DOMAIN}/{code}</span>.
           </>
         ) : (
           'Try another search or clear it.'
@@ -465,12 +467,12 @@ function NoMatch({ q, clearSearchHref }: { q: string; clearSearchHref: string })
         {canCreate && (
           <Link
             href={`/dashboard/create?code=${encodeURIComponent(code)}`}
-            className={cn(buttonVariants({ variant: 'outline' }))}
+            className={buttonVariants({ variant: 'outline' })}
           >
             Create <span className="font-mono">{SHORT_DOMAIN}/{code}</span>
           </Link>
         )}
-        <Link href={clearSearchHref} className={cn(buttonVariants({ variant: 'link' }))}>
+        <Link href={clearSearchHref} className={buttonVariants({ variant: 'link' })}>
           Clear the search
         </Link>
       </div>

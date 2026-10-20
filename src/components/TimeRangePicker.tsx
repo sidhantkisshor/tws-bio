@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils'
 interface TimeRangePickerProps {
   current: TimeRange
   basePath: string
+  /** False hides "All time" (Overview compares with the period before, which "All time" has none of). */
+  showAllTime?: boolean
   className?: string
 }
 
@@ -20,18 +22,21 @@ const ranges: { value: TimeRange; label: string }[] = [
  * vocabulary that parseTimeRange reads. A segmented control on the sunk
  * track: the selected option is a surface chip with an edge border. Plain
  * links, so it needs no client JS and every range is its own URL. Spans the
- * full width on phones.
+ * full width on phones. `showAllTime={false}` leaves "All time" out.
  */
-export function TimeRangePicker({ current, basePath, className }: TimeRangePickerProps) {
+export function TimeRangePicker({ current, basePath, showAllTime = true, className }: TimeRangePickerProps) {
+  const shown = showAllTime ? ranges : ranges.filter((r) => r.value !== 'all')
   return (
     <nav
       aria-label="Time range"
       className={cn(
-        'grid w-full grid-cols-4 gap-0.5 rounded-ctl bg-sunk p-[3px] md:inline-grid md:w-auto md:auto-cols-max md:grid-flow-col md:grid-cols-none',
+        'grid w-full gap-0.5',
+        shown.length === 4 ? 'grid-cols-4' : 'grid-cols-3',
+        'rounded-ctl bg-sunk p-[3px] md:inline-grid md:w-auto md:auto-cols-max md:grid-flow-col md:grid-cols-none',
         className,
       )}
     >
-      {ranges.map(({ value, label }) => {
+      {shown.map(({ value, label }) => {
         const active = current === value
         return (
           <Link

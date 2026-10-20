@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useAuth } from '@/hooks/useAuth'
 import { buttonVariants } from '@/components/ui/button-variants'
-import { cn } from '@/lib/utils'
 
 /**
  * The home masthead's client island: a "Dashboard" link for a signed-in
@@ -11,16 +10,13 @@ import { cn } from '@/lib/utils'
  * an outline button, not a fill, because the page's one amber fill is its main
  * action (Sign in, or Create link for the owner). An anonymous visitor never
  * downloads supabase-js: useAuth settles from the cookie check alone.
- *
- * cn() runs tailwind-merge, so the variant's border color replaces the base
- * `border-transparent` (raw cva output keeps both, and the border vanishes).
  */
 export function Navbar() {
   const { user } = useAuth()
   if (!user) return null
 
   return (
-    <Link href="/dashboard" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
+    <Link href="/dashboard" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
       Dashboard
     </Link>
   )

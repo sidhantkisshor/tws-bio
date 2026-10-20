@@ -83,10 +83,12 @@ export function linkHealthIssues(
     })
   }
 
+  let expired = false
   if (link.expires_at) {
     const exp = Date.parse(link.expires_at)
     if (Number.isFinite(exp)) {
       if (exp <= now) {
+        expired = true
         issues.push({
           kind: 'expired',
           severity: 'high',
@@ -128,7 +130,9 @@ export function linkHealthIssues(
     })
   }
 
-  if (opts.clicksInLast30d === 0) {
+  // "Quiet" says nothing new about a link that is off or expired: it cannot
+  // get clicks, and the stronger issue is already listed.
+  if (opts.clicksInLast30d === 0 && link.is_active && !expired) {
     const created = Date.parse(link.created_at ?? '')
     if (Number.isFinite(created) && now - created > 14 * DAY_MS) {
       issues.push({
@@ -140,6 +144,56 @@ export function linkHealthIssues(
   }
 
   return issues
+}
+
+const SEVERITY_RANK: Record<HealthIssue['severity'], number> = { high: 0, medium: 1, low: 2 }
+
+/** Issues worst first (high, medium, low). The rule order breaks a tie. */
+export function sortIssues(issues: HealthIssue[]): HealthIssue[] {
+  return issues
+    .map((issue, i) => [issue, i] as const)
+    .sort((a, b) => SEVERITY_RANK[a[0].severity] - SEVERITY_RANK[b[0].severity] || a[1] - b[1])
+    .map(([issue]) => issue)
+}
+
+export interface LinkHealth<T extends HealthLink = HealthLink> {
+  link: T
+  /** Worst first. Never empty. */
+  issues: HealthIssue[]
+  /** The severity of the first issue. */
+  worst: HealthIssue['severity']
+  /** Clicks in the last 30 days, or null when that count is not known. */
+  clicks30: number | null
+}
+
+/**
+ * One entry per link that has at least one issue, so a link is listed once
+ * with every issue it has, worst first. Entries are ranked by their worst
+ * issue, then by clicks in the last 30 days (the links people still use
+ * first; total clicks when the 30-day count is unknown), then by short code.
+ * Return undefined from `clicksInLast30d` when the count is unknown: the
+ * "quiet" rule is then skipped for that link.
+ */
+export function healthByLink<T extends HealthLink>(
+  links: readonly T[],
+  opts: { now: Date; shortDomain: string; clicksInLast30d?: (link: T) => number | undefined },
+): LinkHealth<T>[] {
+  const out: LinkHealth<T>[] = []
+  for (const link of links) {
+    const recent = opts.clicksInLast30d?.(link)
+    const issues = sortIssues(
+      linkHealthIssues(link, { now: opts.now, shortDomain: opts.shortDomain, clicksInLast30d: recent }),
+    )
+    if (issues.length === 0) continue
+    out.push({ link, issues, worst: issues[0].severity, clicks30: recent ?? null })
+  }
+  const weight = (e: LinkHealth<T>) => e.clicks30 ?? e.link.total_clicks ?? 0
+  return out.sort(
+    (a, b) =>
+      SEVERITY_RANK[a.worst] - SEVERITY_RANK[b.worst] ||
+      weight(b) - weight(a) ||
+      a.link.short_code.localeCompare(b.link.short_code),
+  )
 }
 
 export interface HealthSummary {

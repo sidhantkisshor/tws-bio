@@ -1,7 +1,11 @@
+import type { Metadata } from 'next'
 import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { CreateLinkForm, type CreateLinkInitialValues } from '@/components/CreateLinkForm'
 import { PageHeader } from '@/components/dashboard/PageHeader'
+
+// The root layout's template adds " - tws.bio".
+export const metadata: Metadata = { title: 'New link' }
 
 // A link id from the Duplicate row action. Checked before the query: a value
 // that is not a uuid makes Postgres raise an error instead of finding nothing.
