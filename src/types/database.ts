@@ -410,6 +410,14 @@ export type Database = {
         Args: { p_link_ids: string[]; p_since?: string | null }
         Returns: number
       }
+      get_click_heatmap: {
+        Args: { p_link_ids: string[]; p_since?: string | null }
+        Returns: { dow: number; hour: number; clicks: number }[]
+      }
+      get_link_click_windows: {
+        Args: { p_link_ids: string[]; p_prior_since: string; p_since: string }
+        Returns: { link_id: string; clicks_current: number; clicks_prior: number }[]
+      }
       uid: { Args: never; Returns: string }
     }
     Enums: {
