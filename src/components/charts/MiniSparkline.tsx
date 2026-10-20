@@ -14,7 +14,7 @@ interface MiniSparklineProps {
   className?: string
 }
 
-// A minimal, axis-free trend indicator for click counts inside table cells —
+// A minimal, axis-free trend indicator for click counts inside table cells:
 // gives per-row scannability that a bare number can't (finding:
 // links-per-link-sparklines). Deliberately tiny and non-interactive; the
 // full ClickChart/BarChart remain the source of truth for detailed analysis.

@@ -1,7 +1,10 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { cn, generateShortCode, isValidUrl, getShortUrl } from '@/lib/utils'
+import Link from 'next/link'
+import { cn, generateShortCode, isValidUrl, getShortUrl, normalizeUrl } from '@/lib/utils'
+import { isSafeUrl } from '@/lib/redirectSafety'
+import { isReservedShortCode } from '@/lib/shortCodes'
 import { toast } from 'sonner'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -19,13 +22,29 @@ import { TickerChip } from '@/components/TickerChip'
 import { useAuth } from '@/hooks/useAuth'
 import type { HomeLink } from '@/hooks/useLinks'
 
-type FieldName = 'url' | 'customCode' | 'iosDeepLink' | 'androidDeepLink' | 'fallbackUrl'
+type FieldName = 'url' | 'customCode' | 'campaignName' | 'iosDeepLink' | 'androidDeepLink' | 'fallbackUrl'
 type FieldErrors = Partial<Record<FieldName, string>>
 
-// Sentinel for "no campaign selected" — the Select needs a non-empty value.
+// Input id for each field, in on-screen order. The form is noValidate, so the
+// browser no longer moves focus to a bad field; a failed submit does it instead.
+const FIELD_INPUT_IDS: Record<FieldName, string> = {
+  url: 'url',
+  customCode: 'custom',
+  campaignName: 'new-campaign',
+  iosDeepLink: 'ios',
+  androidDeepLink: 'android',
+  fallbackUrl: 'fallback',
+}
+
+// Sentinels for the campaign Select, which needs a non-empty value.
 const NO_CAMPAIGN = 'none'
+const NEW_CAMPAIGN = '__new__'
+
+const DEEP_LINK_ERROR = 'Use a supported app scheme (such as instagram://) or an https:// link.'
 
 interface CreatedLink {
+  /** Row id, for the ticket's link to this link's stats page. */
+  id: string
   shortCode: string
   /** HH:MM:SS UTC, captured client-side at creation time. */
   filledAt: string
@@ -104,7 +123,9 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
       campaignsLoadedRef.current = false // allow a retry on the next open
       return
     }
-    setCampaigns(data || [])
+    const loaded = data || []
+    // Keep a campaign this form created while the list was still loading.
+    setCampaigns((prev) => [...prev.filter((c) => !loaded.some((l) => l.id === c.id)), ...loaded])
   }
 
   const handleUrlChange = (newUrl: string) => {
@@ -112,14 +133,17 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
     clearFieldError('url')
     // Track the latest input synchronously so stale async detections can bail out
     latestUrlRef.current = newUrl
+    // Detect on the completed form, so a pasted `youtube.com/watch?v=...` gets
+    // its deep links before blur (or submit) adds the scheme to the field.
+    const candidate = normalizeUrl(newUrl)
 
-    if (newUrl && isValidUrl(newUrl)) {
+    if (candidate && isValidUrl(candidate)) {
       // Dynamically import the deep-link map so it stays out of the initial bundle
       void (async () => {
         const { detectDeepLinks } = await import('@/lib/deeplinks')
         // A newer input superseded this one during the await; drop the stale result
         if (latestUrlRef.current !== newUrl) return
-        const deepLinkConfig = detectDeepLinks(newUrl)
+        const deepLinkConfig = detectDeepLinks(candidate)
 
         if (deepLinkConfig) {
           setDetectedPlatform(deepLinkConfig.platform)
@@ -138,11 +162,11 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
           setAutoDetected(false)
         }
       })().catch(() => {
-        // Deep-link chunk failed to load (offline/network) — detection is a
+        // Deep-link chunk failed to load (offline/network). Detection is a
         // best-effort enhancement, so silently skip rather than reject.
       })
     } else if (autoDetected) {
-      // URL cleared or invalidated — clear any previously auto-detected state
+      // URL cleared or invalidated: clear any previously auto-detected state
       setIosDeepLink('')
       setAndroidDeepLink('')
       setFallbackUrl('')
@@ -156,6 +180,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
   // client-side at creation time (FILLED · HH:MM:SS UTC · → destination-host).
   const showTicket = (link: HomeLink, copied: boolean) => {
     setCreatedLink({
+      id: link.id,
       shortCode: link.short_code,
       filledAt: new Date().toISOString().slice(11, 19),
       destHost: formatDestHost(link.original_url),
@@ -189,9 +214,41 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
     // first request is still in flight must be a no-op, not a duplicate RPC.
     if (loading) return
 
-    if (!isValidUrl(url)) {
-      setFieldErrors((prev) => ({ ...prev, url: 'Please enter a valid URL' }))
-      toast.error('Please enter a valid URL')
+    // Every check runs here, before any request: the form is noValidate. Enter
+    // submits without a blur, so a pasted bare host is completed here as well.
+    const destination = normalizeUrl(url)
+    const fallback = normalizeUrl(fallbackUrl)
+    const iosLink = iosDeepLink.trim()
+    const androidLink = androidDeepLink.trim()
+    if (destination !== url) setUrl(destination)
+    if (fallback !== fallbackUrl) setFallbackUrl(fallback)
+
+    const errors: FieldErrors = {}
+    if (!isValidUrl(destination)) errors.url = 'Please enter a valid URL'
+    // A code that names an app route is saved but never redirects, because
+    // the route matches before [shortCode] does.
+    if (customCode && isReservedShortCode(customCode)) {
+      errors.customCode = `Short code "${customCode}" is reserved. Please choose another.`
+    }
+    if (selectedCampaignId === NEW_CAMPAIGN && !newCampaignName.trim()) {
+      errors.campaignName = 'Please enter a campaign name'
+    }
+    // The redirect quietly skips a deep link or fallback it will not follow,
+    // so refuse those now, while the owner can still fix them. These fields
+    // are only sent, and only shown, for a deep link.
+    if (linkType === 'deep_link') {
+      if (iosLink && !isSafeUrl(iosLink)) errors.iosDeepLink = DEEP_LINK_ERROR
+      if (androidLink && !isSafeUrl(androidLink)) errors.androidDeepLink = DEEP_LINK_ERROR
+      if (fallback && !isValidUrl(fallback)) errors.fallbackUrl = 'Please enter a valid fallback URL'
+    }
+
+    const firstInvalid = (Object.keys(FIELD_INPUT_IDS) as FieldName[]).find((field) => errors[field])
+    if (firstInvalid) {
+      setFieldErrors(errors)
+      if (errors.iosDeepLink || errors.androidDeepLink || errors.fallbackUrl) setShowAdvanced(true)
+      toast.error(errors[firstInvalid])
+      // Wait a frame so the error, and the advanced panel if it was closed, is rendered.
+      requestAnimationFrame(() => document.getElementById(FIELD_INPUT_IDS[firstInvalid])?.focus())
       return
     }
 
@@ -208,26 +265,32 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
 
       // Resolve campaign ID (create new campaign if needed, only for logged-in users)
       let campaignId: string | undefined = undefined
-      if (user && selectedCampaignId === '__new__' && newCampaignName.trim()) {
+      if (user && selectedCampaignId === NEW_CAMPAIGN) {
         const { data: newCampaign, error: campaignError } = await supabase
           .from('campaigns')
           .insert({ name: newCampaignName.trim(), user_id: user.id })
-          .select('id')
+          .select('id, name')
           .single()
         if (campaignError) throw new Error(campaignError.message)
         campaignId = newCampaign.id
-      } else if (selectedCampaignId !== NO_CAMPAIGN && selectedCampaignId !== '__new__') {
+        // The campaign exists now, whatever happens to the link. Select it in
+        // place of "+ New campaign" so a retry after a failed create reuses it
+        // instead of inserting a duplicate.
+        setCampaigns((prev) => [newCampaign, ...prev.filter((c) => c.id !== newCampaign.id)])
+        setSelectedCampaignId(newCampaign.id)
+        setNewCampaignName('')
+      } else if (selectedCampaignId !== NO_CAMPAIGN && selectedCampaignId !== NEW_CAMPAIGN) {
         campaignId = selectedCampaignId
       }
 
       if (linkType === 'deep_link') {
         const { data, error: rpcError } = await supabase.rpc('create_deep_link', {
           p_short_code: shortCode,
-          p_original_url: url,
+          p_original_url: destination,
           p_user_id: user?.id,
-          p_ios_deep_link: iosDeepLink || undefined,
-          p_android_deep_link: androidDeepLink || undefined,
-          p_fallback_url: fallbackUrl || undefined,
+          p_ios_deep_link: iosLink || undefined,
+          p_android_deep_link: androidLink || undefined,
+          p_fallback_url: fallback || undefined,
         })
 
         if (rpcError) throw new Error(rpcError.message)
@@ -260,7 +323,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
       } else {
         const { data, error: rpcError } = await supabase.rpc('create_link', {
           p_short_code: shortCode,
-          p_original_url: url,
+          p_original_url: destination,
           p_user_id: user?.id,
         })
 
@@ -307,13 +370,14 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
       } else if (/android deep link/i.test(message)) {
         setFieldErrors((prev) => ({ ...prev, androidDeepLink: message }))
         setShowAdvanced(true)
-      } else if (/short code/i.test(message)) {
+      } else if (/short[ _]code/i.test(message)) {
+        // `short_code` also catches a check-constraint error that names the column.
         setFieldErrors((prev) => ({ ...prev, customCode: message }))
       } else if (/url must start with/i.test(message)) {
         setFieldErrors((prev) => ({ ...prev, url: message }))
       }
 
-      // Only clear loading on failure — on success the ticket replaces the
+      // Only clear loading on failure. On success the ticket replaces the
       // form, so the double-submit window is closed either way.
       setLoading(false)
     }
@@ -321,9 +385,10 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
 
   // Link creation requires authentication. The sign-in gate is the optimistic
   // default while client auth state resolves (anonymous is the common case on
-  // the marketing page — no skeleton, no title flicker); the form appears once
+  // the marketing page: no skeleton, no title flicker); the form appears once
   // a session is present. Routes that already resolved auth server-side (e.g.
   // the dashboard create route) pass initialUser to render the form directly.
+  // Signups are disabled on the project, so the gate offers only Sign in.
   if (!user) {
     return (
       <div className="max-w-2xl mx-auto">
@@ -331,16 +396,13 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
           <CardHeader>
             <CardTitle className="text-xl text-foreground">Sign in to shorten URLs</CardTitle>
             <CardDescription>
-              Create an account or sign in to create short links, deep links, and campaigns — all saved to your dashboard with analytics.
+              Sign in to create short links, deep links, and campaigns, all saved to your dashboard with analytics. Accounts are invite-only.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
-            <a href="/login" className={cn(buttonVariants(), 'h-10 px-6')}>
+          <CardContent>
+            <Link href="/login" className={cn(buttonVariants(), 'h-10 px-6')}>
               Sign in
-            </a>
-            <a href="/signup" className={cn(buttonVariants({ variant: 'outline' }), 'h-10 px-6')}>
-              Create account
-            </a>
+            </Link>
           </CardContent>
         </Card>
       </div>
@@ -368,7 +430,10 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
               <Button type="button" onClick={resetForm} className="h-10 px-6">
                 Create another
               </Button>
-              <a href="/dashboard" className={cn(buttonVariants({ variant: 'outline' }), 'h-10 px-6')}>
+              <a
+                href={`/dashboard/links/${createdLink.id}`}
+                className={cn(buttonVariants({ variant: 'outline' }), 'h-10 px-6')}
+              >
                 View in dashboard
               </a>
             </div>
@@ -381,7 +446,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
   const campaignOptions = [
     { value: NO_CAMPAIGN, label: 'No campaign' },
     ...campaigns.map((c) => ({ value: c.id, label: c.name })),
-    { value: '__new__', label: '+ New campaign...' },
+    { value: NEW_CAMPAIGN, label: '+ New campaign...' },
   ]
 
   return (
@@ -392,26 +457,30 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
           <CardDescription>Create a short, memorable link in seconds</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {detectedPlatform && (
-              <div className="rounded-lg border border-primary/20 bg-primary/10 p-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-primary-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p className="text-sm text-primary-text">
-                    <strong>{detectedPlatform}</strong> deep links detected and configured automatically!
-                  </p>
+          <form onSubmit={handleSubmit} noValidate>
+            {/* Always mounted, so screen readers announce the banner when
+                detection switches the link to a deep link. */}
+            <div role="status">
+              {detectedPlatform && (
+                <div className="mb-5 rounded-lg border border-primary/20 bg-primary/10 p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-primary-text" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-sm text-primary-text">
+                      <strong>{detectedPlatform}</strong> deep links detected and configured automatically!
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanced(true)}
+                    className="text-primary-text hover:text-primary-text/80 text-sm font-medium"
+                  >
+                    View settings
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowAdvanced(true)}
-                  className="text-primary-text hover:text-primary-text/80 text-sm font-medium"
-                >
-                  View settings
-                </button>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="space-y-4">
               {/* URL input row */}
@@ -423,6 +492,11 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                     type="url"
                     value={url}
                     onChange={(e) => handleUrlChange(e.target.value)}
+                    onBlur={() => {
+                      // Complete a pasted bare host (`example.com`) once focus leaves.
+                      const normalized = normalizeUrl(url)
+                      if (normalized !== url) handleUrlChange(normalized)
+                    }}
                     placeholder="https://example.com/very-long-url"
                     className="flex-1 bg-muted h-10"
                     aria-invalid={!!fieldErrors.url}
@@ -474,7 +548,10 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                 <Label htmlFor="campaign" className="mb-2">Campaign (optional)</Label>
                 <Select
                   value={selectedCampaignId}
-                  onValueChange={(v) => setSelectedCampaignId(v || NO_CAMPAIGN)}
+                  onValueChange={(v) => {
+                    setSelectedCampaignId(v || NO_CAMPAIGN)
+                    clearFieldError('campaignName')
+                  }}
                   onOpenChange={(open) => {
                     if (open) void loadCampaigns()
                   }}
@@ -493,14 +570,28 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedCampaignId === '__new__' && (
-                  <Input
-                    type="text"
-                    value={newCampaignName}
-                    onChange={(e) => setNewCampaignName(e.target.value)}
-                    placeholder="Campaign name"
-                    className="mt-2 bg-muted h-10"
-                  />
+                {selectedCampaignId === NEW_CAMPAIGN && (
+                  <>
+                    <Input
+                      id="new-campaign"
+                      type="text"
+                      value={newCampaignName}
+                      onChange={(e) => {
+                        setNewCampaignName(e.target.value)
+                        clearFieldError('campaignName')
+                      }}
+                      placeholder="Campaign name"
+                      aria-label="New campaign name"
+                      className="mt-2 bg-muted h-10"
+                      aria-invalid={!!fieldErrors.campaignName}
+                      aria-describedby={fieldErrors.campaignName ? 'campaign-name-error' : undefined}
+                    />
+                    {fieldErrors.campaignName && (
+                      <p id="campaign-name-error" role="alert" className="mt-1.5 text-xs text-destructive">
+                        {fieldErrors.campaignName}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -509,6 +600,8 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                 <button
                   type="button"
                   onClick={() => setShowAdvanced(!showAdvanced)}
+                  aria-expanded={showAdvanced}
+                  aria-controls="advanced-options"
                   className="text-sm text-primary-text hover:text-primary-text/80 font-medium flex items-center gap-1"
                 >
                   <svg
@@ -516,6 +609,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
+                    aria-hidden="true"
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
@@ -524,10 +618,11 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
               </div>
 
               {showAdvanced && (
-                <div className="space-y-4 p-4 bg-muted rounded-lg">
+                <div id="advanced-options" className="space-y-4 p-4 bg-muted rounded-lg">
                   <div>
-                    <Label className="mb-3">Link Type</Label>
+                    <Label id="link-type-label" className="mb-3">Link Type</Label>
                     <RadioGroup
+                      aria-labelledby="link-type-label"
                       value={linkType}
                       onValueChange={(val) => setLinkType(val as 'url' | 'deep_link')}
                       className="flex gap-6"
@@ -558,7 +653,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                             setAutoDetected(false)
                             clearFieldError('iosDeepLink')
                           }}
-                          placeholder="myapp://screen/path"
+                          placeholder="instagram://user?username=name"
                           className="bg-muted h-10"
                           aria-invalid={!!fieldErrors.iosDeepLink}
                           aria-describedby={fieldErrors.iosDeepLink ? 'ios-error' : undefined}
@@ -582,7 +677,7 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                             setAutoDetected(false)
                             clearFieldError('androidDeepLink')
                           }}
-                          placeholder="myapp://screen/path"
+                          placeholder="instagram://user?username=name"
                           className="bg-muted h-10"
                           aria-invalid={!!fieldErrors.androidDeepLink}
                           aria-describedby={fieldErrors.androidDeepLink ? 'android-error' : undefined}
@@ -605,6 +700,10 @@ export function CreateLinkForm({ initialUser = null, onCreated }: CreateLinkForm
                             setFallbackUrl(e.target.value)
                             setAutoDetected(false)
                             clearFieldError('fallbackUrl')
+                          }}
+                          onBlur={() => {
+                            const normalized = normalizeUrl(fallbackUrl)
+                            if (normalized !== fallbackUrl) setFallbackUrl(normalized)
                           }}
                           placeholder="https://app-store-link.com"
                           className="bg-muted h-10"

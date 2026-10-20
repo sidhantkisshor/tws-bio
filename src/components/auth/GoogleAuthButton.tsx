@@ -16,9 +16,10 @@ interface GoogleAuthButtonProps {
 }
 
 /**
- * Shared "Or continue with" divider + Google OAuth button for login/signup.
+ * "Or continue with" divider + Google OAuth button for the login form. Its
+ * toasts need a <Toaster /> on the page (the login page renders one).
  * signInWithOAuth navigates the whole page on success, so pending state is
- * only reset on failure — otherwise the button flickers before the redirect.
+ * only reset on failure: otherwise the button flickers before the redirect.
  */
 export function GoogleAuthButton({ errorMessage, disabled, onPendingChange }: GoogleAuthButtonProps) {
   const [pending, setPending] = useState(false)
@@ -39,7 +40,7 @@ export function GoogleAuthButton({ errorMessage, disabled, onPendingChange }: Go
       })
 
       if (error) throw error
-      // Success: the browser is navigating to Google — stay pending.
+      // Success: the browser is navigating to Google, so stay pending.
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : errorMessage)
       setPending(false)

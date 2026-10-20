@@ -32,12 +32,18 @@ export function getShortUrl(shortCode: string): string {
 // Locale-stable date formatter. `toLocaleDateString()` with no explicit locale
 // uses the server's locale on the server and the browser's locale on the client,
 // which produces a hydration mismatch (e.g. 11/7/2026 vs 7/11/2026) once a table
-// is a Client Component. Pinning the locale makes server and client agree.
+// is a Client Component. Pinning the locale makes server and client agree. The
+// zone is pinned for the same reason (the server runs in UTC), and to India
+// Standard Time so a date matches the day the charts file it under
+// (CHART_TIME_ZONE in analytics.ts, which this module cannot import: it is
+// server-only and this one also runs in the browser).
+const DATE_TIME_ZONE = 'Asia/Kolkata'
+
 export function formatDate(value: string | number | Date | null | undefined): string {
   if (!value) return '---'
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return '---'
-  return d.toLocaleDateString('en-US')
+  return d.toLocaleDateString('en-US', { timeZone: DATE_TIME_ZONE })
 }
 
 // Canonicalize an IPv4 host given in any notation (dotted-decimal, dotted-octal,

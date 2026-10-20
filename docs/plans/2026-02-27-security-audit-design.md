@@ -1,3 +1,5 @@
+> Historical record (written February 2026). Completed or superseded: do not execute. Current state: CLAUDE.md.
+
 # Security-First Audit Design
 
 **Date:** 2026-02-27

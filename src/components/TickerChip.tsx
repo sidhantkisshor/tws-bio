@@ -18,12 +18,18 @@ interface TickerChipProps {
   flashOnMount?: boolean
   /** Start on the green Check state, then revert after 1.2s. */
   copiedOnMount?: boolean
+  /**
+   * Grow the copy button's hit area to 40px for thumbs, without changing how
+   * the chip looks. The extra area fills the gap beside the label, so it never
+   * covers the label link.
+   */
+  touchTarget?: boolean
 }
 
 /**
  * The product's signature element: a short link rendered as a monospace
  * "ticker" chip with a green tick bar. Copying fires a one-time fill flash
- * (tick-fill keyframe) and morphs the Copy icon into a green Check — under
+ * (tick-fill keyframe) and morphs the Copy icon into a green Check. Under
  * prefers-reduced-motion the icon swap alone confirms.
  */
 export function TickerChip({
@@ -34,6 +40,7 @@ export function TickerChip({
   onCopied,
   flashOnMount = false,
   copiedOnMount = false,
+  touchTarget = false,
 }: TickerChipProps) {
   const [copied, setCopied] = useState(copiedOnMount)
   const [flashing, setFlashing] = useState(flashOnMount)
@@ -52,7 +59,7 @@ export function TickerChip({
     try {
       await navigator.clipboard.writeText(getShortUrl(code))
     } catch {
-      return // clipboard unavailable — never show a false success
+      return // clipboard unavailable: never show a false success
     }
     setCopied(true)
     setFlashing(true)
@@ -89,7 +96,10 @@ export function TickerChip({
           type="button"
           onClick={handleCopy}
           aria-label={copied ? 'Short link copied' : 'Copy short link'}
-          className="inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className={cn(
+            'inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+            touchTarget && "relative after:absolute after:-inset-2 after:content-['']",
+          )}
         >
           <span className="relative block size-3.5">
             <Copy

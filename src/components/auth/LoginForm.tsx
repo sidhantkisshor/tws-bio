@@ -2,7 +2,6 @@
 
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
 import { toast } from 'sonner'
 import { CircleAlert, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -12,9 +11,13 @@ import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton'
 
 /**
  * Surfaces ?error=auth_failed set by src/app/auth/callback/route.ts when the
- * PKCE code exchange fails. The query key is a contract with that route —
+ * PKCE code exchange fails. The query key is a contract with that route:
  * change both together or neither. useSearchParams must render inside a
  * Suspense boundary so the page stays statically prerenderable.
+ *
+ * Signups are disabled on the project, so a Google account with no
+ * provisioned user also lands here. Retrying cannot fix that, hence the
+ * invite-only hint instead of "Try again".
  */
 function CallbackErrorAlert() {
   const searchParams = useSearchParams()
@@ -27,7 +30,10 @@ function CallbackErrorAlert() {
       className="mb-4 flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
     >
       <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
-      <span>Google sign-in didn&apos;t complete. Try again.</span>
+      <span>
+        Google sign-in didn&apos;t complete. Accounts are invite-only, so if you have not
+        been given one, ask the owner.
+      </span>
     </div>
   )
 }
@@ -54,7 +60,7 @@ export function LoginForm() {
 
       if (error) throw error
 
-      // Success: stay disabled through the redirect — loading resets only on failure.
+      // Success: stay disabled through the redirect. Loading resets only on failure.
       router.push('/dashboard')
       router.refresh()
     } catch (err: unknown) {
@@ -114,12 +120,7 @@ export function LoginForm() {
           onPendingChange={setGooglePending}
         />
 
-        <div className="text-center text-sm">
-          <span className="text-muted-foreground">Don&apos;t have an account? </span>
-          <Link href="/signup" className="font-medium text-primary-text hover:text-primary-text/80">
-            Sign up
-          </Link>
-        </div>
+        <p className="text-center text-sm text-muted-foreground">Accounts are invite-only.</p>
       </form>
     </>
   )

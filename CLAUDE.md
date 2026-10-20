@@ -12,17 +12,22 @@ tws.bio is a URL shortener with analytics and mobile deep linking, built with Ne
 npm run dev       # Start dev server (Next.js)
 npm run build     # Production build
 npm run start     # Start production server
-npm run lint      # ESLint 10 (flat config, eslint.config.mjs)
+npm run lint      # ESLint 10 (flat config, eslint.config.mjs): typescript-eslint recommended, Next.js rules, react-hooks
 npm run test      # Vitest (run mode), unit tests for pure functions and the redirect routes
 npm run typecheck # tsc --noEmit
 ```
 
+`next build` (Next.js 16) does not run ESLint and there is no CI, so run `npm run lint`,
+`npm run typecheck` and `npm run test` before pushing.
+
 Testing uses **Vitest** (`vitest.config.ts`, `environment: node`). Specs live in `src/**/__tests__/`.
 They cover the two redirect route handlers (`[shortCode]` and `r/[slug]`, run with Supabase and
-`after()` mocked), URL safety (`redirectSafety`, `utils`), short codes (including a check that every
-top-level route is reserved), the measurement layer (`sgtm`, `forwardParams`,
-`shortLinkAttribution`, `clickContext`), `deeplinks`, `resourceDrop`, `userAgent` and the
-`anonLinks` hook. Add tests for pure/logic functions; there is no component/E2E harness.
+`after()` mocked), URL safety (`redirectSafety`, `utils`), short codes (including checks that every
+top-level route is reserved and that migration 027's SQL list matches), the measurement layer
+(`sgtm`, `forwardParams`, `shortLinkAttribution`, `clickContext`), `deeplinks`, `resourceDrop`,
+`userAgent`, the dashboard's date windows and filters (`analytics`, `linkFilters`), the Edit Link
+checks (`linkEdit`) and the session cookie check in `useAuth`. Add tests for pure/logic functions;
+there is no component/E2E harness.
 
 **Runtime:** Node 24 is pinned via `engines.node` (`^24.0.0`) and `.nvmrc`. Vercel reads
 `engines.node` and builds with it, which is what actually decides the production runtime: the
@@ -82,10 +87,11 @@ The session-refresh middleware lives in `src/proxy.ts` (exports `proxy` function
 
 | Route | Type | Purpose |
 |---|---|---|
-| `/` | Server Component + Client islands | Home page with link creation form |
-| `/login` | Client Component | Email/password + Google OAuth login |
-| `/signup` | Client Component | Registration |
-| `/dashboard` | Server Component | Auth-guarded, fetches user's links server-side via `redirect('/login')` |
+| `/` | Server Component + Client islands | Home page with link creation form. Static |
+| `/login` | Server Component + client form | Email/password + Google OAuth login. Static |
+| `/signup` | Server Component | Invite-only notice. Sign-ups are disabled on the Supabase project and the owner creates accounts, so there is no registration form. Static |
+| `/resources` | Server Component | Public list of trading tools and resources. Static |
+| `/dashboard/*` | Server Components | Overview, links, link detail, analytics, campaigns, campaign detail, create. `dashboard/layout.tsx` guards them all (`redirect('/login')`); each has a `loading.tsx` skeleton |
 | `/[shortCode]` | Route Handler (GET) | Core redirect logic + deep link handling + analytics tracking. Next.js also runs it for HEAD |
 | `/r/[slug]` | Route Handler (GET) | TWS Resource Drop short links: 302 to `twsgurukulx.com/r/{slug}` without waiting on the DB (see `src/lib/resourceDrop.ts`). The Resource Drop Desk writes to the TWS CRM and cannot reach this database, so there is no link created up front. In `after()`, `resource_drop_link_id` (migration 021, definer, anon-callable) finds or creates a `links` row `short_code = 'r/{slug}'` tagged `resource-drop`, then `record_click_and_increment` logs the click. Bots skipped; creation capped at 20 new rows an hour. |
 | `/auth/callback` | Route Handler (GET) | PKCE OAuth code exchange |
@@ -97,11 +103,12 @@ The home page demonstrates the app's core split: `page.tsx` is a Server Componen
 
 ### Key Data Flow
 
-1. **Link creation**: Requires authentication. Client calls `create_link` or `create_deep_link` Supabase RPC (SECURITY DEFINER); since migration 019 both reject callers with no session (`auth.uid() IS NULL` → "You must be signed in to create links") and always own the row to the caller via `COALESCE(p_user_id, auth.uid())`. These RPCs are the only write path to `links` (direct INSERT is blocked by RLS), so this holds for raw REST calls too. `CreateLinkForm` shows a sign-in/create-account gate to anonymous visitors instead of the form. The `anon_links` localStorage system + `get_links_by_ids` RPC now only surface links created anonymously *before* migration 019 — no new anonymous links can be created.
+1. **Link creation**: Requires authentication. Client calls `create_link` or `create_deep_link` Supabase RPC (SECURITY DEFINER); since migration 019 both reject callers with no session (`auth.uid() IS NULL` → "You must be signed in to create links") and always own the row to the caller via `COALESCE(p_user_id, auth.uid())`. These RPCs are meant to be the only write path to `links`, but the 001 policy "Users can create links" still lets a signed-in user INSERT through REST until migration 026 drops it; anonymous callers are refused either way. `CreateLinkForm` shows a sign-in gate (accounts are invite-only) to anonymous visitors instead of the form. It also refuses a reserved code (`RESERVED_SHORT_CODES` in `src/lib/shortCodes.ts`: the app's own top-level route names, which Next.js serves before `[shortCode]`; migration 027 adds the same list as a CHECK) and a destination that is another tws.bio short link (`isValidUrl`). The `anon_links` localStorage system + `get_links_by_ids` RPC now only surface links created anonymously *before* migration 019. No new anonymous links can be created.
 2. **Redirect**: `GET /[shortCode]` first checks that the path has the shape of a stored code (`hasShortCodeShape`), so `/favicon.ico`, `/robots.txt` and scanner probes get the branded 404 with no database call. Then it looks up the active link. A failed or timed-out lookup returns a logged 503 page with `Retry-After`, never "not found". An expired link, a link at its click limit, and a link whose destination or web fallback is the same short link (a loop) get a 410 page. Deep links get an Android intent redirect or the HTML page with a JS redirect and fallback timeout; standard links get a `no-store` 307. The status pages are in `src/lib/linkPages.ts`.
 3. **Analytics**: Tracked asynchronously via `after()` callback during redirect. Calls the `record_click_and_increment` RPC (inserts into `clicks` and bumps `links.total_clicks` in one call). Only the three responses that send the visitor on record a click (307, Android intent, deep-link page), and only for a GET from a user agent that is not a bot or link preview (`shouldRecordClick` in `src/lib/clickContext.ts`). Click totals from before this filter shipped (October 2026) still include some bot and HEAD requests: they were left in on purpose.
 4. **Auth**: Email/password or Google OAuth → PKCE exchange at `/auth/callback` → session refreshed by middleware on every request. Sign-out uses `<form action="/auth/signout" method="post">` for progressive enhancement. Auth redirect routes resolve origin from `NEXT_PUBLIC_APP_URL` with fallback to `requestUrl.origin`.
-5. **Dashboard**: Server-side paginated (PAGE_SIZE 20) using async `searchParams` — fully server-rendered, no client JS
+5. **Dashboard**: Server Components. Each page starts its queries together rather than one after another, and a query that fails shows an error card instead of failing the page. Charts (recharts) load lazily through `src/components/charts/lazy.tsx`, so recharts is in no first-load bundle. Days are India Standard Time days (`src/lib/analytics.ts`, and `get_clicks_over_time` once migration 022 is applied). The Links page is server-paginated (`PAGE_SIZE` 20) through async `searchParams`.
+6. **Auth on public pages**: `useAuth` (`src/hooks/useAuth.ts`) checks `document.cookie` for a Supabase session cookie first. With none, it settles to signed-out without loading supabase-js, so anonymous visitors never download it.
 
 ### Deep Link System
 
@@ -135,28 +142,35 @@ What tws.bio measures is the **click**, not the app. That path is server-side an
 - `clicks` — per-click records (ip_address, user_agent, browser_name, os_name, device_type, referrer_url)
 - `profiles` — extends auth.users (email, full_name, avatar_url)
 
-Ghost tables (exist in schema but not wired into the app): `custom_domains`, `api_keys`. Ghost columns on `links`: `password_hash`, `unique_clicks`, `custom_meta`, `tags`, `qr_code_url`.
+Ghost tables (exist in schema but not wired into the app): `custom_domains`, `api_keys`. Ghost columns on `links`: `password_hash`, `unique_clicks`, `custom_meta`, `qr_code_url`. `tags` is live: Resource Drop rows carry `resource-drop` (migration 021).
 
 RLS is enabled on all tables. `SECURITY DEFINER` RPCs (`create_link`, `create_deep_link`, `get_link_by_short_code`, `record_click_and_increment`) bypass RLS intentionally — all have `SET search_path = 'public'` to prevent search path injection. The analytics aggregation RPCs (`get_clicks_over_time`, `get_*_breakdown`, `get_total_clicks`) are SECURITY INVOKER on purpose so clicks RLS applies. Anonymous SELECT on `links` is disabled (owner-only policy); the redirect path uses `get_link_by_short_code`.
 
-Migrations are in `supabase/migrations/` (001–021 + a timestamped drop). The remote DB is managed via the Supabase MCP `apply_migration` tool (tracked migration history); local files are the canonical intent but the remote drifted historically — always preflight actual remote state (`pg_proc`, `pg_indexes`, `pg_policies`) before applying. Migrations 001–021 are applied to production. Some (021 among them) were run in the SQL editor, so they are missing from `supabase_migrations.schema_migrations`: confirm what is applied from `pg_proc` / `pg_policies`, not from that table. `_repair_backup_20260718` holds the pre-repair state from migration 020 (link ownership, deep-link URIs, `total_clicks`); keep it until nobody needs a rollback.
+Migrations are in `supabase/migrations/` (001-029 + a timestamped drop). The remote DB is managed via the Supabase MCP `apply_migration` tool (tracked migration history); local files are the canonical intent but the remote drifted historically, so always preflight actual remote state (`pg_proc`, `pg_indexes`, `pg_policies`) before applying. Migrations 001-021 are applied to production. Some (021 among them) were run in the SQL editor, so they are missing from `supabase_migrations.schema_migrations`: confirm what is applied from `pg_proc` / `pg_policies`, not from that table. `_repair_backup_20260718` holds the pre-repair state from migration 020 (link ownership, deep-link URIs, `total_clicks`); keep it until nobody needs a rollback.
+
+Migrations 022-029 are written but NOT applied (as of 2026-10-20). Each file's header gives its
+preflight queries, its order and a verify query. Apply 022 (IST day buckets, faster analytics
+windows) right before the app deploy that switches the charts to IST. Apply 028 on its own, after
+026. 029 masks the raw IPs of clicks from before 2026-07-15 and cannot be undone.
 
 ## Conventions
 
 - **Path alias**: `@/*` maps to `./src/*`
 - **Components**: Named exports (not default), props typed with inline interfaces. Exception: `page.tsx` files use `export default` (Next.js requirement)
 - **DB types**: Derived from `Database` type in `src/types/database.ts` — e.g. `Database['public']['Tables']['links']['Row']`
-- **Styling**: Inline Tailwind utility classes only, blue-600 as primary action color
-- **Short codes**: 6-char alphanumeric random string; custom codes are lowercase alphanumeric + hyphens. A path that does not match `SHORT_CODE_PATTERN` (`src/lib/shortCodes.ts`) never reaches the database
-- **Utility functions**: `cn()`, `generateShortCode()`, `getShortUrl()`, `isValidUrl()` (also refuses a destination that is another tws.bio short link), `normalizeUrl()` in `src/lib/utils.ts`
+- **Styling**: Inline Tailwind utility classes only. The primary action color is the brand green: `bg-primary` (#00802B) for solid fills, `text-primary-text` for green text on dark surfaces (tokens in `src/app/globals.css`)
+- **Short codes**: 6-char alphanumeric random string; custom codes are lowercase alphanumeric + hyphens, and never a reserved route name (`RESERVED_SHORT_CODES`). A path that does not match `SHORT_CODE_PATTERN` never reaches the database
+- **Utility functions**: `cn()`, `generateShortCode()`, `getShortUrl()`, `isValidUrl()`, `normalizeUrl()` in `src/lib/utils.ts`
 
 ## Known Issues
 
-- Ghost columns on `links` table (`password_hash`, `unique_clicks`, `custom_meta`, `tags`, `qr_code_url`) are unused — harmless but add schema noise
+- Ghost columns on `links` table (`password_hash`, `unique_clicks`, `custom_meta`, `qr_code_url`) are unused, harmless but add schema noise
 - `unique_clicks` on `links` is always 0 — no logic increments it
 - `custom_domains` and `api_keys` tables exist but have no application code
 - No rate limiting on link creation or redirect endpoints (would require Redis/Upstash)
-- `clicks` rows recorded before 2026-07-15 have raw IPs, NULL `referrer_domain`, and NULL `country`; newer rows get masked IPs, derived referrer domains, and country from Vercel's `x-vercel-ip-country` header (migration 017 — country stays NULL in local dev where the header is absent)
+- `clicks` rows recorded before 2026-07-15 have raw IPs (until migration 029 masks them), NULL `referrer_domain`, and NULL `country`; newer rows get masked IPs, derived referrer domains, and country from Vercel's `x-vercel-ip-country` header (migration 017; country stays NULL in local dev where the header is absent)
 - Anonymous users' home-page link list goes through the `get_links_by_ids(uuid[])` definer RPC (migration 018) since direct `links` reads are owner-only under RLS — possession of a link UUID is treated as proof of creation
 - A tag-server outage surfaces only as a `console.error` from `route.ts` (`'failed'` is logged, `'skipped'` deliberately is not). There is no alert on it, so a sustained GA4 gap is found by reading logs, not by being told
+- `max_clicks` is a soft cap: the redirect checks the count, then records the click in a separate call, so a burst of clicks at the same moment can pass the limit by a few. The Edit Link dialog says so ("Approximate")
 - Safari on an iPad (iPadOS 13 and later) sends the same user agent as Safari on a Mac, so those clicks are stored as macOS desktop and get the desktop redirect, not the app deep link (see `src/lib/userAgent.ts`)
+- The markdown files in `docs/` are historical records of finished or superseded work. Do not execute them; this file and the code are the current state

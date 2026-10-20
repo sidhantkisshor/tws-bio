@@ -1,17 +1,19 @@
-import { Navbar } from '@/components/Navbar'
+import { PublicNav } from '@/components/PublicNav'
 import { Footer } from '@/components/Footer'
 import { resources } from '@/config/resources'
+import { dmSerif } from '@/app/fonts'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Resources — tws.bio',
+  title: 'Resources - tws.bio',
   description: 'Trading tools, platforms, and resources curated by @tradingwithsidhant',
 }
 
 export default function ResourcesPage() {
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <Navbar />
+    <div className={`min-h-screen bg-background flex flex-col ${dmSerif.variable}`}>
+      {/* The audience page: a server-only nav, so no auth client JS ships here. */}
+      <PublicNav />
 
       <main className="flex-1 w-full max-w-2xl mx-auto px-4 pt-28 pb-16">
         <h1 className="text-3xl md:text-4xl font-bold text-foreground leading-tight">

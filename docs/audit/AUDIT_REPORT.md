@@ -1,3 +1,5 @@
+> Historical record (written July 2026). Completed or superseded: do not execute. Current state: CLAUDE.md.
+
 # tws.bio — Comprehensive Code Audit
 
 **Scope:** full repository (~7k LOC) — Next.js 16 App Router, React 19, TypeScript 5, Tailwind v4, Supabase (Postgres + Auth).

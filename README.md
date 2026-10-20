@@ -1,102 +1,57 @@
-# tws.bio - URL Shortener with Analytics
+# tws.bio
 
-A URL shortener with click analytics and mobile deep linking, built with Next.js and Supabase.
+A private short-link and click-tracking tool for one business (Trading with Sidhant). It replaces a Bitly subscription: short links on `tws.bio`, mobile deep links that open the native app, campaigns, and per-link click stats.
 
-## Features
+- **Sign-in is required to create links.** Anyone can follow a short link. Only a signed-in user can make one.
+- **Accounts are invite-only.** Signups are disabled on the Supabase project, so `/signup` only says so. The owner adds users in the Supabase dashboard.
+- **Sign-in methods:** email and password, or Google OAuth. Google is the only OAuth provider. There is no GitHub sign-in.
 
-- **URL Shortening** — Create short, memorable links (anonymous or authenticated)
-- **Click Analytics** — Track total clicks per link with browser, OS, and device info
-- **Mobile Deep Linking** — Auto-detect 30+ platforms and generate iOS/Android deep links with fallback URLs
-- **Link Controls** — Expiration dates and max click limits
+## Stack
 
-## Tech Stack
+Next.js 16 (App Router), React 19, TypeScript 5, Tailwind CSS v4, Supabase (PostgreSQL + Auth), Vitest. Hosted on Vercel, with functions in `bom1` (Mumbai) next to the database. Node 24 (`.nvmrc`).
 
-- **Frontend**: Next.js 16 (App Router), React 19, TypeScript 5, Tailwind CSS v4
-- **Backend**: Supabase (PostgreSQL, Auth)
-- **Deployment**: Vercel
+## Local setup
 
-## Setup Instructions
+1. Use Node 24 and run `npm install`.
+2. Create a Supabase project. On its empty database, run every file in `supabase/migrations/` in filename order (SQL editor or `psql`).
+   - 001 to 021 are applied to production. The numbered files from 022 on are written but not yet applied to production. Each of those has a read-only preflight in its header to run against production first.
+   - The timestamped `20250715073856_drop_public_links_policy.sql` sorts last. It is a `DROP POLICY IF EXISTS`, so that position is fine.
+3. In Supabase Auth:
+   - **Providers:** enable Google.
+   - **URL Configuration:** set the Site URL to `http://localhost:3000` and add `http://localhost:3000/auth/callback` to the Redirect URLs.
+   - **Users:** add your own account here. The app has no sign-up form.
+4. Create `.env.local`:
 
-### 1. Clone the repository
+   ```env
+   # Required
+   NEXT_PUBLIC_SUPABASE_URL=
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=
+   NEXT_PUBLIC_APP_URL=              # e.g. http://localhost:3000
+   NEXT_PUBLIC_SHORT_DOMAIN=         # e.g. tws.bio
 
-```bash
-cd tws-bio
-```
+   # Optional, all safe to leave unset (see "Measurement and Tagging" in CLAUDE.md)
+   SGTM_CLICKS=                      # server-only, must be `on` to send clicks at all (off by default)
+   SGTM_ENDPOINT=                    # server-only, GTM server container base URL
+   GA4_MEASUREMENT_ID=               # server-only, GA4 property the server container forwards to
+   SGTM_CID_SALT=                    # server-only, salt for the derived cookieless client ID
+   SHORTLINK_AUTOTAG=                # optional, `off` disables default utm auto-tagging (anything else, or unset, leaves it on)
+   ```
 
-### 2. Install dependencies
+   Keep `SGTM_CLICKS` off unless `GA4_MEASUREMENT_ID` points at a GA4 property used only for clicks. In the property the business website reports into, each click lands as a new, unattributed user and drowns the real numbers.
 
-```bash
-npm install
-```
+5. Run `npm run dev` and open http://localhost:3000.
 
-### 3. Set up Supabase
+## Commands
 
-1. Create a new project at [supabase.com](https://supabase.com)
-2. Go to SQL Editor and run the migration from `supabase/migrations/001_create_url_shortener_schema.sql`
-3. Enable Google and GitHub OAuth providers in Authentication > Providers (optional)
-4. Add your redirect URLs in Authentication > URL Configuration:
-   - Site URL: `http://localhost:3000` (for development)
-   - Redirect URLs: `http://localhost:3000/auth/callback`
+| Command | What it does |
+|---|---|
+| `npm run dev` | Start the dev server |
+| `npm run build` | Production build |
+| `npm run start` | Serve the production build |
+| `npm run lint` | ESLint (flat config in `eslint.config.mjs`) |
+| `npm run test` | Vitest unit tests, run once |
+| `npm run typecheck` | Type-check with `tsc --noEmit` |
 
-### 4. Configure environment variables
+## Architecture
 
-Create a `.env.local` file:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-
-# Domain configuration
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-NEXT_PUBLIC_SHORT_DOMAIN=localhost:3000
-```
-
-### 5. Run the development server
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) to see the app.
-
-## Deployment
-
-### Deploy to Vercel
-
-1. Push your code to GitHub
-2. Import your repository in Vercel
-3. Add the environment variables
-4. Update the environment variables with production URLs:
-   - `NEXT_PUBLIC_APP_URL`: Your Vercel app URL
-   - `NEXT_PUBLIC_SHORT_DOMAIN`: tws.bio (or your custom domain)
-5. Deploy!
-
-### Custom Domain Setup
-
-1. Add your domain (tws.bio) in Vercel domain settings
-2. Update DNS records as instructed
-3. Update `NEXT_PUBLIC_SHORT_DOMAIN` environment variable
-4. Add the domain to Supabase allowed redirect URLs
-
-## Database Schema
-
-The app uses the following main tables:
-
-- **links** — Shortened links with metadata (short_code, original_url, deep link fields, expiration, click limits)
-- **clicks** — Per-click analytics records (IP, user agent, browser, OS, device type, referrer)
-- **profiles** — User profile information (extends auth.users)
-
-Note: `custom_domains` and `api_keys` tables exist in the schema but are not wired into the application.
-
-## Security Features
-
-- Row Level Security (RLS) enabled on all tables
-- SECURITY DEFINER RPCs with `SET search_path = 'public'`
-- URL validation with SSRF protection (blocks private IPs, cloud metadata, hex/octal encodings)
-- XSS prevention in deep link HTML responses
-- Secure authentication with Supabase Auth (PKCE flow)
-
-## License
-
-This project is licensed under the MIT License.
+See [CLAUDE.md](CLAUDE.md): routes, the three Supabase clients, the redirect handler and its security checks, measurement and tagging, the database and its migrations, and known issues.

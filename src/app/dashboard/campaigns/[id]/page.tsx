@@ -2,24 +2,27 @@ import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import {
-  getClicksOverTime,
-  getTopReferrers,
-  getDeviceBreakdown,
-  getCountryBreakdown,
-  getBrowserBreakdown,
-  getTotalClicks,
-  type TimeRange,
+  getClicksOverTimeResult,
+  getTopReferrersResult,
+  getDeviceBreakdownResult,
+  getCountryBreakdownResult,
+  getBrowserBreakdownResult,
+  getTotalClicksResult,
+  isUuid,
+  parseTimeRange,
+  priorWindowTotal,
+  rangeWindow,
+  zeroFillDays,
 } from '@/lib/analytics'
-import { ClicksOverTimeChart } from '@/components/charts/ClicksOverTimeChart'
-import { BarChart } from '@/components/charts/BarChart'
-import { PieChart } from '@/components/charts/PieChart'
+import { AlertTriangle, ChevronLeft } from 'lucide-react'
+import { LazyBarChart, LazyClicksOverTimeChart, LazyPieChart } from '@/components/charts/lazy'
 import { TimeRangePicker } from '@/components/TimeRangePicker'
-import { TrendChip, computeTrend, type StatTrend } from '@/components/dashboard/StatCard'
+import { TrendChip, computeTrend } from '@/components/dashboard/StatCard'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 
-const VALID_RANGES = new Set(['7d', '30d', '90d', 'all'])
-const RANGE_DAYS: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90 }
+// What an empty campaign's stats are, without asking the database.
+const NO_ROWS = { data: [], error: false }
 
 export default async function CampaignDetailPage({
   params,
@@ -33,151 +36,205 @@ export default async function CampaignDetailPage({
   if (!user) redirect('/login')
 
   const { id } = await params
+  // Before any query: a malformed id would fail both uuid lookups and render
+  // the error page instead of a 404.
+  if (!isUuid(id)) notFound()
+
   const { range: rangeParam } = await searchParams
-  const timeRange: TimeRange = VALID_RANGES.has(rangeParam || '') ? (rangeParam as TimeRange) : '30d'
+  const timeRange = parseTimeRange(rangeParam)
+  const { since, priorSince, days } = rangeWindow(timeRange)
 
-  const { data: campaign, error } = await supabase
-    .from('campaigns')
-    .select('id, name, description')
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .single()
+  // Wave 1: the links query needs only the id, not the campaign row, so the
+  // two run together. notFound() still keys on the campaign row alone.
+  const [campaignResult, linksResult] = await Promise.all([
+    supabase
+      .from('campaigns')
+      .select('id, name, description')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .maybeSingle(),
+    supabase
+      .from('links')
+      .select('id, short_code, original_url, total_clicks')
+      .eq('campaign_id', id)
+      .eq('user_id', user.id)
+      .order('total_clicks', { ascending: false }),
+  ])
 
-  if (error || !campaign) notFound()
+  // A failed row query is an outage, not a missing campaign:
+  // dashboard/error.tsx renders it.
+  if (campaignResult.error) throw campaignResult.error
+  const campaign = campaignResult.data
+  if (!campaign) notFound()
 
-  const { data: campaignLinks } = await supabase
-    .from('links')
-    .select('id, short_code, original_url, total_clicks')
-    .eq('campaign_id', id)
-    .order('total_clicks', { ascending: false })
-
-  const linkIds = (campaignLinks || []).map((l) => l.id)
-
-  const empty = { clicksOverTime: [], referrers: [], devices: [], countries: [], browsers: [], totalClicks: 0 }
-  const { clicksOverTime, referrers, devices, countries, browsers, totalClicks } = linkIds.length > 0
-    ? await (async () => {
-        const filter = { timeRange, linkIds }
-        const [clicksOverTime, referrers, devices, countries, browsers, totalClicks] = await Promise.all([
-          getClicksOverTime(filter),
-          getTopReferrers(filter),
-          getDeviceBreakdown(filter),
-          getCountryBreakdown(filter),
-          getBrowserBreakdown(filter),
-          getTotalClicks(filter),
-        ])
-        return { clicksOverTime, referrers, devices, countries, browsers, totalClicks }
-      })()
-    : empty
-
-  // Prior-period click count (same-length window immediately preceding the
-  // selected range) for the campaign's clicks trend delta. Not meaningful
-  // for "all time" or an empty campaign.
-  let periodTrend: StatTrend | null = null
-  if (timeRange !== 'all' && linkIds.length > 0) {
-    const days = RANGE_DAYS[timeRange]
-    const periodStart = new Date()
-    periodStart.setDate(periodStart.getDate() - days)
-    const priorStart = new Date(periodStart)
-    priorStart.setDate(priorStart.getDate() - days)
-
-    const { count: priorClicks, error: priorClicksError } = await supabase
-      .from('clicks')
-      .select('id', { count: 'exact', head: true })
-      .in('link_id', linkIds)
-      .gte('clicked_at', priorStart.toISOString())
-      .lt('clicked_at', periodStart.toISOString())
-
-    if (priorClicksError) {
-      console.error('[campaign-detail] prior clicks query:', priorClicksError)
-    }
-    periodTrend = computeTrend(totalClicks, priorClicks || 0)
+  // A failed links query must not read as "No links in this campaign yet".
+  const linksError = Boolean(linksResult.error)
+  if (linksResult.error) {
+    console.error('[campaign-detail] links query:', linksResult.error)
   }
+  const campaignLinks = linksResult.data ?? []
+  const linkIds = campaignLinks.map((l) => l.id)
+
+  // Wave 2: the stats RPCs and the prior-window count. Skipped when there is
+  // nothing to count: an empty campaign, or a failed links query (which
+  // renders the error card).
+  const filter = { timeRange, linkIds, since: since?.toISOString() ?? null }
+  const [
+    clicksOverTimeResult,
+    referrersResult,
+    devicesResult,
+    countriesResult,
+    browsersResult,
+    totalClicksResult,
+    combinedClicksResult,
+  ] =
+    linkIds.length > 0
+      ? await Promise.all([
+          getClicksOverTimeResult(filter),
+          getTopReferrersResult(filter),
+          getDeviceBreakdownResult(filter),
+          getCountryBreakdownResult(filter),
+          getBrowserBreakdownResult(filter),
+          getTotalClicksResult(filter),
+          // The current and prior windows in one count, with the link ids in
+          // the RPC's POST body. A GET with every id in its URL breaks past a
+          // few hundred links. 'all' has no prior window.
+          priorSince ? getTotalClicksResult({ ...filter, since: priorSince.toISOString() }) : null,
+        ])
+      : ([NO_ROWS, NO_ROWS, NO_ROWS, NO_ROWS, NO_ROWS, { data: 0, error: false }, null] as const)
+
+  // A failed query must never masquerade as "0 clicks" or "0 links", so
+  // render the same destructive-tinted error state link detail uses.
+  const statsError =
+    linksError ||
+    clicksOverTimeResult.error ||
+    referrersResult.error ||
+    devicesResult.error ||
+    countriesResult.error ||
+    browsersResult.error ||
+    totalClicksResult.error
+
+  // Empty days count as 0, so the line does not slope across them.
+  const clicksOverTime = zeroFillDays(clicksOverTimeResult.data, since, days)
+  const referrers = referrersResult.data
+  const devices = devicesResult.data
+  const countries = countriesResult.data
+  const browsers = browsersResult.data
+  const totalClicks = totalClicksResult.data
+
+  // Hidden for all time, for an empty campaign and whenever a count failed,
+  // so the chip never compares against a fake zero baseline.
+  const priorClicks = priorWindowTotal(combinedClicksResult, totalClicksResult)
+  const periodTrend = priorClicks !== null ? computeTrend(totalClicks, priorClicks) : null
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="bg-card border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center h-16 gap-4">
-            <Link href="/dashboard/campaigns" className="text-muted-foreground hover:text-foreground">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </Link>
-            <div>
-              <h1 className="font-heading text-2xl text-foreground">{campaign.name}</h1>
-              {campaign.description && <p className="text-sm text-muted-foreground">{campaign.description}</p>}
-            </div>
-          </div>
+    <div>
+      <div className="flex items-center gap-2 mb-6">
+        <Link
+          href="/dashboard/campaigns"
+          aria-label="Back to campaigns"
+          className="-ml-2 inline-flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <ChevronLeft className="size-5" />
+        </Link>
+        <div className="min-w-0">
+          <h1 className="font-heading text-2xl text-foreground wrap-break-word">{campaign.name}</h1>
+          {campaign.description && (
+            <p className="text-sm text-muted-foreground wrap-break-word">{campaign.description}</p>
+          )}
         </div>
-      </header>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <TimeRangePicker current={timeRange} basePath={`/dashboard/campaigns/${id}`} />
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>
-              {totalClicks.toLocaleString()} clicks &middot; {linkIds.length} links
-            </span>
-            <TrendChip trend={periodTrend} />
-          </div>
-        </div>
-
+      {statsError ? (
         <Card className="bg-card border-border mb-8">
-          <CardHeader>
-            <CardTitle>Clicks Over Time</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ClicksOverTimeChart data={clicksOverTime} />
+          <CardContent className="flex flex-col items-center text-center gap-4 py-12">
+            <div className="rounded-full bg-destructive/10 p-3">
+              <AlertTriangle className="size-6 text-destructive" />
+            </div>
+            <div>
+              <p className="text-foreground font-medium">Couldn&apos;t load campaign statistics</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Something went wrong. Please try again.
+              </p>
+            </div>
+            <Button render={<Link href={`/dashboard/campaigns/${id}?range=${timeRange}`} />} variant="outline">
+              Try again
+            </Button>
           </CardContent>
         </Card>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
+            <TimeRangePicker current={timeRange} basePath={`/dashboard/campaigns/${id}`} />
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>
+                {totalClicks.toLocaleString()} clicks &middot; {linkIds.length} links
+              </span>
+              <TrendChip trend={periodTrend} />
+            </div>
+          </div>
 
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          <Card className="bg-card border-border">
+          <Card className="bg-card border-border mb-8">
             <CardHeader>
-              <CardTitle>Referrers</CardTitle>
+              <CardTitle>Clicks Over Time</CardTitle>
             </CardHeader>
             <CardContent>
-              <BarChart
-                data={referrers.map((r) => ({ label: r.name, value: r.clicks }))}
-                className="h-48 w-full"
-              />
+              <LazyClicksOverTimeChart data={clicksOverTime} />
             </CardContent>
           </Card>
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle>Devices</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PieChart data={devices} className="h-48 w-full" />
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle>Countries</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <BarChart
-                data={countries.map((c) => ({ label: c.name, value: c.clicks }))}
-                color="var(--chart-3)"
-                className="h-48 w-full"
-              />
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle>Browsers</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PieChart data={browsers} className="h-48 w-full" />
-            </CardContent>
-          </Card>
-        </div>
 
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle>Referrers</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <LazyBarChart
+                  data={referrers.map((r) => ({ label: r.name, value: r.clicks }))}
+                  className="h-48 w-full"
+                />
+              </CardContent>
+            </Card>
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle>Devices</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <LazyPieChart data={devices} className="h-48 w-full" />
+              </CardContent>
+            </Card>
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle>Countries</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <LazyBarChart
+                  data={countries.map((c) => ({ label: c.name, value: c.clicks }))}
+                  color="var(--chart-3)"
+                  className="h-48 w-full"
+                />
+              </CardContent>
+            </Card>
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle>Browsers</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <LazyPieChart data={browsers} className="h-48 w-full" />
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+
+      {/* The links list is real data whenever its own query worked, so it
+          stays under a stats error card. */}
+      {!linksError && (
         <Card className="bg-card border-border overflow-hidden">
           <CardHeader className="border-b border-border">
             <CardTitle>Links in Campaign</CardTitle>
           </CardHeader>
-          {campaignLinks && campaignLinks.length > 0 ? (
+          {campaignLinks.length > 0 ? (
             <div className="divide-y divide-border">
               {campaignLinks.map((link) => (
                 <Link
@@ -185,12 +242,12 @@ export default async function CampaignDetailPage({
                   href={`/dashboard/links/${link.id}`}
                   className="block px-6 py-3 hover:bg-muted"
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
                       <span className="text-sm font-medium text-primary-text">tws.bio/{link.short_code}</span>
                       <p className="text-xs text-muted-foreground truncate max-w-md">{link.original_url}</p>
                     </div>
-                    <span className="text-sm text-muted-foreground">{(link.total_clicks || 0).toLocaleString()} clicks</span>
+                    <span className="shrink-0 text-sm text-muted-foreground">{(link.total_clicks || 0).toLocaleString()} clicks</span>
                   </div>
                 </Link>
               ))}
@@ -206,7 +263,7 @@ export default async function CampaignDetailPage({
             </CardContent>
           )}
         </Card>
-      </main>
+      )}
     </div>
   )
 }

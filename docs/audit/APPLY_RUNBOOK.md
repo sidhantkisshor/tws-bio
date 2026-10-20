@@ -1,3 +1,5 @@
+> Historical record (written July 2026). Completed or superseded: do not execute. Current state: CLAUDE.md.
+
 # APPLY_RUNBOOK.md — how to land the gated fixes safely
 
 Everything on branch `audit-fixes`. The autonomous fixes are already safe to merge. The items below are **gated** — they touch your live Supabase DB, auth visibility, a real credential, and git history, so they need you in the loop. Follow the order; some steps break the app if done out of sequence.

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { isResourceDropRow } from '@/lib/linkRows'
 import type { Database } from '@/types/database'
 import { getShortUrl } from '@/lib/utils'
 import {
@@ -36,6 +37,14 @@ export function DeleteLinkDialog({
   const displayUrl = shortUrl.replace(/^https?:\/\//, '')
 
   async function handleDelete() {
+    // LinkActions offers no Delete for these rows. This stops any other way in:
+    // the delete would cascade the click history away, and the next click
+    // would start the row again at zero.
+    if (isResourceDropRow(link.short_code)) {
+      toast.error('Resource Drop links are managed by the Resource Drop Desk.')
+      onOpenChange(false)
+      return
+    }
     setDeleting(true)
     try {
       const supabase = createClient()
@@ -66,7 +75,7 @@ export function DeleteLinkDialog({
           <AlertDialogTitle>Delete Link</AlertDialogTitle>
           <AlertDialogDescription>
             Are you sure you want to delete{' '}
-            <span className="font-mono font-medium text-foreground">
+            <span className="font-mono font-medium break-all text-foreground">
               {displayUrl}
             </span>
             ? This action cannot be undone.

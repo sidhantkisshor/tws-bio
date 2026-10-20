@@ -11,7 +11,7 @@ export interface StatTrend {
   isNew?: boolean
   /**
    * True for ratio/average metrics (e.g. "Avg Clicks/Link") where a decrease
-   * isn't inherently bad — new links dilute the average even when clicks are
+   * isn't inherently bad: new links dilute the average even when clicks are
    * healthy. Renders the chip in a neutral tone instead of red/green.
    */
   isRatio?: boolean
@@ -21,7 +21,7 @@ interface StatCardProps {
   title: string
   value: string | number
   icon?: ReactNode
-  /** Trend vs. the prior period — pass the result of `computeTrend`. Omit or pass `null` to hide. */
+  /** Trend vs. the prior period: pass the result of `computeTrend`. Omit or pass `null` to hide. */
   trend?: StatTrend | null
   /** Short context shown after the trend chip, e.g. "vs prior 30 days". */
   trendLabel?: string
@@ -33,7 +33,7 @@ interface StatCardProps {
  * nothing meaningful to show (both periods are zero).
  *
  * Pass `isRatio: true` for average/ratio metrics (clicks-per-link and the
- * like) so `TrendChip` renders a neutral tone instead of alarm red/green —
+ * like) so `TrendChip` renders a neutral tone instead of alarm red/green:
  * a drop in an average is often benign (e.g. new links diluting it).
  */
 export function computeTrend(
@@ -64,7 +64,7 @@ function formatDelta(delta: number, isRatio?: boolean): string {
  * Small delta chip: shows both the relative percent and the absolute change
  * (e.g. "↑500% (+7)") so a swing at a small denominator doesn't read as
  * alarmist with no sense of scale. Colored green for a favorable move, red
- * for an unfavorable one, and muted for flat/new — except ratio/average
+ * for an unfavorable one, and muted for flat/new, except ratio/average
  * metrics (`isRatio`), which always render in a neutral tone since their
  * direction isn't inherently good or bad.
  */

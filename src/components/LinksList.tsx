@@ -7,15 +7,26 @@ import { getShortUrl } from '@/lib/utils'
 import { TickerChip } from '@/components/TickerChip'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 
 interface LinksListProps {
   user: User | null
   authLoading: boolean
   links: HomeLink[]
   linksLoading: boolean
+  /** The last fetch failed: shown as an error, never as "no links". */
+  linksError: boolean
+  onRetry: () => void
 }
 
-export function LinksList({ user, authLoading, links, linksLoading }: LinksListProps) {
+export function LinksList({
+  user,
+  authLoading,
+  links,
+  linksLoading,
+  linksError,
+  onRetry,
+}: LinksListProps) {
   // Anon ids are read after mount so the first client render matches the
   // server HTML (localStorage is unreadable during SSR).
   const [hasAnonIds, setHasAnonIds] = useState(false)
@@ -43,6 +54,22 @@ export function LinksList({ user, authLoading, links, linksLoading }: LinksListP
             </div>
           </div>
         ))}
+      </div>
+    )
+  }
+
+  if (linksError) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-3">
+        <h3 className="text-lg font-semibold text-foreground">Recent Links</h3>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+          <p role="alert" className="text-sm text-muted-foreground">
+            Couldn&apos;t load your links.
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+            Retry
+          </Button>
+        </div>
       </div>
     )
   }

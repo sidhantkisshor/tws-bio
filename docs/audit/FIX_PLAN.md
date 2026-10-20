@@ -1,3 +1,5 @@
+> Historical record (written July 2026). Completed or superseded: do not execute. Current state: CLAUDE.md.
+
 # FIX_PLAN.md — Remediation of AUDIT_REPORT.md
 
 Branch: `audit-fixes` (snapshot commit `7f8bddb`). Do not merge to main automatically.

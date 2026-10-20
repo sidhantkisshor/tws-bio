@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
  * page's shape (heading + toolbar row + table) so a hard navigation (first
  * load, full page refresh) gets a layout-matched skeleton instead of the
  * generic /dashboard fallback or a blank screen (finding:
- * links-toolbar-pending-feedback — the toolbar itself covers the in-page
+ * links-toolbar-pending-feedback; the toolbar itself covers the in-page
  * search/filter/sort transitions via isPending).
  */
 export default function LinksLoading() {

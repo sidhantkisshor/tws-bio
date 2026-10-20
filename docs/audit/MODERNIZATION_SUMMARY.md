@@ -1,3 +1,5 @@
+> Historical record (written July 2026). Completed or superseded: do not execute. Current state: CLAUDE.md.
+
 # MODERNIZATION_SUMMARY.md — tws.bio
 
 **Branch:** `deps-update` (off `audit-fixes`) · **Not merged to main.**

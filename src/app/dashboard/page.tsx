@@ -1,7 +1,12 @@
 import { createClient, getAuthenticatedUser } from '@/lib/supabase/server'
-import { getClicksOverTimeResult, getTotalClicksResult } from '@/lib/analytics'
+import {
+  getClicksOverTimeResult,
+  getTotalClicksResult,
+  rangeWindow,
+  zeroFillDays,
+} from '@/lib/analytics'
 import { StatCard, computeTrend } from '@/components/dashboard/StatCard'
-import { ClickChart } from '@/components/dashboard/ClickChart'
+import { LazyClickChart } from '@/components/charts/lazy'
 import { TypeBadge } from '@/components/dashboard/TypeBadge'
 import { Link2, MousePointerClick, Activity, BarChart3, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -25,18 +30,11 @@ export default async function DashboardPage() {
     return null
   }
 
-  // Date math for the current 30-day window and the immediately-preceding
-  // 30-day window (used for prior-period trend deltas below). Computed in
-  // UTC (matching the UTC date `clicked_at.slice(0, 10)` below) so the
-  // zero-fill loop can't drift a day off from the aggregated click dates
-  // due to server timezone.
-  const DAYS_IN_RANGE = 30
-  const MS_PER_DAY = 24 * 60 * 60 * 1000
-  const now = new Date()
-  const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  const rangeStartUTC = todayUTC - (DAYS_IN_RANGE - 1) * MS_PER_DAY
-  const thirtyDaysAgo = new Date(rangeStartUTC)
-  const prevWindowStart = new Date(rangeStartUTC - DAYS_IN_RANGE * MS_PER_DAY)
+  // The current 30-day window and the immediately-preceding 30-day window
+  // (used for prior-period trend deltas below). These are the same whole IST
+  // days Analytics and the detail pages use for "30d", so the chart buckets
+  // line up with the RPC's IST day labels whatever the server time zone.
+  const { since: windowStart, priorSince: prevWindowStart, days } = rangeWindow('30d')
 
   // Fetch stats in parallel
   const [totalLinksResult, activeLinksResult, clicksDataResult, recentLinksResult, trendLinksResult] =
@@ -63,7 +61,7 @@ export default async function DashboardPage() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(5),
-      // Links created in the current or prior 30-day window — used to
+      // Links created in the current or prior 30-day window, used to
       // derive "new links" / "new active links" trend deltas below.
       supabase
         .from('links')
@@ -73,7 +71,7 @@ export default async function DashboardPage() {
         .order('id', { ascending: true }),
     ])
 
-  // Any of these failing silently degrades a stat to 0 — surface it instead
+  // Any of these failing silently degrades a stat to 0, so surface it instead
   // of letting a genuine query error render identically to "no data yet".
   let statsError = Boolean(
     totalLinksResult.error ||
@@ -162,7 +160,7 @@ export default async function DashboardPage() {
   for (const l of trendLinks) {
     if (!l.created_at) continue
     const createdMs = new Date(l.created_at).getTime()
-    if (createdMs >= rangeStartUTC) {
+    if (createdMs >= windowStart.getTime()) {
       linksCurrentCount++
       if (l.is_active) activeLinksCurrentCount++
     } else {
@@ -178,21 +176,21 @@ export default async function DashboardPage() {
   let clicksPrevWindow = 0
   let clickTrendAvailable = false
   // Distinguishes "the click query failed" from "this link genuinely has no
-  // clicks yet" — ClickChart renders a different message for each so a
+  // clicks yet": ClickChart renders a different message for each so a
   // swallowed error doesn't masquerade as a brand-new-user empty state.
   let chartError = Boolean(clicksDataResult.error)
 
   if (linkIds.length > 0) {
     const [clicksSeriesResult, combinedClicksResult] = await Promise.all([
       // Day buckets aggregated DB-side via the SECURITY INVOKER RPC (clicks
-      // RLS applies — called as the logged-in user) instead of one raw row
-      // per click, which silently undercounted past PostgREST's 1000-row
-      // response cap. `since` pins the RPC to the same UTC-anchored window
+      // RLS applies, since it runs as the logged-in user) instead of one raw
+      // row per click, which silently undercounted past PostgREST's 1000-row
+      // response cap. `since` pins the RPC to the same IST-midnight window
       // boundary used by the prior-period count below.
       getClicksOverTimeResult({
         timeRange: '30d',
         linkIds,
-        since: thirtyDaysAgo.toISOString(),
+        since: windowStart.toISOString(),
       }),
       // Combined current + prior span. Subtract the current series below to
       // derive the prior window without putting every UUID in a GET query.
@@ -212,18 +210,10 @@ export default async function DashboardPage() {
       statsError = true
     }
 
-    const clicksByDate = new Map<string, number>()
-    for (const row of clicksSeriesResult.data) {
-      clicksByDate.set(row.date.slice(0, 10), row.clicks)
-    }
-
     // Zero-fill every day in the window so the chart always renders a
     // continuous 30-day line instead of only the (possibly sparse) days
     // that happened to have a click.
-    clickChartData = Array.from({ length: DAYS_IN_RANGE }, (_, i) => {
-      const date = new Date(rangeStartUTC + i * MS_PER_DAY).toISOString().slice(0, 10)
-      return { date, clicks: clicksByDate.get(date) || 0 }
-    })
+    clickChartData = zeroFillDays(clicksSeriesResult.data, windowStart, days)
 
     if (!clicksSeriesResult.error) {
       clicksCurrentWindow = clicksSeriesResult.data.reduce((sum, row) => sum + row.clicks, 0)
@@ -237,7 +227,7 @@ export default async function DashboardPage() {
   const recentLinks = recentLinksResult.data || []
   const recentLinksError = Boolean(recentLinksResult.error)
 
-  // Prior-period trend deltas for the stat cards. "vs prior 30 days" —
+  // Prior-period trend deltas for the stat cards, "vs prior 30 days":
   // Total Links / Active Links compare new links added in each window;
   // Total Clicks compares raw click volume; Avg Clicks/Link compares the
   // click-volume-to-link-count ratio at the end of each window.
@@ -282,7 +272,7 @@ export default async function DashboardPage() {
 
       {/* Stat Cards */}
       <div className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {/* Gradient glow effect behind stat cards — the shared brand-green
+        {/* Gradient glow effect behind stat cards: the shared brand-green
             radial token; the gradient already fades to transparent, so no
             blur filter (a 100px blur forced an expensive GPU pass over a
             large region for a visually identical result). */}
@@ -326,7 +316,7 @@ export default async function DashboardPage() {
           <CardTitle>Clicks Over Time (Last 30 Days)</CardTitle>
         </CardHeader>
         <CardContent>
-          <ClickChart data={clickChartData} error={chartError} />
+          <LazyClickChart data={clickChartData} error={chartError} />
         </CardContent>
       </Card>
 

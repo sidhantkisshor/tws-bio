@@ -10,7 +10,7 @@ export const meta = {
 // baseline screenshots are named <shot>-desktop.png / <shot>-mobile.png in baselineDir.
 const SURFACES = [
   { key: 'shell',      shot: 'overview',   label: 'Sidebar + dashboard layout', files: ['src/app/dashboard/layout.tsx', 'src/components/dashboard/DashboardSidebar.tsx'] },
-  { key: 'overview',   shot: 'overview',   label: 'Overview',    files: ['src/app/dashboard/page.tsx', 'src/components/dashboard/StatCard.tsx', 'src/components/dashboard/ClickChart.tsx', 'src/components/charts/ClicksOverTimeChart.tsx'] },
+  { key: 'overview',   shot: 'overview',   label: 'Overview',    files: ['src/app/dashboard/page.tsx', 'src/components/dashboard/StatCard.tsx', 'src/components/dashboard/ClickChart.tsx'] },
   { key: 'links',      shot: 'links',      label: 'Links list',  files: ['src/app/dashboard/links/page.tsx', 'src/components/dashboard/LinkActions.tsx'] },
   { key: 'linkDetail', shot: 'linkDetail', label: 'Link detail', files: ['src/app/dashboard/links/[id]/page.tsx', 'src/components/charts/BarChart.tsx', 'src/components/charts/DonutChart.tsx', 'src/components/TimeRangePicker.tsx'] },
   { key: 'analytics',  shot: 'analytics',  label: 'Analytics',   files: ['src/app/dashboard/analytics/page.tsx', 'src/components/dashboard/DeviceChart.tsx', 'src/components/dashboard/BrowserChart.tsx', 'src/components/dashboard/ReferrerChart.tsx', 'src/components/dashboard/DateRangePicker.tsx'] },

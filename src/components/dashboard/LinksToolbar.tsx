@@ -41,14 +41,29 @@ export function LinksToolbar() {
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
 
-  const [search, setSearch] = useState(searchParams.get('q') || '')
+  const urlQuery = searchParams.get('q') || ''
+  const [search, setSearch] = useState(urlQuery)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The q this toolbar last pushed. The page is not remounted when its search
+  // params change, so `search` would keep stale text after Back, the empty
+  // state's "Clear filters" link or the sidebar's Links link. A q that differs
+  // from this one came from outside and replaces the box; our own pushes do
+  // not, so text typed while a search loads is never overwritten.
+  const lastPushedQuery = useRef(urlQuery)
 
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    if (urlQuery === lastPushedQuery.current) return
+    lastPushedQuery.current = urlQuery
+    // A search still waiting on its debounce would push the old text back.
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    setSearch(urlQuery)
+  }, [urlQuery])
 
   function pushParams(next: URLSearchParams) {
     next.delete('page')
@@ -79,6 +94,9 @@ export function LinksToolbar() {
       } else {
         params.delete('q')
       }
+      // Trimmed, like the URL value, so a trailing space being typed is not
+      // read as an outside change.
+      lastPushedQuery.current = trimmed
       pushParams(params)
     }, 350)
   }
@@ -91,7 +109,7 @@ export function LinksToolbar() {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
       {/* Announces loading state to screen readers without a visible layout
-          shift — the spinner + dimmed controls below cover sighted users. */}
+          shift. The spinner + dimmed controls below cover sighted users. */}
       <span className="sr-only" role="status" aria-live="polite">
         {isPending ? 'Updating links…' : ''}
       </span>
@@ -159,6 +177,8 @@ export function LinksToolbar() {
           <button
             type="button"
             onClick={() => {
+              if (debounceRef.current) clearTimeout(debounceRef.current)
+              lastPushedQuery.current = ''
               setSearch('')
               startTransition(() => router.push(pathname))
             }}
