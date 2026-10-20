@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils'
 // One header for every dashboard page, so titles share a weight, a wrap rule
 // and a back-link shape. The optional back link is a chevron (44px on touch
 // screens, 40px with a pointer); actions sit at the right and wrap below the
-// title on narrow screens.
+// title on narrow screens. Items align to the top edge, so on pages without a
+// back link the title starts at the same height, whatever the actions measure.
 export function PageHeader({
   title,
   description,
@@ -26,7 +27,7 @@ export function PageHeader({
   titleClassName?: string
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-center gap-2">
         {backHref && (
           <Link

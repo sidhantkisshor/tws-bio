@@ -19,9 +19,10 @@ interface TickerChipProps {
   /** Start on the green Check state, then revert after 1.2s. */
   copiedOnMount?: boolean
   /**
-   * Grow the copy button's hit area to 44px for thumbs, without changing how
-   * the chip looks. The extra area fills the gap beside the label, so it never
-   * covers the label link.
+   * Grow the hit areas to 44px for thumbs, without changing how the chip
+   * looks. The copy button's extra area fills the gap beside the label. The
+   * label link (when `href` is set) grows above and below its text only, so
+   * the two areas never overlap.
    */
   touchTarget?: boolean
 }
@@ -82,9 +83,16 @@ export function TickerChip({
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          className="truncate rounded-sm transition-colors hover:text-primary-text focus-ring"
+          className={cn(
+            'flex min-w-0 rounded-sm transition-colors hover:text-primary-text focus-ring',
+            touchTarget && "relative after:absolute after:inset-x-0 after:-inset-y-3 after:content-['']",
+          )}
         >
-          {SHORT_DOMAIN}/{code}
+          {/* The inner span does the truncating: the anchor itself must not
+              clip, or it would cut off the touch area above and below it. */}
+          <span className="truncate">
+            {SHORT_DOMAIN}/{code}
+          </span>
         </a>
       ) : (
         <span className="truncate">

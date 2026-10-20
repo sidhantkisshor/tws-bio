@@ -29,7 +29,7 @@ export function AuthShell({ title, description, children }: AuthShellProps) {
         <div className="text-center">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-md text-3xl font-bold tracking-tight text-foreground focus-ring"
+            className="relative inline-flex items-center gap-2 rounded-md text-3xl font-bold tracking-tight text-foreground focus-ring after:absolute after:-inset-2 after:content-['']"
           >
             {/* Same tick bar as Wordmark; the serif 'bio' is this page's one display moment. */}
             <span aria-hidden className="h-[0.85em] w-0.5 bg-primary-text" />

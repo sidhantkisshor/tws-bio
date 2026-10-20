@@ -27,7 +27,7 @@ export function Navbar() {
           invite-only, so the logged-out action is sign-in only. */}
       <Link
         href={user ? '/dashboard' : '/login'}
-        className={cn(buttonVariants({ size: 'sm' }), 'min-w-[5.75rem]')}
+        className={cn(buttonVariants({ size: 'sm' }), 'min-w-[5.75rem] rounded-full')}
       >
         {user ? 'Dashboard' : 'Sign in'}
       </Link>

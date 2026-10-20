@@ -72,7 +72,7 @@ ${opts.footerScript ?? ''}
 const TRUSTED_HOME_URL = 'https://tradingwithsidhant.com'
 
 const ALT_LINK_CSS =
-  '.alt{margin:8px 0 0;font-size:13px}.alt a{display:inline-flex;align-items:center;min-height:44px;color:#999999;text-underline-offset:3px}.alt a:hover{color:#FAFAFA}'
+  '.alt{margin:8px 0 0;font-size:13px}.alt a{display:inline-flex;align-items:center;min-height:44px;color:#999999;text-underline-offset:3px}.alt a:hover{color:#FAFAFA}.alt a:focus-visible{outline:2px solid #00B03B;outline-offset:2px;border-radius:4px}'
 
 /**
  * Split '404: LINK NOT FOUND' into the code (small mono label) and the reason

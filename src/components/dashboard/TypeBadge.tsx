@@ -14,7 +14,7 @@ export function TypeBadge({ type }: { type: LinkRow['link_type'] }) {
   return (
     <Badge variant="outline" className="gap-1 text-muted-foreground">
       {isDeepLink ? <Smartphone className="size-3" /> : <LinkIcon className="size-3" />}
-      {isDeepLink ? 'Deep Link' : 'URL'}
+      {isDeepLink ? 'Deep link' : 'URL'}
     </Badge>
   )
 }

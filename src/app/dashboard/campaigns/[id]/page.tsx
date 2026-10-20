@@ -22,6 +22,7 @@ import { TimeRangePicker } from '@/components/TimeRangePicker'
 import { TrendChip, computeTrend } from '@/components/dashboard/StatCard'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { PageHeader } from '@/components/dashboard/PageHeader'
+import { displayUrl } from '@/components/dashboard/displayUrl'
 import { Card, CardAction, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 
 // What an empty campaign's stats are, without asking the database.
@@ -297,11 +298,14 @@ export default async function CampaignDetailPage({
                     >
                       <div className="flex items-center justify-between gap-4">
                         <div className="min-w-0">
-                          <span className="font-mono text-sm text-primary-text">
+                          <span className="block truncate font-mono text-sm text-foreground">
                             tws.bio/{link.short_code}
                           </span>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {link.original_url}
+                          <p
+                            className="truncate text-xs text-muted-foreground"
+                            title={link.original_url}
+                          >
+                            {displayUrl(link.original_url)}
                           </p>
                         </div>
                         <span className="shrink-0 text-sm text-muted-foreground">

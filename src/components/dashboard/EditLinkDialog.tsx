@@ -333,13 +333,13 @@ export function EditLinkDialog({
             {isDeepLink && (
               <>
                 <div className="grid gap-2">
-                  <Label htmlFor={FIELD_IDS.iosDeepLink}>iOS Deep Link</Label>
+                  <Label htmlFor={FIELD_IDS.iosDeepLink}>iOS deep link</Label>
                   <Input {...inputProps('iosDeepLink')} placeholder="app://path" />
                   <FieldError field="iosDeepLink" message={errors.iosDeepLink} />
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor={FIELD_IDS.androidDeepLink}>Android Deep Link</Label>
+                  <Label htmlFor={FIELD_IDS.androidDeepLink}>Android deep link</Label>
                   <Input {...inputProps('androidDeepLink')} placeholder="app://path" />
                   <FieldError field="androidDeepLink" message={errors.androidDeepLink} />
                 </div>
@@ -357,7 +357,7 @@ export function EditLinkDialog({
             )}
 
             <div className="grid gap-2">
-              <Label htmlFor={FIELD_IDS.expiresAt}>Expiration Date (optional)</Label>
+              <Label htmlFor={FIELD_IDS.expiresAt}>Expiration date (optional)</Label>
               <Input
                 {...inputProps('expiresAt', expiredUntouched ? 'edit-expires-at-note' : undefined)}
                 type="datetime-local"
@@ -371,7 +371,7 @@ export function EditLinkDialog({
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor={FIELD_IDS.maxClicks}>Max Clicks (optional)</Label>
+              <Label htmlFor={FIELD_IDS.maxClicks}>Max clicks (optional)</Label>
               {/* Text with a numeric keypad rather than type="number", so the
                   check sees exactly what was typed (no "1e3" or scroll-wheel
                   changes). */}

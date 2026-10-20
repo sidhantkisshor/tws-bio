@@ -15,7 +15,7 @@ import {
 const TYPE_OPTIONS = [
   { value: 'all', label: 'All types' },
   { value: 'url', label: 'URL' },
-  { value: 'deep_link', label: 'Deep Link' },
+  { value: 'deep_link', label: 'Deep link' },
 ]
 
 const STATUS_OPTIONS = [

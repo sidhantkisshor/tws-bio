@@ -386,11 +386,10 @@ export function LinksTable({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete {formatCount(selectedCount, 'link')}
+              Delete {formatCount(selectedCount, 'link')}?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the selected link{selectedCount === 1 ? '' : 's'} and all
-              associated click data. This action cannot be undone.
+              This deletes the selected {selectedCount === 1 ? 'link and its' : 'links and their'} click history. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

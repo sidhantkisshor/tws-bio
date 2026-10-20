@@ -418,7 +418,7 @@ export function CreateLinkForm({ initialUser = null, onCreated, showHeader = tru
                 Short links, deep links and campaigns, saved to your dashboard with click analytics. Accounts are invite-only.
               </p>
             </div>
-            <Link href="/login" className={cn(buttonVariants({ size: 'lg' }), 'shrink-0 px-6')}>
+            <Link href="/login" className={cn(buttonVariants(), 'shrink-0 sm:px-4')}>
               Sign in
             </Link>
           </CardContent>
@@ -441,16 +441,16 @@ export function CreateLinkForm({ initialUser = null, onCreated, showHeader = tru
                 copiedOnMount={createdLink.copied}
               />
               <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                FILLED · {createdLink.filledAt} IST · → {createdLink.destHost}
+                FILLED · {createdLink.filledAt} IST · <span className="whitespace-nowrap">→ {createdLink.destHost}</span>
               </p>
             </div>
             <div className="flex flex-wrap gap-3 mt-6">
-              <Button type="button" size="lg" onClick={resetForm}>
+              <Button type="button" onClick={resetForm} className="sm:px-4">
                 Create another
               </Button>
               <a
                 href={`/dashboard/links/${createdLink.id}`}
-                className={buttonVariants({ variant: 'outline', size: 'lg' })}
+                className={cn(buttonVariants({ variant: 'outline' }), 'sm:px-4')}
               >
                 View in dashboard
               </a>
@@ -523,7 +523,7 @@ export function CreateLinkForm({ initialUser = null, onCreated, showHeader = tru
                     aria-describedby={fieldErrors.url ? 'url-error' : undefined}
                     required
                   />
-                  <Button type="submit" disabled={loading} className="w-full px-6 sm:w-auto">
+                  <Button type="submit" disabled={loading} className="w-full sm:w-auto sm:px-4">
                     {loading ? 'Creating...' : linkType === 'deep_link' ? 'Create deep link' : 'Shorten'}
                   </Button>
                 </div>
@@ -538,7 +538,7 @@ export function CreateLinkForm({ initialUser = null, onCreated, showHeader = tru
               <div>
                 <Label htmlFor="custom" className="mb-2">Custom short code (optional)</Label>
                 <div className="flex">
-                  <span className="inline-flex items-center rounded-l-lg border border-r-0 border-input bg-muted px-3 font-mono text-sm text-muted-foreground">
+                  <span className="inline-flex items-center rounded-l-lg border border-r-0 border-input bg-muted px-3 font-mono text-base text-muted-foreground md:text-sm">
                     {process.env.NEXT_PUBLIC_SHORT_DOMAIN || 'tws.bio'}/
                   </span>
                   <Input
