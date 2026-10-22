@@ -9,7 +9,7 @@ import { Toaster } from '@/components/ui/sonner'
 
 interface HomeInteractiveProps {
   /**
-   * The signed-out view, rendered on the server: the link desk and the sign-in
+   * The signed-out view, rendered on the server: the closed door and the Unlock access
    * panel. It is the static HTML of the page and shows while auth resolves, so
    * a follower on a slow phone reads it before any script runs.
    */

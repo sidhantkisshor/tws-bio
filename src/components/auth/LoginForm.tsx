@@ -141,7 +141,7 @@ export function LoginForm() {
           className="w-full"
         >
           {loading && <Loader2 aria-hidden className="size-4 animate-spin" />}
-          {loading ? 'Signing in...' : 'Sign in'}
+          {loading ? 'Unlocking...' : 'Unlock access'}
         </Button>
       </form>
     </div>

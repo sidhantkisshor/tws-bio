@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og'
 
-export const alt = 'tws.bio: the link desk for Trading with Sidhant'
+export const alt = 'tws.bio: members only'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
@@ -70,7 +70,7 @@ export default function OpenGraphImage() {
                 paddingBottom: 24,
               }}
             >
-              The link desk for Trading with Sidhant.
+              You found the door.
             </div>
             {/* The double rule, drawn as two lines: satori has no double border. */}
             <div
@@ -82,7 +82,7 @@ export default function OpenGraphImage() {
               }}
             />
             <div style={{ display: 'flex', fontSize: 28, color: TEXT_3, marginTop: 24 }}>
-              Short links, click counts and app deep links.
+              Members only. Entry is by invitation.
             </div>
           </div>
 

@@ -14,14 +14,14 @@ export const metadata: Metadata = {
   title: { default: "tws.bio", template: "%s - tws.bio" },
   description: "The private link tool of Trading with Sidhant.",
   openGraph: {
-    title: "tws.bio: the link desk for Trading with Sidhant",
+    title: "tws.bio: members only",
     description: "The private link tool of Trading with Sidhant.",
     siteName: "tws.bio",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "tws.bio: the link desk for Trading with Sidhant",
+    title: "tws.bio: members only",
     description: "The private link tool of Trading with Sidhant.",
   },
 };

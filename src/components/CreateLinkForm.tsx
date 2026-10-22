@@ -599,12 +599,7 @@ export function CreateLinkForm({
   if (!user) {
     return (
       <div className="rule-open flex flex-col gap-4 pt-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="type-h2 text-ink">Sign in to create links</h2>
-          <p className="mt-1 text-sm text-text-2">
-            For the Trading with Sidhant team. Sidhant creates each account.
-          </p>
-        </div>
+        <h2 className="type-h2 min-w-0 text-ink">Sign in to create links</h2>
         <Link href="/login" className={cn(buttonVariants(), 'shrink-0')}>
           Sign in
         </Link>

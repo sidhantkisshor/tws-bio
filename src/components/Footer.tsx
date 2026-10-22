@@ -7,13 +7,10 @@ export function Footer() {
   return (
     <footer className="mx-auto w-full max-w-[1280px] px-4 pb-8 md:px-10 md:pb-10">
       <div className="flex flex-col gap-x-6 gap-y-1 border-t border-rule pt-4 text-[13px] text-text-2 sm:flex-row sm:items-center sm:justify-between sm:pt-5">
-        <p>tws.bio is the private link tool of Trading with Sidhant.</p>
+        <p>tws.bio. Members only.</p>
         <nav aria-label="Footer" className="flex items-center gap-5">
           <a href="https://tws.bio/tools" className={LINK_CLASS}>
-            Resources
-          </a>
-          <a href="https://tradingwithsidhant.com" target="_blank" rel="noopener noreferrer" className={LINK_CLASS}>
-            tradingwithsidhant.com
+            tws.bio/tools
           </a>
         </nav>
       </div>

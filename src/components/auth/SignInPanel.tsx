@@ -10,8 +10,7 @@ interface SignInPanelProps {
 /**
  * The sign-in panel, one of the two raised panels in Day Book (surface fill,
  * hairline border, 6px radius). Shared by the home page and /login so the two
- * cannot drift. Accounts are invite-only, so the line under the title says
- * who it is for instead of offering a sign-up.
+ * cannot drift. Accounts are invite-only, so there is no sign-up offer.
  */
 export function SignInPanel({ headingLevel = 2, className }: SignInPanelProps) {
   const Heading = headingLevel === 1 ? 'h1' : 'h2'
@@ -20,14 +19,9 @@ export function SignInPanel({ headingLevel = 2, className }: SignInPanelProps) {
       aria-labelledby="sign-in-heading"
       className={cn('grid gap-4 rounded-panel border border-rule bg-surface p-5 sm:p-8', className)}
     >
-      <div className="grid gap-1.5">
-        <Heading id="sign-in-heading" className="type-h2 text-ink">
-          Sign in
-        </Heading>
-        <p className="text-[13px] leading-normal text-text-2">
-          For the Trading with Sidhant team. Sidhant creates each account.
-        </p>
-      </div>
+      <Heading id="sign-in-heading" className="type-h2 text-ink">
+        Members only
+      </Heading>
       <LoginForm />
     </section>
   )
