@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 const DESTINATIONS: { name: string; href: string; shown: string; internal?: boolean }[] = [
   { name: 'YouTube channel', href: 'https://www.youtube.com/@tradingwithsidhant', shown: 'youtube.com/@tradingwithsidhant' },
   { name: 'Courses and cohorts', href: 'https://twsgurukulx.com', shown: 'twsgurukulx.com' },
-  { name: 'Trading tools and resources', href: '/resources', shown: 'tws.bio/resources', internal: true },
+  { name: 'Trading tools and resources', href: 'https://tws.bio/tools', shown: 'tws.bio/tools' },
   { name: 'Telegram channel', href: 'https://t.me/tradingwsidhant', shown: 't.me/tradingwsidhant' },
   { name: 'Hitpoint app', href: 'https://hitpoint.app', shown: 'hitpoint.app' },
 ]

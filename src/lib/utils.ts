@@ -256,7 +256,7 @@ export function isValidUrl(url: string): boolean {
     // A destination on this app's own host is another short link. Following it
     // records a second click, and two links that point at each other loop
     // until the browser gives up, recording a click on every hop. App pages on
-    // the same host (the home page, /resources, /r/{slug}) are fine.
+    // the same host (the home page, /r/{slug}) are fine.
     if (ownHosts().has(parsed.hostname.toLowerCase().replace(/^www\./, ''))) {
       const first = parsed.pathname.split('/')[1] ?? ''
       if (first !== '' && !isReservedShortCode(first)) return false

@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { Wordmark } from '@/components/Wordmark'
 
 /**
- * The slim masthead of the public pages (/, /login, /signup, /resources): the
+ * The slim masthead of the public pages (/, /login, /signup): the
  * wordmark and "by Trading with Sidhant" on one ruled row. A server component
  * with no auth state of its own: each page passes the `Navbar` island as
  * `children` for the signed-in "Dashboard" link. There is no filled button here: the one amber

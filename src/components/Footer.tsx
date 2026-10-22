@@ -1,5 +1,3 @@
-import Link from 'next/link'
-
 const LINK_CLASS =
   'inline-flex min-h-11 items-center rounded-ctl text-accent-text underline decoration-accent-text/40 underline-offset-[3px] transition-colors duration-150 hover:decoration-current focus-ring md:min-h-0'
 
@@ -11,9 +9,9 @@ export function Footer() {
       <div className="flex flex-col gap-x-6 gap-y-1 border-t border-rule pt-4 text-[13px] text-text-2 sm:flex-row sm:items-center sm:justify-between sm:pt-5">
         <p>tws.bio is the private link tool of Trading with Sidhant.</p>
         <nav aria-label="Footer" className="flex items-center gap-5">
-          <Link href="/resources" className={LINK_CLASS}>
+          <a href="https://tws.bio/tools" className={LINK_CLASS}>
             Resources
-          </Link>
+          </a>
           <a href="https://tradingwithsidhant.com" target="_blank" rel="noopener noreferrer" className={LINK_CLASS}>
             tradingwithsidhant.com
           </a>

@@ -94,7 +94,6 @@ The session-refresh middleware lives in `src/proxy.ts` (exports `proxy` function
 | `/` | Server Component + Client islands | Home page with link creation form. Static |
 | `/login` | Server Component + client form | Email/password + Google OAuth login. Static |
 | `/signup` | Server Component | Invite-only notice. Sign-ups are disabled on the Supabase project and the owner creates accounts, so there is no registration form. Static |
-| `/resources` | Server Component | Public list of trading tools and resources. Static |
 | `/dashboard/*` | Server Components | Overview, links, link detail, analytics, campaigns, campaign detail, create, health. `dashboard/layout.tsx` guards them all (`redirect('/login')`); each has a `loading.tsx` skeleton |
 | `/dashboard/health` | Server Component + Server Action | Link problems from `linkHealth` rules (placeholder or looping destination, expired, near or at the click cap, paused, quiet), one row per link. "Check destinations now" runs `checkDestinations` in a Server Action (`health/actions.ts`): it re-checks the user, checks only the owner's active links, blocks private hosts and the short domain on every redirect hop, retries HEAD failures with GET, and stops starting new checks after a 45 s budget (`maxDuration` 60). It never runs on page load |
 | `/[shortCode]` | Route Handler (GET) | Core redirect logic + deep link handling + analytics tracking. Next.js also runs it for HEAD |
