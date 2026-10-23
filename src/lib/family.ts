@@ -189,17 +189,6 @@ export const TWS_FAMILY_PROPERTIES = [
     "status": "live"
   },
   {
-    "key": "rfactor",
-    "group": "products",
-    "label": "Position size calculator",
-    "url": "https://rfactor.tradingwithsidhant.com",
-    "host": "rfactor.tradingwithsidhant.com",
-    "brand": "Trading With Sidhant",
-    "role": "Risk and position sizing",
-    "strip": false,
-    "status": "needs-review"
-  },
-  {
     "key": "shortlinks",
     "group": "company",
     "label": "tws.bio",
