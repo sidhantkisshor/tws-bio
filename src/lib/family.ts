@@ -24,7 +24,12 @@ export const TWS_FOUNDER = {
   "name": "Sidhant Kisshor",
   "jobTitle": "Founder",
   "url": "https://tradingwithsidhant.com/about",
-  "image": "https://d2j3cl693ttatt.cloudfront.net/assets/images/brand/raw/sidhant-shh-blazer-256w.webp"
+  "image": "https://d2j3cl693ttatt.cloudfront.net/assets/images/brand/raw/sidhant-shh-blazer-256w.webp",
+  "sameAs": [
+    "https://www.youtube.com/@tradingwithsidhant",
+    "https://www.instagram.com/tradingwithsidhant",
+    "https://x.com/tradingwsidhant"
+  ]
 } as const;
 
 export const TWS_SOCIALS = [
@@ -323,7 +328,9 @@ export function familyOrganizationJsonLd() {
   };
 }
 
-/** The founder Person node, shared by @id across the family. */
+/** The founder Person node, shared by @id across the family. sameAs lists the
+ *  profiles the owner confirmed as his own (2026-10-29: the TWS YouTube,
+ *  Instagram and X he fronts; his personal LinkedIn to follow). */
 export function familyFounderJsonLd() {
   return {
     '@type': 'Person',
@@ -332,6 +339,7 @@ export function familyFounderJsonLd() {
     jobTitle: TWS_FOUNDER.jobTitle,
     url: TWS_FOUNDER.url,
     image: TWS_FOUNDER.image,
+    sameAs: [...TWS_FOUNDER.sameAs],
     worksFor: { '@id': TWS_ORGANIZATION.id },
   };
 }
